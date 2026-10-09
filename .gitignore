@@ -1,0 +1,21 @@
+# build output — xuất lại bằng lệnh trong AGENTS.md
+dist-site/
+dist-live/
+
+# deps
+node_modules/
+
+# wrangler
+.wrangler/
+
+# đóng gói tạm
+*.zip
+
+# log / hệ điều hành
+*.log
+.DS_Store
+
+# ảnh gốc chưa dùng (site chỉ dùng bản tối ưu trong */opt/) — còn trên máy, không commit
+assets/img/*.jpg
+assets/img/toppings/*.jpg
+assets/img/toppings/*.png

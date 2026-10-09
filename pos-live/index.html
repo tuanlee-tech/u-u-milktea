@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POS Live — Ú Ụ Milk Tea (văn phòng)</title>
+<meta name="description" content="POS bán hàng Ú Ụ Milk Tea: bấm bill nhanh, lưu Google Sheet, xuất PDF.">
+<link rel="icon" href="assets/img/opt/logo.webp" type="image/webp">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="pos-top">
+  <a class="pos-brand" href="index.html">
+    <img src="assets/img/opt/logo.webp" alt="" width="36" height="36">
+    <span><b>Ú Ụ Milk Tea</b><i>POS bán hàng</i></span>
+  </a>
+  <div class="pos-status">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">Chưa kết nối Sheet</span>
+  </div>
+  <div class="pos-top__actions">
+    <button class="btn ghost" id="btnHistory" type="button">Đơn đã lưu</button>
+    <button class="btn ghost" id="btnSettings" type="button">⚙ Cài đặt</button>
+  </div>
+</header>
+
+<main class="pos-layout">
+  <!-- LEFT: menu -->
+  <section class="pos-menu">
+    <div class="pos-searchrow">
+      <input id="search" type="search" placeholder="Tìm món… vd: thái xanh, khoai môn" autocomplete="off">
+      <select id="payFilter" title="Lọc nhanh">
+        <option value="">Tất cả</option>
+      </select>
+    </div>
+    <div class="pos-tabs" role="tablist" id="tabs">
+      <button class="tab is-active" data-cat="trasua" type="button">Trà sữa</button>
+      <button class="tab" data-cat="suatuoi" type="button">Sữa tươi</button>
+      <button class="tab" data-cat="tra" type="button">Trà</button>
+      <button class="tab" data-cat="traitraicay" type="button">Trà trái cây</button>
+      <button class="tab" data-cat="topping" type="button">Topping</button>
+    </div>
+    <div class="pos-grid" id="productGrid"></div>
+    <p class="pos-hint">Bấm <b>M</b> / <b>L</b> để thêm vào bill. Mỗi dòng có nút <b>⚙ Tùy chọn ly này</b>: tên ly, size, topping, đường, đá, ghi chú.</p>
+  </section>
+
+  <!-- RIGHT: bill -->
+  <aside class="pos-cart">
+    <div class="cart-head">
+      <h2>Hóa đơn <span id="orderCode">UU-mới</span></h2>
+      <button class="btn ghost sm" id="btnNew" type="button">Làm mới</button>
+    </div>
+    <div class="sync-row">
+      <label class="sync-toggle"><input type="checkbox" id="syncOn" checked> Live</label>
+      <button class="btn ghost sm" id="btnShare" type="button">Copy link bill</button>
+      <span class="sync-st" id="syncSt"></span>
+    </div>
+
+    <div class="cart-fields">
+      <label>Khách hàng
+        <input id="customer" type="text" placeholder="Tên khách / ghi chú tên ly…" autocomplete="off">
+      </label>
+      <div class="row2">
+        <label>Thanh toán (ghi vào Sheet)
+          <select id="payMethod">
+            <option>Tiền mặt</option>
+            <option>Chuyển khoản</option>
+            <option>ShopeeFood</option>
+            <option>Nợ / khác</option>
+          </select>
+        </label>
+        <label>Kênh
+          <select id="channel">
+            <option>Tại quán</option>
+            <option>Mang về</option>
+            <option>Ship < 2km</option>
+            <option>Ship 2–5km</option>
+            <option>ShopeeFood</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <ul class="cart-items" id="cartItems"></ul>
+
+    <div class="cart-fields">
+      <div class="row2">
+        <label>Giảm giá (k)
+          <input id="discount" type="number" min="0" value="0" inputmode="numeric">
+        </label>
+        <label>Ship (k)
+          <input id="shipFee" type="number" min="0" value="0" inputmode="numeric">
+        </label>
+      </div>
+      <label>Ghi chú bill
+        <input id="orderNote" type="text" placeholder="Ít đá, ít đường, giờ lấy…">
+      </label>
+    </div>
+
+    <div class="cart-total">
+      <div><span>Tạm tính</span><b id="subTotal">0k</b></div>
+      <div><span>Giảm + ship</span><b id="adjTotal">0k</b></div>
+      <div class="grand"><span>TỔNG THU</span><b id="grandTotal">0k</b></div>
+    </div>
+
+    <div class="cart-actions">
+      <button class="btn primary" id="btnSave" type="button">Lưu vào Sheet</button>
+      <button class="btn dark" id="btnPDF" type="button">Xuất PDF</button>
+    </div>
+    <p class="pos-hint" id="saveMsg">Chưa lưu. “Lưu vào Sheet” trước, rồi “Xuất PDF” gửi Zalo cho khách.</p>
+  </aside>
+</main>
+
+<!-- Settings modal -->
+<div class="modal" id="settingsModal" hidden>
+  <div class="modal__box">
+    <h3>Cài đặt POS</h3>
+    <label>Apps Script Web App URL (lấy sau khi Deploy — xem HUONG-DAN-POS-SHEET.md)
+      <input id="setApi" type="url" placeholder="https://script.google.com/macros/s/…/exec">
+    </label>
+    <label>WebSocket server (để trống = tự động: cùng host hoặc localhost:8787)
+      <input id="setWs" type="text" placeholder="auto">
+    </label>
+    <div class="row2">
+      <label>Tên quán<input id="setName" type="text"></label>
+      <label>SĐT<input id="setPhone" type="text"></label>
+    </div>
+    <label>Địa chỉ<input id="setAddr" type="text"></label>
+    <label>Dòng cảm ơn trên bill<input id="setThanks" type="text"></label>
+    <div class="modal__actions">
+      <button class="btn ghost" id="btnCloseSettings" type="button">Đóng</button>
+      <button class="btn primary" id="btnSaveSettings" type="button">Lưu cài đặt</button>
+    </div>
+  </div>
+</div>
+
+<!-- History modal -->
+<div class="modal" id="historyModal" hidden>
+  <div class="modal__box">
+    <h3>Đơn đã lưu (máy này)</h3>
+    <ul class="history" id="historyList"></ul>
+    <div class="modal__actions">
+      <button class="btn ghost" id="btnCloseHistory" type="button">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bill in để xuất PDF -->
+<div id="printArea" aria-hidden="true">
+  <div class="bill" id="billPaper">
+    <div class="bill__head">
+      <h1 id="bShop">Ú Ụ MILK TEA</h1>
+      <p id="bAddr">349 Huỳnh Thị Hai, Trung Mỹ Tây, TP.HCM</p>
+      <p id="bPhone">0981.328.096 · 0585.202.705</p>
+      <hr>
+      <h2>HÓA ĐƠN BÁN LẺ</h2>
+      <p><span id="bCode">UU-000</span> · <span id="bTime">--</span></p>
+      <p>Khách: <b id="bCustomer">—</b> · <span id="bChannel">Tại quán</span></p>
+      <p>TT: <span id="bPay">Tiền mặt</span></p>
+    </div>
+    <table class="bill__table">
+      <thead><tr><th>Món</th><th>SL</th><th>Giá</th><th>TT</th></tr></thead>
+      <tbody id="bItems"></tbody>
+    </table>
+    <div class="bill__total">
+      <p><span>Tạm tính</span><span id="bSub">0</span></p>
+      <p><span>Giảm giá</span><span id="bDisc">0</span></p>
+      <p><span>Ship</span><span id="bShip">0</span></p>
+      <p class="grand"><span>TỔNG CỘNG</span><span id="bGrand">0</span></p>
+      <p class="note" id="bNote"></p>
+    </div>
+    <hr>
+    <p class="bill__thanks" id="bThanks">Cảm ơn bạn đã ủng hộ trà sữa nhà làm!</p>
+  </div>
+</div>
+
+<script src="live.js"></script>
+</body>
+</html>
