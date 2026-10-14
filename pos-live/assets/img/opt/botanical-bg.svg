@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 400" fill="none">
+  <defs>
+    <linearGradient id="mist1" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#DCE8E0" stop-opacity="0.85"/>
+      <stop offset="50%" stop-color="#EBF2ED" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#F7F6F2" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="mist2" x1="30%" y1="100%" x2="100%" y2="20%">
+      <stop offset="0%" stop-color="#C5D8CC" stop-opacity="0.7"/>
+      <stop offset="60%" stop-color="#DFEBE3" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#F7F6F2" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="leafGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#658372"/>
+      <stop offset="50%" stop-color="#476555"/>
+      <stop offset="100%" stop-color="#2D4638"/>
+    </linearGradient>
+    <linearGradient id="leafGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8FA99A"/>
+      <stop offset="70%" stop-color="#5E7D6D"/>
+      <stop offset="100%" stop-color="#3D5A4A"/>
+    </linearGradient>
+    <linearGradient id="leafGradLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#B2C7BA"/>
+      <stop offset="100%" stop-color="#7B9988"/>
+    </linearGradient>
+    <linearGradient id="goldMist" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#D8C49E" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#D8C49E" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Watercolor wash hills (curves like reference mockup) -->
+  <path d="M0 400 Q150 280 340 320 T700 240 L700 400 Z" fill="url(#mist1)"/>
+  <path d="M100 400 Q280 290 480 340 T700 280 L700 400 Z" fill="url(#mist2)"/>
+  <path d="M250 400 Q400 330 550 365 T700 320 L700 400 Z" fill="url(#goldMist)"/>
+
+  <!-- Botanical branch 1: sweeping from bottom left upward -->
+  <g opacity="0.88">
+    <!-- Main stem -->
+    <path d="M80 420 C110 330 150 250 220 190 C260 155 310 135 360 120" stroke="#415E4E" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Leaves on branch 1 -->
+    <path d="M150 270 C130 240 135 200 170 195 C185 220 180 255 150 270 Z" fill="url(#leafGrad2)"/>
+    <path d="M150 270 Q160 230 170 195" stroke="#2D4638" stroke-width="0.8" fill="none"/>
+
+    <path d="M185 230 C205 200 240 195 250 225 C230 245 195 250 185 230 Z" fill="url(#leafGrad1)"/>
+    <path d="M185 230 Q220 215 250 225" stroke="#1E3327" stroke-width="0.8" fill="none"/>
+
+    <path d="M220 190 C210 155 225 125 255 125 C265 150 250 180 220 190 Z" fill="url(#leafGrad2)"/>
+    <path d="M220 190 Q235 155 255 125" stroke="#2D4638" stroke-width="0.8" fill="none"/>
+
+    <path d="M280 150 C310 125 350 130 360 155 C335 170 295 165 280 150 Z" fill="url(#leafGradLight)"/>
+    <path d="M280 150 Q325 140 360 155" stroke="#476555" stroke-width="0.8" fill="none"/>
+
+    <!-- Tip leaf -->
+    <path d="M360 120 C385 105 415 110 425 130 C400 145 370 140 360 120 Z" fill="url(#leafGrad1)"/>
+  </g>
+
+  <!-- Botanical branch 2: rising more upright -->
+  <g opacity="0.75">
+    <path d="M180 410 C195 350 210 300 245 260 C275 225 315 210 350 200" stroke="#526F5F" stroke-width="2" stroke-linecap="round"/>
+    <path d="M210 320 C235 295 270 300 275 325 C250 340 220 335 210 320 Z" fill="url(#leafGradLight)"/>
+    <path d="M245 260 C240 230 260 205 285 210 C290 235 275 255 245 260 Z" fill="url(#leafGrad2)"/>
+    <path d="M300 220 C325 195 360 200 370 220 C345 235 315 230 300 220 Z" fill="url(#leafGrad1)"/>
+  </g>
+
+  <!-- Delicate golden dots / sparkles of morning tea essence -->
+  <circle cx="270" cy="170" r="2.5" fill="#D8C49E" opacity="0.6"/>
+  <circle cx="340" cy="110" r="2" fill="#D8C49E" opacity="0.5"/>
+  <circle cx="210" cy="210" r="1.8" fill="#D8C49E" opacity="0.6"/>
+  <circle cx="390" cy="150" r="2.2" fill="#D8C49E" opacity="0.45"/>
+  <circle cx="160" cy="250" r="1.5" fill="#D8C49E" opacity="0.5"/>
+
+  <!-- Right side calligraphy: "Trà sữa nhà làm" with leaf flourish -->
+  <g transform="translate(430, 240)">
+    <text x="0" y="50" font-family="'Alex Brush', 'Playfair Display', cursive, serif" font-size="52" font-style="italic" fill="#3D5A4B" opacity="0.82" letter-spacing="1">Trà sữa</text>
+    <text x="55" y="105" font-family="'Alex Brush', 'Playfair Display', cursive, serif" font-size="52" font-style="italic" fill="#3D5A4B" opacity="0.82" letter-spacing="1">nhà làm</text>
+    <!-- Little leaf next to text -->
+    <path d="M225 80 C240 70 255 72 260 85 C248 95 232 92 225 80 Z" fill="#5E7D6D" opacity="0.8"/>
+    <path d="M225 80 Q244 80 260 85" stroke="#2D4638" stroke-width="0.8" fill="none"/>
+  </g>
+</svg>

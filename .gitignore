@@ -19,3 +19,5 @@ node_modules/
 assets/img/*.jpg
 assets/img/toppings/*.jpg
 assets/img/toppings/*.png
+pos-live/assets/img/toppings/*.jpg
+pos-live/assets/img/toppings/*.png
