@@ -7,63 +7,345 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
-  /* ================= 1. MENU DỮ LIỆU GỐC ================= */
-  var DEFAULT_MENU = [
-    { id: 'ts01', ten: 'Ú ụ full topping', nhom: 'trasua', giaM: 30000, giaL: 38000, note: 'M 30-32 / L 38-40 tùy topping' },
-    { id: 'ts02', ten: 'Trà sữa truyền thống', nhom: 'trasua', giaM: 18000, giaL: 22000 },
-    { id: 'ts03', ten: 'Trà sữa thái xanh', nhom: 'trasua', giaM: 18000, giaL: 22000 },
-    { id: 'ts04', ten: 'Trà sữa thái đỏ', nhom: 'trasua', giaM: 18000, giaL: 22000 },
-    { id: 'ts05', ten: 'Trà sữa khoai môn', nhom: 'trasua', giaM: 18000, giaL: 22000 },
-    { id: 'ts06', ten: 'Trà sữa olong lài', nhom: 'trasua', giaM: 20000, giaL: 25000 },
-    { id: 'ts07', ten: 'Trà sữa chocomint', nhom: 'trasua', giaM: 20000, giaL: 25000 },
-    { id: 'ts08', ten: 'Trà sữa socola', nhom: 'trasua', giaM: 20000, giaL: 25000 },
-    { id: 'ts09', ten: 'Trà sữa gạo rang', nhom: 'trasua', giaM: 20000, giaL: 25000 },
-    { id: 'st01', ten: 'Sữa tươi cf sương sáo', nhom: 'suatuoi', giaM: 25000, giaL: 30000 },
-    { id: 'st02', ten: 'Sữa tươi tc đường đen', nhom: 'suatuoi', giaM: 25000, giaL: 30000 },
-    { id: 'st03', ten: 'Matcha latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
-    { id: 'st04', ten: 'Khoai môn latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
-    { id: 'st05', ten: 'Cacao latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
-    { id: 'tr01', ten: 'Hồng trà', nhom: 'tra', giaM: 12000, giaL: 17000 },
-    { id: 'tr02', ten: 'Hồng trà tắc', nhom: 'tra', giaM: 12000, giaL: 17000 },
-    { id: 'tr03', ten: 'Trà tắc thái xanh', nhom: 'tra', giaM: 12000, giaL: 17000 },
-    { id: 'tr04', ten: 'Lục trà lài', nhom: 'tra', giaM: 12000, giaL: 17000 },
-    { id: 'tr05', ten: 'Lục trà tắc', nhom: 'tra', giaM: 12000, giaL: 17000 },
-    { id: 'tc01', ten: 'Trà ổi hồng', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc02', ten: 'Trà đào', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc03', ten: 'Trà vải', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc04', ten: 'Trà xoài chanh dây', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc05', ten: 'Trà nhiệt đới', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc06', ten: 'Trà tắc xí muội', nhom: 'traitraicay', giaM: 15000, giaL: 20000 },
-    { id: 'tc07', ten: 'Trà dưa lưới', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc08', ten: 'Trà dâu', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
-    { id: 'tc09', ten: 'Trà đặc thơm (dứa)', nhom: 'traitraicay', giaM: 27000, giaL: 32000 },
-    { id: 'tp01', ten: 'Trân châu dừa', nhom: 'topping', gia: 6000 },
-    { id: 'tp02', ten: 'Trân châu đen', nhom: 'topping', gia: 6000 },
-    { id: 'tp03', ten: 'Trân châu trắng', nhom: 'topping', gia: 6000 },
-    { id: 'tp04', ten: 'Trân châu phô mai', nhom: 'topping', gia: 1000, note: '1k/viên' },
-    { id: 'tp05', ten: 'Trân châu củ năng', nhom: 'topping', gia: 6000 },
-    { id: 'tp06', ten: 'Khoai dẻo', nhom: 'topping', gia: 5000 },
-    { id: 'tp07', ten: 'Sương sáo', nhom: 'topping', gia: 5000 },
-    { id: 'tp08', ten: 'Rau câu phô mai', nhom: 'topping', gia: 6000, note: '6k/4 viên' },
-    { id: 'tp09', ten: 'Pudding socola', nhom: 'topping', gia: 5000 },
-    { id: 'tp10', ten: 'Pudding trứng', nhom: 'topping', gia: 5000 },
-    { id: 'tp11', ten: 'Khúc bạch tảng', nhom: 'topping', gia: 5000, note: '5k/3 viên' },
-    { id: 'tp12', ten: 'Khúc bạch', nhom: 'topping', gia: 6000, note: '6k/3 viên' },
-    { id: 'tp13', ten: 'Khúc bạch bảy màu', nhom: 'topping', gia: 6000 },
-    { id: 'tp14', ten: 'Khúc bạch donut', nhom: 'topping', gia: 14000 },
-    { id: 'tp15', ten: 'Khúc bạch chân mèo', nhom: 'topping', gia: 6000, note: '4k/6k/8k — mặc định 6k' },
-    { id: 'tp16', ten: 'Khúc bạch jerry', nhom: 'topping', gia: 6000, note: '6k/8k — mặc định 6k' },
-    { id: 'tp17', ten: 'Kem trứng', nhom: 'topping', gia: 6000 },
-    { id: 'tp18', ten: 'Kem cheese', nhom: 'topping', gia: 6000 },
-    { id: 'tp19', ten: 'Khoai môn tươi', nhom: 'topping', gia: 6000 }
-  ];
+  /* ================= 1. MENU DỮ LIỆU GỐC & ĐA QUÁN (MULTI-STORE) ================= */
+  var STORE_UU = {
+    id: 'uu-milktea',
+    name: 'Ú Ụ Milk Tea',
+    tagline: 'Trà sữa nhà làm · Chuẩn vị đậm trà',
+    icon: '🧋',
+    category: 'trasua',
+    itemUnit: 'ly',
+    isBuiltin: true,
+    options: { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true },
+    bankInfo: { bank: '', account: '', owner: '' },
+    categories: [
+      { id: 'trasua', name: 'Trà sữa', icon: '🧋', title: 'Trà sữa đậm vị', sub: 'Hương trà mộc đậm đà hòa quyện cùng sữa thơm béo hảo hạng' },
+      { id: 'suatuoi', name: 'Sữa tươi', icon: '🥛', title: 'Sữa tươi & Latte', sub: 'Sữa tươi thanh trùng nguyên chất thơm ngậy dinh dưỡng' },
+      { id: 'tra', name: 'Trà mộc', icon: '🍃', title: 'Trà nguyên chất thanh mát', sub: 'Lá trà tươi chọn lọc, ủ lạnh giữ trọn vị thanh tao tự nhiên' },
+      { id: 'traitraicay', name: 'Trái cây', icon: '🍊', title: 'Trà trái cây tươi mát', sub: 'Trái cây tự nhiên nhiệt đới ngọt ngào sảng khoái mát lạnh' },
+      { id: 'topping', name: 'Topping', icon: '✨', title: 'Topping tươi ngon', sub: 'Topping được chọn lọc kỹ lưỡng, tươi ngon mỗi ngày' }
+    ],
+    items: [
+      { id: 'ts01', ten: 'Ú ụ full topping', nhom: 'trasua', giaM: 30000, giaL: 38000, note: 'M 30-32 / L 38-40 tùy topping' },
+      { id: 'ts02', ten: 'Trà sữa truyền thống', nhom: 'trasua', giaM: 18000, giaL: 22000 },
+      { id: 'ts03', ten: 'Trà sữa thái xanh', nhom: 'trasua', giaM: 18000, giaL: 22000 },
+      { id: 'ts04', ten: 'Trà sữa thái đỏ', nhom: 'trasua', giaM: 18000, giaL: 22000 },
+      { id: 'ts05', ten: 'Trà sữa khoai môn', nhom: 'trasua', giaM: 18000, giaL: 22000 },
+      { id: 'ts06', ten: 'Trà sữa olong lài', nhom: 'trasua', giaM: 20000, giaL: 25000 },
+      { id: 'ts07', ten: 'Trà sữa chocomint', nhom: 'trasua', giaM: 20000, giaL: 25000 },
+      { id: 'ts08', ten: 'Trà sữa socola', nhom: 'trasua', giaM: 20000, giaL: 25000 },
+      { id: 'ts09', ten: 'Trà sữa gạo rang', nhom: 'trasua', giaM: 20000, giaL: 25000 },
+      { id: 'st01', ten: 'Sữa tươi cf sương sáo', nhom: 'suatuoi', giaM: 25000, giaL: 30000 },
+      { id: 'st02', ten: 'Sữa tươi tc đường đen', nhom: 'suatuoi', giaM: 25000, giaL: 30000 },
+      { id: 'st03', ten: 'Matcha latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
+      { id: 'st04', ten: 'Khoai môn latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
+      { id: 'st05', ten: 'Cacao latte', nhom: 'suatuoi', giaM: 27000, giaL: 32000 },
+      { id: 'tr01', ten: 'Hồng trà', nhom: 'tra', giaM: 12000, giaL: 17000 },
+      { id: 'tr02', ten: 'Hồng trà tắc', nhom: 'tra', giaM: 12000, giaL: 17000 },
+      { id: 'tr03', ten: 'Trà tắc thái xanh', nhom: 'tra', giaM: 12000, giaL: 17000 },
+      { id: 'tr04', ten: 'Lục trà lài', nhom: 'tra', giaM: 12000, giaL: 17000 },
+      { id: 'tr05', ten: 'Lục trà tắc', nhom: 'tra', giaM: 12000, giaL: 17000 },
+      { id: 'tc01', ten: 'Trà ổi hồng', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc02', ten: 'Trà đào', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc03', ten: 'Trà vải', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc04', ten: 'Trà xoài chanh dây', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc05', ten: 'Trà nhiệt đới', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc06', ten: 'Trà tắc xí muội', nhom: 'traitraicay', giaM: 15000, giaL: 20000 },
+      { id: 'tc07', ten: 'Trà dưa lưới', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc08', ten: 'Trà dâu', nhom: 'traitraicay', giaM: 25000, giaL: 30000 },
+      { id: 'tc09', ten: 'Trà đặc thơm (dứa)', nhom: 'traitraicay', giaM: 27000, giaL: 32000 }
+    ],
+    toppings: [
+      { id: 'tp01', ten: 'Trân châu dừa', nhom: 'topping', gia: 6000 },
+      { id: 'tp02', ten: 'Trân châu đen', nhom: 'topping', gia: 6000 },
+      { id: 'tp03', ten: 'Trân châu trắng', nhom: 'topping', gia: 6000 },
+      { id: 'tp04', ten: 'Trân châu phô mai', nhom: 'topping', gia: 1000, note: '1k/viên' },
+      { id: 'tp05', ten: 'Trân châu củ năng', nhom: 'topping', gia: 6000 },
+      { id: 'tp06', ten: 'Khoai dẻo', nhom: 'topping', gia: 5000 },
+      { id: 'tp07', ten: 'Sương sáo', nhom: 'topping', gia: 5000 },
+      { id: 'tp08', ten: 'Rau câu phô mai', nhom: 'topping', gia: 6000, note: '6k/4 viên' },
+      { id: 'tp09', ten: 'Pudding socola', nhom: 'topping', gia: 5000 },
+      { id: 'tp10', ten: 'Pudding trứng', nhom: 'topping', gia: 5000 },
+      { id: 'tp11', ten: 'Khúc bạch tảng', nhom: 'topping', gia: 5000, note: '5k/3 viên' },
+      { id: 'tp12', ten: 'Khúc bạch', nhom: 'topping', gia: 6000, note: '6k/3 viên' },
+      { id: 'tp13', ten: 'Khúc bạch bảy màu', nhom: 'topping', gia: 6000 },
+      { id: 'tp14', ten: 'Khúc bạch donut', nhom: 'topping', gia: 14000 },
+      { id: 'tp15', ten: 'Khúc bạch chân mèo', nhom: 'topping', gia: 6000, note: '4k/6k/8k — mặc định 6k' },
+      { id: 'tp16', ten: 'Khúc bạch jerry', nhom: 'topping', gia: 6000, note: '6k/8k — mặc định 6k' },
+      { id: 'tp17', ten: 'Kem trứng', nhom: 'topping', gia: 6000 },
+      { id: 'tp18', ten: 'Kem cheese', nhom: 'topping', gia: 6000 },
+      { id: 'tp19', ten: 'Khoai môn tươi', nhom: 'topping', gia: 6000 }
+    ]
+  };
 
-  var MENU = DEFAULT_MENU.slice();
+  var STORE_COMTAM = {
+    id: 'com-tam',
+    name: 'Cơm Tấm Văn Phòng',
+    tagline: 'Cơm sườn nướng than hoa · Đậm đà chuẩn vị',
+    icon: '🍱',
+    category: 'comtrua',
+    itemUnit: 'phần',
+    isBuiltin: true,
+    options: { hasSize: false, hasSugar: false, hasIce: false, hasToppings: true },
+    bankInfo: { bank: '', account: '', owner: '' },
+    categories: [
+      { id: 'com', name: 'Cơm đĩa', icon: '🍱', title: 'Cơm đĩa nóng hổi', sub: 'Cơm tấm dẻo thơm hạt tấm vỡ cùng các món mặn nướng nóng hổi' },
+      { id: 'canh', name: 'Canh & Món thêm', icon: '🍲', title: 'Canh nóng trong ngày', sub: 'Canh ngọt thanh đạm ăn kèm cơm' },
+      { id: 'douong', name: 'Đồ uống', icon: '🥤', title: 'Nước giải khát', sub: 'Trà đá, nước sâm, nước ngọt ướp lạnh' }
+    ],
+    items: [
+      { id: 'ct01', ten: 'Cơm sườn nướng than', nhom: 'com', giaM: 38000, note: 'Sườn nướng mật ong' },
+      { id: 'ct02', ten: 'Cơm sườn bì chả', nhom: 'com', giaM: 48000, note: 'Bộ ba truyền thống' },
+      { id: 'ct03', ten: 'Cơm sườn trứng ốp la', nhom: 'com', giaM: 45000 },
+      { id: 'ct04', ten: 'Cơm sườn bì chả trứng (Đặc biệt)', nhom: 'com', giaM: 55000, note: 'Đầy đủ món' },
+      { id: 'ct05', ten: 'Cơm đùi gà nướng sốt cay', nhom: 'com', giaM: 42000 },
+      { id: 'ct06', ten: 'Cơm thịt kho tàu hột vịt', nhom: 'com', giaM: 40000 },
+      { id: 'ct07', ten: 'Canh khổ qua nhồi thịt', nhom: 'canh', giaM: 15000 },
+      { id: 'ct08', ten: 'Canh rong biển thịt bằm', nhom: 'canh', giaM: 12000 },
+      { id: 'ct09', ten: 'Trà đá giải nhiệt', nhom: 'douong', giaM: 3000 },
+      { id: 'ct10', ten: 'Nước ngọt lon các loại', nhom: 'douong', giaM: 15000 }
+    ],
+    toppings: [
+      { id: 'tp_ct01', ten: 'Trứng ốp la lòng đào', nhom: 'topping', gia: 7000 },
+      { id: 'tp_ct02', ten: 'Chả trứng chưng thịt', nhom: 'topping', gia: 8000 },
+      { id: 'tp_ct03', ten: 'Thêm miếng sườn nướng', nhom: 'topping', gia: 22000 },
+      { id: 'tp_ct04', ten: 'Thêm cơm tấm', nhom: 'topping', gia: 5000 }
+    ]
+  };
+
+  var STORE_CAFE = {
+    id: 'cafe-sang',
+    name: 'Cà Phê & Bánh Mì Sáng',
+    tagline: 'Năng lượng tươi mới khởi đầu ngày làm việc',
+    icon: '☕',
+    category: 'cafe',
+    itemUnit: 'món',
+    isBuiltin: true,
+    options: { hasSize: true, hasSugar: true, hasIce: true, hasToppings: false },
+    bankInfo: { bank: '', account: '', owner: '' },
+    categories: [
+      { id: 'cafe', name: 'Cà phê', icon: '☕', title: 'Cà phê phin truyền thống', sub: 'Hạt Robusta mộc đậm đà thơm nồng' },
+      { id: 'banhmi', name: 'Bánh mì', icon: '🥖', title: 'Bánh mì giòn rụm', sub: 'Bánh mì nóng hổi đầy ắp nhân pate bơ' },
+      { id: 'nuoc', name: 'Nước ép & Trà', icon: '🧃', title: 'Thức uống giải khát', sub: 'Nước cam vắt nguyên chất và trà thanh nhiệt' }
+    ],
+    items: [
+      { id: 'cf01', ten: 'Cà phê đen đá', nhom: 'cafe', giaM: 18000, giaL: 22000 },
+      { id: 'cf02', ten: 'Cà phê sữa đá', nhom: 'cafe', giaM: 22000, giaL: 26000 },
+      { id: 'cf03', ten: 'Bạc xỉu 3 tầng', nhom: 'cafe', giaM: 25000, giaL: 30000 },
+      { id: 'bm01', ten: 'Bánh mì chả lụa pate bơ', nhom: 'banhmi', giaM: 22000 },
+      { id: 'bm02', ten: 'Bánh mì ốp la xúc xích', nhom: 'banhmi', giaM: 25000 },
+      { id: 'bm03', ten: 'Bánh mì thập cẩm đặc biệt', nhom: 'banhmi', giaM: 30000 },
+      { id: 'ne01', ten: 'Cam vắt nguyên chất mật ong', nhom: 'nuoc', giaM: 25000, giaL: 30000 }
+    ],
+    toppings: []
+  };
+
+  var BUILTIN_STORES = [ STORE_UU, STORE_COMTAM, STORE_CAFE ];
+  var currentStore = STORE_UU;
+  var MENU = (STORE_UU.items || []).concat(STORE_UU.toppings || []);
   var cart = [];
   var cartDel = {};
   var currentCat = 'trasua';
   var orderCode = newOrderCode();
   var isInitialSyncing = false; // Flag to prevent pushing empty cart on initial load
+
+  /* ================= STORE MANAGER LOGIC ================= */
+  function getCustomStores() {
+    try {
+      var raw = localStorage.getItem('office_order_custom_stores');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  }
+
+  function saveCustomStores(list) {
+    try {
+      localStorage.setItem('office_order_custom_stores', JSON.stringify(list));
+    } catch (e) {}
+  }
+
+  function getAllStores() {
+    var customs = getCustomStores();
+    return BUILTIN_STORES.concat(customs);
+  }
+
+  function getStoreById(id) {
+    var stores = getAllStores();
+    for (var i = 0; i < stores.length; i++) {
+      if (stores[i].id === id) return stores[i];
+    }
+    return STORE_UU;
+  }
+
+  function switchStore(storeOrId, broadcast) {
+    var store = typeof storeOrId === 'string' ? getStoreById(storeOrId) : storeOrId;
+    if (!store) store = STORE_UU;
+
+    currentStore = store;
+    try {
+      localStorage.setItem('office_order_active_store_id', currentStore.id);
+    } catch (e) {}
+
+    var allItems = (currentStore.items || []).concat(currentStore.toppings || []);
+    MENU = allItems.slice();
+
+    if (currentStore.categories && currentStore.categories.length) {
+      currentCat = currentStore.categories[0].id;
+    } else {
+      currentCat = 'all';
+    }
+
+    updateStoreBranding();
+    renderCategoryTabs();
+    renderMenu();
+
+    if (broadcast) {
+      schedulePush();
+    }
+  }
+
+  function updateStoreBranding() {
+    if (!currentStore) return;
+
+    var sbLogo = $('sidebarLogoImg');
+    var sbEmoji = $('sidebarEmojiIcon');
+    var sbName = $('sidebarStoreName');
+    var sbTagline = $('sidebarStoreTagline');
+
+    if (currentStore.id === 'uu-milktea') {
+      if (sbLogo) { sbLogo.style.display = 'block'; sbLogo.src = 'assets/img/opt/logo.webp'; }
+      if (sbEmoji) sbEmoji.style.display = 'none';
+    } else {
+      if (sbLogo) sbLogo.style.display = 'none';
+      if (sbEmoji) {
+        sbEmoji.style.display = 'flex';
+        sbEmoji.textContent = currentStore.icon || '🍱';
+      }
+    }
+    if (sbName) sbName.textContent = currentStore.name;
+    if (sbTagline) sbTagline.textContent = currentStore.tagline || (currentStore.category === 'comtrua' ? 'Cơm văn phòng' : 'Ăn uống thả ga');
+
+    var bpEmoji = $('bannerStoreEmoji');
+    var bpName = $('bannerStoreName');
+    if (bpEmoji) bpEmoji.textContent = currentStore.icon || '🏪';
+    if (bpName) bpName.textContent = currentStore.name;
+
+    document.title = currentStore.name + ' · Office Order';
+  }
+
+  function renderCategoryTabs() {
+    var nav = $('tabs');
+    if (!nav || !currentStore) return;
+    nav.innerHTML = '';
+
+    var cats = currentStore.categories || [];
+    cats.forEach(function (cat) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.role = 'tab';
+      btn.className = 'v-tab' + (cat.id === currentCat ? ' is-active' : '');
+      btn.dataset.cat = cat.id;
+
+      var iconHtml = '<span class="v-tab-emoji">' + (cat.icon || '✨') + '</span>';
+      btn.innerHTML =
+        '<span class="v-tab-icon">' + iconHtml + '</span>' +
+        '<span class="v-tab-text">' + esc(cat.name) + '</span>';
+
+      btn.onclick = function () {
+        document.querySelectorAll('#tabs .v-tab').forEach(function (x) { x.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        currentCat = cat.id;
+        renderMenu();
+      };
+      nav.appendChild(btn);
+    });
+  }
+
+  function parseMenuText(text, defaultCategory) {
+    if (!text || !text.trim()) return [];
+    var lines = text.split('\n');
+    var items = [];
+    var curCategory = defaultCategory || 'Món chính';
+    var counter = 1;
+
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+
+      var catHeader = line.match(/^\[(.*?)\]$/) || line.match(/^={2,}\s*(.*?)\s*={2,}$/) || line.match(/^(.*?):$/);
+      if (catHeader) {
+        curCategory = catHeader[1].trim();
+        return;
+      }
+
+      var priceMatch = line.match(/(\d+[\.,]?\d*)\s*(k|K|đ|d|dong|nghìn|ngan)?(?:\s*[-–]\s*(\d+[\.,]?\d*)\s*(k|K|đ)?)?$/i);
+      var itemName = line;
+      var priceM = 0;
+      var priceL = 0;
+
+      if (priceMatch) {
+        var p1Raw = priceMatch[1].replace(/[\.,]/g, '');
+        var num1 = parseInt(p1Raw, 10) || 0;
+        if (priceMatch[2] && priceMatch[2].toLowerCase() === 'k' || num1 < 1000) num1 = num1 * 1000;
+        priceM = num1;
+
+        if (priceMatch[3]) {
+          var p2Raw = priceMatch[3].replace(/[\.,]/g, '');
+          var num2 = parseInt(p2Raw, 10) || 0;
+          if (num2 < 1000) num2 = num2 * 1000;
+          priceL = num2;
+        }
+
+        itemName = line.substring(0, priceMatch.index).trim();
+        itemName = itemName.replace(/[-–—:]+$/, '').trim();
+      }
+
+      if (!itemName) return;
+
+      items.push({
+        id: 'item_' + Date.now().toString(36) + '_' + (counter++),
+        ten: itemName,
+        nhom: curCategory,
+        giaM: priceM,
+        giaL: priceL
+      });
+    });
+
+    return items;
+  }
+
+  function parseToppingsText(text) {
+    if (!text || !text.trim()) return [];
+    var lines = text.split('\n');
+    var toppings = [];
+    var counter = 1;
+
+    lines.forEach(function (raw) {
+      var line = raw.trim();
+      if (!line) return;
+
+      var match = line.match(/^(.*?)\s*[-–—:]?\s*(\d+[\.,]?\d*)\s*(k|K|đ)?$/i);
+      if (match) {
+        var name = match[1].trim();
+        var rawNum = match[2].replace(/[\.,]/g, '');
+        var num = parseInt(rawNum, 10) || 0;
+        if (match[3] || num < 1000) num = num * 1000;
+        if (name && num > 0) {
+          toppings.push({
+            id: 'tp_' + Date.now().toString(36) + '_' + (counter++),
+            ten: name,
+            nhom: 'topping',
+            gia: num
+          });
+        }
+      }
+    });
+
+    return toppings;
+  }
 
   var CAT_INFO = {
     'topping': {
@@ -424,7 +706,16 @@
   }
 
   function snapshot() {
-    return { lines: cart, tomb: cartDel, fields: F, by: clientId, dev: deviceName(), ucolor: myUcolor };
+    return {
+      lines: cart,
+      tomb: cartDel,
+      fields: F,
+      by: clientId,
+      dev: deviceName(),
+      ucolor: myUcolor,
+      storeId: currentStore ? currentStore.id : '',
+      storeData: currentStore
+    };
   }
 
   function schedulePush() {
@@ -584,6 +875,11 @@
       lines = wrap.lines; tomb = wrap.tomb || {}; fields = wrap.fields || {};
       dev = wrap.dev || '';
     } else return { changed: false, needsPush: false, dev: '' };
+
+    if (wrap.storeData && (!currentStore || currentStore.id !== wrap.storeData.id)) {
+      switchStore(wrap.storeData, false);
+      changed = true;
+    }
 
     Object.keys(tomb).forEach(function (lid) {
       var r = tomb[lid];
@@ -838,30 +1134,50 @@
     grid.innerHTML = '';
 
     var filtered = MENU.filter(function (m) {
-      if (m.nhom !== currentCat) return false;
+      if (currentCat !== 'all' && m.nhom !== currentCat) return false;
       if (q && m.ten.toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
 
-    if ($('currentCatTitle')) $('currentCatTitle').textContent = (CAT_INFO[currentCat] && CAT_INFO[currentCat].title) || 'Danh sách món';
-    if ($('currentCatSub')) $('currentCatSub').textContent = (CAT_INFO[currentCat] && CAT_INFO[currentCat].sub) || '';
-    if ($('currentCatCount')) $('currentCatCount').textContent = filtered.length + ' món';
+    var catObj = (currentStore.categories || []).find(function (c) { return c.id === currentCat; });
+    if ($('currentCatTitle')) $('currentCatTitle').textContent = (catObj && catObj.title) || (catObj && catObj.name) || (CAT_INFO[currentCat] && CAT_INFO[currentCat].title) || 'Danh sách món';
+    if ($('currentCatSub')) $('currentCatSub').textContent = (catObj && catObj.sub) || (CAT_INFO[currentCat] && CAT_INFO[currentCat].sub) || '';
+    var unitStr = (currentStore && currentStore.itemUnit) || 'món';
+    if ($('currentCatCount')) $('currentCatCount').textContent = filtered.length + ' ' + unitStr;
 
     filtered.forEach(function (m) {
       var card = document.createElement('div');
       var isTopping = (m.nhom === 'topping');
       card.className = 'product-card' + (isTopping ? ' pcard-topping' : '');
 
-      var imgUrl = isTopping ? (TOPPING_IMGS[m.id] || 'assets/img/opt/logo.webp') : (PRODUCT_IMGS[m.id] || 'assets/img/opt/logo.webp');
-      var priceHtml = isTopping ?
-        (fmt(m.gia) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '')) :
-        ('M ' + fmtK(m.giaM) + ' · L ' + fmtK(m.giaL) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : ''));
+      var hasOptSize = currentStore.options && currentStore.options.hasSize;
+      var priceHtml = '';
+      if (isTopping) {
+        priceHtml = fmt(m.gia) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '');
+      } else if (hasOptSize && m.giaL) {
+        priceHtml = 'M ' + fmtK(m.giaM) + ' · L ' + fmtK(m.giaL) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '');
+      } else {
+        priceHtml = fmt(m.giaM || m.gia || 0) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '');
+      }
       var btnLabel = isTopping ? '+ Thêm món' : '+ Chọn món';
 
+      var itemImg = isTopping ? (TOPPING_IMGS[m.id] || m.img) : (PRODUCT_IMGS[m.id] || m.img);
+      var imgHtml = '';
+      if (itemImg) {
+        imgHtml =
+          '<div class="pcard-img-wrap">' +
+            '<img src="' + itemImg + '" alt="' + esc(m.ten) + '" loading="lazy" onerror="this.onerror=null;this.parentElement.className=\'pcard-img-wrap pcard-emoji-wrap\';this.parentElement.innerHTML=\'<span class=\\\'pcard-emoji\\\'>' + (currentStore.icon || '🍱') + '</span>\';">' +
+          '</div>';
+      } else {
+        var itemEmoji = m.emoji || (catObj && catObj.icon) || currentStore.icon || '🍱';
+        imgHtml =
+          '<div class="pcard-img-wrap pcard-emoji-wrap">' +
+            '<span class="pcard-emoji">' + itemEmoji + '</span>' +
+          '</div>';
+      }
+
       card.innerHTML =
-        '<div class="pcard-img-wrap">' +
-          '<img src="' + imgUrl + '" alt="' + esc(m.ten) + '" loading="lazy" onerror="this.onerror=null;this.src=\'assets/img/opt/logo.webp\'">' +
-        '</div>' +
+        imgHtml +
         '<div class="pcard-info">' +
           '<h4>' + esc(m.ten) + '</h4>' +
           '<div class="price-tag">' + priceHtml + '</div>' +
@@ -926,33 +1242,47 @@
       sendPresence({ lid: 'new', action: 'chọn ' + (menuItem ? menuItem.ten : 'món') });
     }
 
-    // Hide size/sugar/ice if topping only
-    var secSize = $('custSizeSection');
-    var secSugar = $('custSugarSection');
-    var secIce = $('custIceSection');
+    var opts = (currentStore && currentStore.options) || { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
+    var hideOptions = isToppingOnly || (menuItem && menuItem.nhom === 'topping') || (cartLine && cartLine.size === 'TP');
 
-    if (isToppingOnly || (menuItem && menuItem.nhom === 'topping') || (cartLine && cartLine.size === 'TP')) {
-      if (secSize) secSize.style.display = 'none';
-      if (secSugar) secSugar.style.display = 'none';
-      if (secIce) secIce.style.display = 'none';
-    } else {
-      if (secSize) secSize.style.display = 'block';
-      if (secSugar) secSugar.style.display = 'block';
-      if (secIce) secIce.style.display = 'block';
+    // Hide/show size
+    var secSize = $('custSizeSection');
+    if (secSize) {
+      if (!hideOptions && opts.hasSize && menuItem && menuItem.giaL) {
+        secSize.style.display = 'block';
+        var bm = $('btnSizeM');
+        var bl = $('btnSizeL');
+        if (bm) {
+          bm.textContent = 'Size M · ' + fmtK(menuItem.giaM);
+          bm.classList.toggle('is-active', curSelectedSize === 'M');
+        }
+        if (bl) {
+          bl.textContent = 'Size L · ' + fmtK(menuItem.giaL);
+          bl.classList.toggle('is-active', curSelectedSize === 'L');
+        }
+      } else {
+        secSize.style.display = 'none';
+        curSelectedSize = 'M';
+      }
     }
 
-    // Size buttons
-    if (menuItem && menuItem.nhom !== 'topping') {
-      var bm = $('btnSizeM');
-      var bl = $('btnSizeL');
-      if (bm) {
-        bm.textContent = 'Size M · ' + fmtK(menuItem.giaM);
-        bm.classList.toggle('is-active', curSelectedSize === 'M');
-      }
-      if (bl) {
-        bl.textContent = 'Size L · ' + fmtK(menuItem.giaL);
-        bl.classList.toggle('is-active', curSelectedSize === 'L');
-      }
+    // Hide/show sugar
+    var secSugar = $('custSugarSection');
+    if (secSugar) {
+      secSugar.style.display = (!hideOptions && opts.hasSugar) ? 'block' : 'none';
+    }
+
+    // Hide/show ice
+    var secIce = $('custIceSection');
+    if (secIce) {
+      secIce.style.display = (!hideOptions && opts.hasIce) ? 'block' : 'none';
+    }
+
+    // Hide/show topping section
+    var secTopping = $('custToppingSection');
+    if (secTopping) {
+      var storeTops = (currentStore && currentStore.toppings) || [];
+      secTopping.style.display = (!hideOptions && opts.hasToppings && storeTops.length > 0) ? 'block' : 'none';
     }
 
     // Sugar chips
@@ -981,12 +1311,13 @@
       var found = null;
       curSelectedToppings.forEach(function (t) { if (t.id === tp.id) found = t; });
 
-      var div = document.createElement('div');
-      div.className = 'top-chip-card' + (found ? ' is-selected' : '');
-      var topImg = TOPPING_IMGS[tp.id] || 'assets/img/opt/logo.webp';
+      var topImg = TOPPING_IMGS[tp.id] || tp.img || '';
+      var thumbHtml = topImg ?
+        ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;\\\'>✨</span>\');">') :
+        ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;">✨</span>');
 
       div.innerHTML =
-        '<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy">' +
+        thumbHtml +
         '<div class="top-name-price">' +
           '<b>' + esc(tp.ten) + '</b>' +
           '<span>+' + fmtK(tp.gia) + '</span>' +
@@ -1232,11 +1563,12 @@
     if ($('shipFeeVal')) $('shipFeeVal').textContent = t.ship ? '+' + fmt(t.ship) : '0đ';
     if ($('adjTotal')) $('adjTotal').textContent = (t.disc ? '−' + fmtK(t.disc) : '0k') + ' + ' + fmtK(t.ship);
     if ($('grandTotal')) $('grandTotal').textContent = fmt(t.grand);
-    if ($('cupCountBadge')) $('cupCountBadge').textContent = t.totalCups + ' ly';
+    var unitStr = (currentStore && currentStore.itemUnit) || 'món';
+    if ($('cupCountBadge')) $('cupCountBadge').textContent = t.totalCups + ' ' + unitStr;
 
     // Cập nhật thanh Mobile bar
     if ($('mobileCartTotal')) $('mobileCartTotal').textContent = fmt(t.grand);
-    if ($('mobileCartCount')) $('mobileCartCount').textContent = t.totalCups + ' ly';
+    if ($('mobileCartCount')) $('mobileCartCount').textContent = t.totalCups + ' ' + unitStr;
 
     if ($('orderCode')) $('orderCode').textContent = orderCode;
 
@@ -1351,7 +1683,8 @@
     ctx.fillStyle = '#0A7259';
     ctx.font = '800 18px ' + window.getComputedStyle(document.body).fontFamily;
     ctx.textAlign = 'left';
-    ctx.fillText('🧋 Ú Ụ MILK TEA · ĐƠN ĐẶT CHUNG', pad, curY);
+    var canvasTitle = (currentStore.icon ? currentStore.icon + ' ' : '') + currentStore.name.toUpperCase() + ' · ĐƠN ĐẶT CHUNG';
+    ctx.fillText(canvasTitle, pad, curY);
 
     curY += 20;
     ctx.fillStyle = '#64748B';
@@ -1362,7 +1695,8 @@
     curY += 19;
     ctx.fillStyle = '#1E293B';
     ctx.font = '700 12px ' + window.getComputedStyle(document.body).fontFamily;
-    ctx.fillText('Đại diện: ' + hostName + ' · Tổng: ' + t.totalCups + ' ly', pad, curY);
+    var cUnit = (currentStore && currentStore.itemUnit) || 'món';
+    ctx.fillText('Đại diện: ' + hostName + ' · Tổng: ' + t.totalCups + ' ' + cUnit, pad, curY);
 
     curY += 14;
     ctx.strokeStyle = '#E2E8F0';
@@ -1512,17 +1846,19 @@
       var share = (t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0;
       var finalPay = Math.max(0, p.drinkSub + share);
 
+      var cUnit = (currentStore && currentStore.itemUnit) || 'món';
       ctx.fillStyle = '#1E293B';
       ctx.font = '700 12px ' + window.getComputedStyle(document.body).fontFamily;
       ctx.textAlign = 'left';
-      ctx.fillText('● ' + p.name + ' (' + p.cups + ' ly): ' + fmt(p.drinkSub), pad, curY);
+      var personLineLabel = '● ' + p.name + ' (' + p.cups + ' ' + cUnit + '): ' + fmt(p.drinkSub);
+      ctx.fillText(personLineLabel, pad, curY);
 
       var adjStr = '';
       if (share > 0) adjStr = ' (+ship ' + fmt(share) + ')';
       else if (share < 0) adjStr = ' (-giảm ' + fmt(Math.abs(share)) + ')';
 
       if (adjStr) {
-        var preW = ctx.measureText('● ' + p.name + ' (' + p.cups + ' ly): ' + fmt(p.drinkSub)).width;
+        var preW = ctx.measureText(personLineLabel).width;
         ctx.fillStyle = '#64748B';
         ctx.font = '500 11px ' + window.getComputedStyle(document.body).fontFamily;
         ctx.fillText(adjStr, pad + preW, curY);
@@ -1538,7 +1874,10 @@
     curY += 34;
     var fontFam = window.getComputedStyle(document.body).fontFamily;
     var preTxt = 'Chuyển khoản cho ';
-    var postTxt = ' theo bill trên · Chúc bạn ngon miệng! 🧋';
+    var postTxt = ' theo bill trên · Chúc bạn ngon miệng! ' + (currentStore.icon || '✨');
+    if (currentStore.bankInfo && currentStore.bankInfo.account) {
+      postTxt = ' (STK ' + currentStore.bankInfo.bank + ' ' + currentStore.bankInfo.account + ') · Chúc bạn ngon miệng! ' + (currentStore.icon || '✨');
+    }
 
     ctx.font = '500 11.5px ' + fontFam;
     var wPre = ctx.measureText(preTxt).width;
@@ -1596,6 +1935,7 @@
 
   /* ================= 9. LƯU GOOGLE SHEET ================= */
   function fetchMenuFromSheet() {
+    if (currentStore && currentStore.id !== 'uu-milktea') return;
     var url = api();
     if (!url) return;
     fetch(url + '?action=menu')
@@ -1727,16 +2067,494 @@
     }
   }
 
-  /* ================= 11. WIRING & EVENTS ================= */
-  // Tabs lọc thể loại
-  document.querySelectorAll('#tabs .v-tab, #tabs .tab').forEach(function (t) {
-    t.onclick = function () {
-      document.querySelectorAll('#tabs .v-tab, #tabs .tab').forEach(function (x) { x.classList.remove('is-active'); });
-      t.classList.add('is-active');
-      currentCat = t.dataset.cat;
-      renderMenu();
+  /* ================= 10.5. STORE MODAL & MANAGEMENT ================= */
+  var parsedStoreItems = [];
+  var parsedStoreToppings = [];
+
+  function setupStoreModal() {
+    var modal = $('storeModal');
+    if (!modal) return;
+
+    // Open store modal triggers
+    var openBtns = ['btnOpenStoreSidebar', 'btnOpenStoreBanner', 'btnOpenStoreAction', 'btnMenuStores'];
+    openBtns.forEach(function (bid) {
+      if ($(bid)) {
+        $(bid).onclick = function () {
+          if ($('moreDropdown')) $('moreDropdown').hidden = true;
+          openStoreListView();
+          modal.hidden = false;
+        };
+      }
+    });
+
+    // Close buttons
+    ['btnCloseStoreModal', 'btnCloseStoreModalBtn'].forEach(function (bid) {
+      if ($(bid)) $(bid).onclick = function () { modal.hidden = true; };
+    });
+
+    // Tabs inside modal
+    if ($('tabStoreList')) {
+      $('tabStoreList').onclick = openStoreListView;
+    }
+    if ($('tabStoreCreate')) {
+      $('tabStoreCreate').onclick = function () { openStoreEditView(null); };
+    }
+    if ($('btnGoCreateStore')) {
+      $('btnGoCreateStore').onclick = function () { openStoreEditView(null); };
+    }
+    if ($('btnCancelEditStore')) {
+      $('btnCancelEditStore').onclick = openStoreListView;
+    }
+
+    // Emoji picker
+    document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
+      opt.onclick = function () {
+        document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (x) { x.classList.remove('is-active'); });
+        opt.classList.add('is-active');
+        if ($('storeInputEmoji')) $('storeInputEmoji').value = opt.dataset.emoji;
+      };
+    });
+
+    // Toggle toppings textarea visibility
+    if ($('chkOptTopping')) {
+      $('chkOptTopping').onchange = function () {
+        if ($('groupStoreToppings')) {
+          $('groupStoreToppings').style.display = $('chkOptTopping').checked ? 'block' : 'none';
+        }
+      };
+    }
+
+    // Parse button
+    if ($('btnParseMenuText')) {
+      $('btnParseMenuText').onclick = doParseMenuInputs;
+    }
+
+    // Save Store button
+    if ($('btnSaveStore')) {
+      $('btnSaveStore').onclick = doSaveStore;
+    }
+
+    // Export stores JSON
+    if ($('btnExportStores')) {
+      $('btnExportStores').onclick = function () {
+        var data = {
+          app: 'office-order',
+          version: '1.0',
+          exportedAt: new Date().toISOString(),
+          stores: getAllStores()
+        };
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'office-order-stores.json';
+        a.click();
+        showToast('Đã xuất file office-order-stores.json');
+      };
+    }
+
+    // Import stores JSON
+    if ($('btnImportStores') && $('inputImportStoresFile')) {
+      $('btnImportStores').onclick = function () {
+        $('inputImportStoresFile').click();
+      };
+      $('inputImportStoresFile').onchange = function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (evt) {
+          try {
+            var json = JSON.parse(evt.target.result);
+            var importedStores = json.stores || (Array.isArray(json) ? json : []);
+            if (!Array.isArray(importedStores) || !importedStores.length) {
+              alert('File JSON không chứa danh sách quán hợp lệ.');
+              return;
+            }
+            var currentCustoms = getCustomStores();
+            importedStores.forEach(function (st) {
+              if (st.id === 'uu-milktea' || st.id === 'com-tam' || st.id === 'cafe-sang') return;
+              var existing = currentCustoms.find(function (x) { return x.id === st.id; });
+              if (existing) {
+                Object.assign(existing, st);
+              } else {
+                currentCustoms.push(st);
+              }
+            });
+            saveCustomStores(currentCustoms);
+            renderStoreListGrid();
+            showToast('✓ Đã nạp thành công các quán từ file JSON!');
+          } catch (err) {
+            alert('Lỗi đọc file JSON: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+    }
+  }
+
+  function openStoreListView() {
+    if ($('storeListView')) $('storeListView').hidden = false;
+    if ($('storeEditView')) $('storeEditView').hidden = true;
+    if ($('tabStoreList')) $('tabStoreList').classList.add('is-active');
+    if ($('tabStoreCreate')) $('tabStoreCreate').classList.remove('is-active');
+    if ($('storeListFooterBtns')) $('storeListFooterBtns').hidden = false;
+    if ($('storeEditFooterBtns')) $('storeEditFooterBtns').hidden = true;
+    if ($('storeModalTitle')) $('storeModalTitle').textContent = '🏪 Quán Yêu Thích & Menu Đặt Món';
+    renderStoreListGrid();
+  }
+
+  function renderStoreListGrid() {
+    var grid = $('storeListGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    var stores = getAllStores();
+    stores.forEach(function (st) {
+      var card = document.createElement('div');
+      var isActive = (currentStore && currentStore.id === st.id);
+      card.className = 'store-card' + (isActive ? ' is-active-store' : '');
+
+      var totalItems = (st.items ? st.items.length : 0);
+      var totalTops = (st.toppings ? st.toppings.length : 0);
+      var countStr = totalItems + ' món' + (totalTops ? ' · ' + totalTops + ' topping' : '');
+
+      var activeBadgeHtml = isActive ? '<span class="store-active-badge">✓ ĐANG CHỌN</span>' : '';
+
+      var actionBtnsHtml = '';
+      if (!isActive) {
+        actionBtnsHtml += '<button class="btn-select-store" type="button">👉 Mở đơn quán này</button>';
+      } else {
+        actionBtnsHtml += '<span style="font-size:12px; font-weight:700; color:#0A7259; padding: 7px 0;">Đang mở quán này</span>';
+      }
+
+      if (!st.isBuiltin) {
+        actionBtnsHtml += '<button class="btn-store-subaction btn-edit-store" type="button" title="Chỉnh sửa quán">✏️ Sửa</button>';
+        actionBtnsHtml += '<button class="btn-store-subaction danger btn-del-store" type="button" title="Xóa quán">🗑️</button>';
+      }
+
+      card.innerHTML =
+        '<div class="store-card-head">' +
+          '<div class="store-card-emoji">' + (st.icon || '🏪') + '</div>' +
+          '<div class="store-card-info">' +
+            '<h4>' + esc(st.name) + '</h4>' +
+            '<p>' + esc(st.tagline || (st.category === 'comtrua' ? 'Cơm trưa văn phòng' : 'Đặt món cùng nhau')) + '</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="store-card-meta">' +
+          '<span>' + countStr + '</span>' +
+          activeBadgeHtml +
+        '</div>' +
+        '<div class="store-card-actions">' +
+          actionBtnsHtml +
+        '</div>';
+
+      var btnSelect = card.querySelector('.btn-select-store');
+      if (btnSelect) {
+        btnSelect.onclick = function () {
+          if (cart.length > 0) {
+            if (!confirm('Đổi sang quán mới sẽ làm mới giỏ hàng hiện tại. Bạn có chắc muốn đổi quán không?')) return;
+            cart = [];
+            cartDel = {};
+          }
+          switchStore(st.id, true);
+          renderCart();
+          $('storeModal').hidden = true;
+          showToast('Đã chuyển sang quán: ' + st.name);
+        };
+      }
+
+      var btnEdit = card.querySelector('.btn-edit-store');
+      if (btnEdit) {
+        btnEdit.onclick = function () {
+          openStoreEditView(st);
+        };
+      }
+
+      var btnDel = card.querySelector('.btn-del-store');
+      if (btnDel) {
+        btnDel.onclick = function () {
+          if (!confirm('Bạn có chắc muốn xóa quán "' + st.name + '" khỏi danh sách yêu thích?')) return;
+          var customs = getCustomStores().filter(function (x) { return x.id !== st.id; });
+          saveCustomStores(customs);
+          if (currentStore.id === st.id) {
+            switchStore('uu-milktea', true);
+          }
+          renderStoreListGrid();
+          showToast('Đã xóa quán ' + st.name);
+        };
+      }
+
+      grid.appendChild(card);
+    });
+  }
+
+  function openStoreEditView(storeToEdit) {
+    if ($('storeListView')) $('storeListView').hidden = true;
+    if ($('storeEditView')) $('storeEditView').hidden = false;
+    if ($('tabStoreList')) $('tabStoreList').classList.remove('is-active');
+    if ($('tabStoreCreate')) $('tabStoreCreate').classList.add('is-active');
+    if ($('storeListFooterBtns')) $('storeListFooterBtns').hidden = true;
+    if ($('storeEditFooterBtns')) $('storeEditFooterBtns').hidden = false;
+
+    if ($('storeModalTitle')) {
+      $('storeModalTitle').textContent = storeToEdit ? '✏️ Chỉnh Sửa Quán Yêu Thích' : '➕ Tạo Quán Yêu Thích Mới';
+    }
+
+    parsedStoreItems = [];
+    parsedStoreToppings = [];
+
+    if (storeToEdit) {
+      $('editStoreId').value = storeToEdit.id;
+      $('storeInputName').value = storeToEdit.name || '';
+      $('storeInputCategory').value = storeToEdit.category || 'comtrua';
+      $('storeInputTagline').value = storeToEdit.tagline || '';
+      $('storeInputEmoji').value = storeToEdit.icon || '🍱';
+
+      document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
+        opt.classList.toggle('is-active', opt.dataset.emoji === (storeToEdit.icon || '🍱'));
+      });
+
+      var opts = storeToEdit.options || {};
+      $('chkOptSize').checked = !!opts.hasSize;
+      $('chkOptSugar').checked = !!opts.hasSugar;
+      $('chkOptIce').checked = !!opts.hasIce;
+      $('chkOptTopping').checked = opts.hasToppings !== false;
+      if ($('groupStoreToppings')) $('groupStoreToppings').style.display = $('chkOptTopping').checked ? 'block' : 'none';
+
+      var bInfo = storeToEdit.bankInfo || {};
+      $('storeBankName').value = bInfo.bank || '';
+      $('storeBankAccount').value = bInfo.account || '';
+      $('storeBankOwner').value = bInfo.owner || '';
+
+      var itemsTextArr = [];
+      var curCat = '';
+      (storeToEdit.items || []).forEach(function (it) {
+        if (it.nhom !== curCat) {
+          curCat = it.nhom;
+          itemsTextArr.push('[' + curCat + ']');
+        }
+        var priceStr = it.giaM ? (it.giaM >= 1000 ? (it.giaM / 1000) + 'k' : it.giaM) : '0';
+        if (it.giaL) priceStr += ' - ' + (it.giaL >= 1000 ? (it.giaL / 1000) + 'k' : it.giaL);
+        itemsTextArr.push(it.ten + ' ' + priceStr);
+      });
+      $('storeInputMenuText').value = itemsTextArr.join('\n');
+
+      var topTextArr = [];
+      (storeToEdit.toppings || []).forEach(function (tp) {
+        var pStr = tp.gia >= 1000 ? (tp.gia / 1000) + 'k' : tp.gia;
+        topTextArr.push(tp.ten + ' ' + pStr);
+      });
+      $('storeInputToppingsText').value = topTextArr.join('\n');
+
+      parsedStoreItems = (storeToEdit.items || []).slice();
+      parsedStoreToppings = (storeToEdit.toppings || []).slice();
+    } else {
+      $('editStoreId').value = '';
+      $('storeInputName').value = '';
+      $('storeInputCategory').value = 'comtrua';
+      $('storeInputTagline').value = '';
+      $('storeInputEmoji').value = '🍱';
+      document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
+        opt.classList.toggle('is-active', opt.dataset.emoji === '🍱');
+      });
+      $('chkOptSize').checked = false;
+      $('chkOptSugar').checked = false;
+      $('chkOptIce').checked = false;
+      $('chkOptTopping').checked = true;
+      if ($('groupStoreToppings')) $('groupStoreToppings').style.display = 'block';
+
+      $('storeBankName').value = '';
+      $('storeBankAccount').value = '';
+      $('storeBankOwner').value = '';
+
+      $('storeInputMenuText').value = '';
+      $('storeInputToppingsText').value = '';
+    }
+
+    renderParsedItemsPreview();
+  }
+
+  function doParseMenuInputs() {
+    var rawMenu = ($('storeInputMenuText') ? $('storeInputMenuText').value : '');
+    var rawTops = ($('storeInputToppingsText') ? $('storeInputToppingsText').value : '');
+    var catVal = ($('storeInputCategory') ? $('storeInputCategory').value : 'comtrua');
+    var defaultCatName = 'Món chính';
+    if (catVal === 'comtrua') defaultCatName = 'Cơm đĩa';
+    else if (catVal === 'trasua') defaultCatName = 'Trà sữa';
+    else if (catVal === 'cafe') defaultCatName = 'Cà phê';
+
+    parsedStoreItems = parseMenuText(rawMenu, defaultCatName);
+    parsedStoreToppings = parseToppingsText(rawTops);
+
+    renderParsedItemsPreview();
+    showToast('Đã phân tích được ' + parsedStoreItems.length + ' món và ' + parsedStoreToppings.length + ' topping!');
+  }
+
+  function renderParsedItemsPreview() {
+    var preview = $('parsedItemsPreview');
+    if (!preview) return;
+    preview.innerHTML = '';
+
+    if ($('parsedItemCount')) $('parsedItemCount').textContent = parsedStoreItems.length;
+    if ($('previewItemCount')) $('previewItemCount').textContent = parsedStoreItems.length + (parsedStoreToppings.length ? ' (+ ' + parsedStoreToppings.length + ' topping)' : '');
+
+    if (!parsedStoreItems.length && !parsedStoreToppings.length) {
+      preview.innerHTML = '<p class="preview-empty-hint">Chưa có món nào. Hãy dán menu vào ô trên và bấm "Phân tích & Nạp vào Menu".</p>';
+      return;
+    }
+
+    parsedStoreItems.forEach(function (it, idx) {
+      var row = document.createElement('div');
+      row.className = 'preview-item-row';
+      var priceStr = it.giaL ? ('M ' + fmtK(it.giaM) + ' · L ' + fmtK(it.giaL)) : fmt(it.giaM);
+      row.innerHTML =
+        '<div>' +
+          '<span class="p-item-name">' + esc(it.ten) + '</span>' +
+          '<span class="p-item-cat">' + esc(it.nhom) + '</span>' +
+        '</div>' +
+        '<div>' +
+          '<span class="p-item-price">' + priceStr + '</span>' +
+          '<button type="button" class="p-item-del" title="Xóa món này">✕</button>' +
+        '</div>';
+      row.querySelector('.p-item-del').onclick = function () {
+        parsedStoreItems.splice(idx, 1);
+        renderParsedItemsPreview();
+      };
+      preview.appendChild(row);
+    });
+
+    if (parsedStoreToppings.length) {
+      var topHead = document.createElement('div');
+      topHead.style.cssText = 'font-weight:700; font-size:11.5px; color:#0A7259; margin: 8px 0 4px; border-top: 1px dashed #CBD5E1; padding-top: 6px;';
+      topHead.textContent = '✨ MÓN THÊM / TOPPING:';
+      preview.appendChild(topHead);
+
+      parsedStoreToppings.forEach(function (tp, idx) {
+        var row = document.createElement('div');
+        row.className = 'preview-item-row';
+        row.innerHTML =
+          '<div>' +
+            '<span class="p-item-name">' + esc(tp.ten) + '</span>' +
+            '<span class="p-item-cat">Topping</span>' +
+          '</div>' +
+          '<div>' +
+            '<span class="p-item-price">+' + fmt(tp.gia) + '</span>' +
+            '<button type="button" class="p-item-del" title="Xóa topping này">✕</button>' +
+          '</div>';
+        row.querySelector('.p-item-del').onclick = function () {
+          parsedStoreToppings.splice(idx, 1);
+          renderParsedItemsPreview();
+        };
+        preview.appendChild(row);
+      });
+    }
+  }
+
+  function doSaveStore() {
+    var name = ($('storeInputName') ? $('storeInputName').value.trim() : '');
+    if (!name) {
+      alert('Vui lòng nhập Tên quán ăn / nước uống!');
+      if ($('storeInputName')) $('storeInputName').focus();
+      return;
+    }
+
+    if (!parsedStoreItems.length && $('storeInputMenuText') && $('storeInputMenuText').value.trim()) {
+      doParseMenuInputs();
+    }
+
+    if (!parsedStoreItems.length) {
+      alert('Vui lòng nhập ít nhất 1 món ăn trong danh sách món!');
+      return;
+    }
+
+    var editId = ($('editStoreId') ? $('editStoreId').value : '');
+    var storeId = editId || ('store_' + Date.now().toString(36));
+    var storeEmoji = ($('storeInputEmoji') ? $('storeInputEmoji').value : '🍱') || '🍱';
+    var storeCat = ($('storeInputCategory') ? $('storeInputCategory').value : 'comtrua');
+    var storeTagline = ($('storeInputTagline') ? $('storeInputTagline').value.trim() : '');
+
+    var uniqueNhom = [];
+    parsedStoreItems.forEach(function (it) {
+      var nh = it.nhom || 'Món chính';
+      if (uniqueNhom.indexOf(nh) === -1) uniqueNhom.push(nh);
+    });
+    if ($('chkOptTopping') && $('chkOptTopping').checked && parsedStoreToppings.length > 0) {
+      if (uniqueNhom.indexOf('topping') === -1) uniqueNhom.push('topping');
+    }
+
+    var cats = uniqueNhom.map(function (nh) {
+      var icon = '✨';
+      var lower = nh.toLowerCase();
+      if (lower.indexOf('cơm') !== -1) icon = '🍱';
+      else if (lower.indexOf('canh') !== -1) icon = '🍲';
+      else if (lower.indexOf('nước') !== -1 || lower.indexOf('uống') !== -1 || lower.indexOf('giải khát') !== -1) icon = '🥤';
+      else if (lower.indexOf('trà') !== -1) icon = '🧋';
+      else if (lower.indexOf('cà phê') !== -1) icon = '☕';
+      else if (lower.indexOf('bánh') !== -1) icon = '🥖';
+      else if (nh === 'topping') icon = '✨';
+
+      return {
+        id: nh,
+        name: nh === 'topping' ? 'Topping' : nh,
+        icon: icon,
+        title: nh === 'topping' ? 'Topping & Món thêm' : nh,
+        sub: 'Danh sách các món trong nhóm ' + nh
+      };
+    });
+
+    var unitStr = (storeCat === 'comtrua' ? 'phần' : (storeCat === 'trasua' ? 'ly' : 'món'));
+
+    var storeObj = {
+      id: storeId,
+      name: name,
+      tagline: storeTagline,
+      icon: storeEmoji,
+      category: storeCat,
+      itemUnit: unitStr,
+      isBuiltin: false,
+      options: {
+        hasSize: $('chkOptSize') ? $('chkOptSize').checked : false,
+        hasSugar: $('chkOptSugar') ? $('chkOptSugar').checked : false,
+        hasIce: $('chkOptIce') ? $('chkOptIce').checked : false,
+        hasToppings: $('chkOptTopping') ? $('chkOptTopping').checked : true
+      },
+      bankInfo: {
+        bank: ($('storeBankName') ? $('storeBankName').value.trim() : ''),
+        account: ($('storeBankAccount') ? $('storeBankAccount').value.trim() : ''),
+        owner: ($('storeBankOwner') ? $('storeBankOwner').value.trim() : '')
+      },
+      categories: cats,
+      items: parsedStoreItems,
+      toppings: parsedStoreToppings
     };
-  });
+
+    var customs = getCustomStores();
+    var idx = -1;
+    for (var i = 0; i < customs.length; i++) {
+      if (customs[i].id === storeId) { idx = i; break; }
+    }
+    if (idx !== -1) {
+      customs[idx] = storeObj;
+    } else {
+      customs.push(storeObj);
+    }
+    saveCustomStores(customs);
+
+    if (cart.length > 0) {
+      if (confirm('Đã lưu quán! Bạn có muốn mở ngay quán này để đặt đơn không? (Lưu ý giỏ hàng hiện tại sẽ làm mới)')) {
+        cart = [];
+        cartDel = {};
+        switchStore(storeObj, true);
+        renderCart();
+      }
+    } else {
+      switchStore(storeObj, true);
+    }
+
+    $('storeModal').hidden = true;
+    showToast('✓ Đã lưu quán: ' + name);
+  }
+
+  /* ================= 11. WIRING & EVENTS ================= */
 
   // Tìm kiếm
   if ($('search')) $('search').addEventListener('input', renderMenu);
@@ -2103,9 +2921,13 @@
   if ($('drawerBackdrop')) $('drawerBackdrop').onclick = closeMobileDrawer;
 
   /* ================= 12. KHỞI TẠO HỆ THỐNG ================= */
+  var initialStoreId = '';
+  try { initialStoreId = localStorage.getItem('office_order_active_store_id') || 'uu-milktea'; } catch (e) {}
+  switchStore(initialStoreId, false);
+  setupStoreModal();
+  setupProfileModal();
   updateMyProfileUI();
   initFields();
-  renderMenu();
 
   // Kiểm tra link URL: ?bill=MÃ
   (function () {

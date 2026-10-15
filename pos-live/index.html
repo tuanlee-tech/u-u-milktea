@@ -17,11 +17,18 @@
   <!-- 1. LEFT SIDEBAR (Dark Forest Pine Green) -->
   <aside class="luxury-sidebar" id="luxurySidebar">
     <!-- Brand / Real Logo Area -->
-    <div class="sidebar-brand">
-      <div class="brand-emblem">
-        <img src="assets/img/opt/logo.webp" alt="Ú Ụ Milk Tea" class="real-logo-img">
+    <div class="sidebar-brand" id="btnOpenStoreSidebar" role="button" tabindex="0" title="Đổi quán hoặc tạo quán mới">
+      <div class="brand-emblem" id="sidebarBrandEmblem">
+        <img src="assets/img/opt/logo.webp" alt="Logo quán" class="real-logo-img" id="sidebarLogoImg">
+        <span class="sidebar-emoji-icon" id="sidebarEmojiIcon" style="display:none">🧋</span>
       </div>
-      <div class="brand-cursive">Trà sữa nhà làm</div>
+      <div class="brand-info-wrap">
+        <div class="brand-title-row">
+          <span class="brand-name-text" id="sidebarStoreName">Ú Ụ Milk Tea</span>
+          <svg class="brand-switch-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="brand-cursive" id="sidebarStoreTagline">Trà sữa nhà làm</div>
+      </div>
     </div>
 
     <!-- Category Navigation (Vertical Tabs - Topping at the bottom) -->
@@ -149,6 +156,7 @@
             </svg>
           </button>
           <div class="dropdown-panel" id="moreDropdown" hidden>
+            <button class="dropdown-item" id="btnMenuStores" type="button">🏪 Quán & Menu yêu thích</button>
             <button class="dropdown-item" id="btnMenuNew" type="button">✨ Tạo bill mới</button>
             <button class="dropdown-item" id="btnMenuHistory" type="button">📋 Lịch sử đơn máy này</button>
           </div>
@@ -162,10 +170,20 @@
       <section class="menu-content-area">
         <div class="cat-header-banner">
           <div>
+            <div class="store-current-pill" id="btnOpenStoreBanner" role="button" tabindex="0" title="Bấm để đổi quán hoặc tạo quán mới">
+              <span class="store-pill-emoji" id="bannerStoreEmoji">🧋</span>
+              <span class="store-pill-title" id="bannerStoreName">Ú Ụ Milk Tea</span>
+              <span class="store-pill-badge">Đổi quán ▾</span>
+            </div>
             <h2 id="currentCatTitle">Trà sữa đậm vị</h2>
             <p class="cat-sub" id="currentCatSub">Hương trà mộc đậm đà hòa quyện cùng sữa thơm béo hảo hạng</p>
           </div>
-          <span class="cat-count-badge" id="currentCatCount">9 món</span>
+          <div class="cat-header-actions">
+            <button class="btn btn-sm btn-store-switch" id="btnOpenStoreAction" type="button" title="Đổi quán ăn/uống khác">
+              🏪 Đổi quán
+            </button>
+            <span class="cat-count-badge" id="currentCatCount">9 món</span>
+          </div>
         </div>
 
         <div class="products-grid" id="productGrid"></div>
@@ -436,6 +454,186 @@
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="btnCloseHistoryBtn" type="button">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 4: STORE MANAGEMENT (CHỌN & TẠO QUÁN) -->
+<div class="modal" id="storeModal" hidden>
+  <div class="modal-box modal-lg store-manager-modal">
+    <div class="modal-head">
+      <div>
+        <h3 id="storeModalTitle">🏪 Quán Yêu Thích & Menu Đặt Món</h3>
+        <p class="modal-sub" id="storeModalSub">Chọn quán để mở đơn hoặc thêm các quán ruột của văn phòng</p>
+      </div>
+      <button class="btn-close" id="btnCloseStoreModal" type="button">✕</button>
+    </div>
+
+    <!-- Store Manager Tabs -->
+    <div class="store-nav-tabs">
+      <button class="store-nav-tab is-active" id="tabStoreList" type="button">📋 Danh sách quán</button>
+      <button class="store-nav-tab" id="tabStoreCreate" type="button">➕ Thêm quán mới</button>
+    </div>
+
+    <div class="modal-body store-modal-body">
+      <!-- VIEW 1: DANH SÁCH QUÁN -->
+      <div class="store-view" id="storeListView">
+        <div class="store-list-grid" id="storeListGrid">
+          <!-- Render danh sách quán bằng JS -->
+        </div>
+        <div class="store-list-footer">
+          <button class="btn btn-outline-dashed" id="btnGoCreateStore" type="button">
+            ➕ Tạo thêm quán yêu thích mới
+          </button>
+          <div class="store-backup-actions">
+            <button class="btn-link-action" id="btnExportStores" type="button" title="Sao lưu danh sách quán ra file JSON">
+              📥 Xuất file JSON
+            </button>
+            <button class="btn-link-action" id="btnImportStores" type="button" title="Nhập danh sách quán từ file JSON">
+              📤 Nạp file JSON
+            </button>
+            <input type="file" id="inputImportStoresFile" accept=".json" style="display:none">
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW 2: TẠO / SỬA QUÁN -->
+      <div class="store-view" id="storeEditView" hidden>
+        <form id="storeForm" onsubmit="return false;">
+          <input type="hidden" id="editStoreId" value="">
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="cust-label" for="storeInputName">Tên quán ăn / nước uống <span class="req">*</span></label>
+              <input class="cust-input" id="storeInputName" type="text" placeholder="Vd: Cơm Tấm Ba Ghiền, Trà Sữa Phê La..." required maxlength="40">
+            </div>
+            <div class="form-group">
+              <label class="cust-label" for="storeInputCategory">Thể loại</label>
+              <select class="cust-input" id="storeInputCategory">
+                <option value="comtrua">🍱 Cơm trưa / Cơm văn phòng</option>
+                <option value="trasua">🧋 Trà sữa / Trà trái cây</option>
+                <option value="cafe">☕ Cà phê / Bánh mì sáng</option>
+                <option value="anvat">🍗 Gà rán / Ăn vặt</option>
+                <option value="bunpho">🍜 Bún / Phở / Hủ tiếu</option>
+                <option value="khac">✨ Quán khác</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row-2">
+            <div class="form-group">
+              <label class="cust-label">Icon / Emoji đại diện</label>
+              <div class="emoji-picker-row" id="emojiPickerRow">
+                <button type="button" class="emoji-opt is-active" data-emoji="🍱">🍱</button>
+                <button type="button" class="emoji-opt" data-emoji="🧋">🧋</button>
+                <button type="button" class="emoji-opt" data-emoji="☕">☕</button>
+                <button type="button" class="emoji-opt" data-emoji="🍗">🍗</button>
+                <button type="button" class="emoji-opt" data-emoji="🍜">🍜</button>
+                <button type="button" class="emoji-opt" data-emoji="🥖">🥖</button>
+                <button type="button" class="emoji-opt" data-emoji="🍕">🍕</button>
+                <button type="button" class="emoji-opt" data-emoji="🥪">🥪</button>
+                <button type="button" class="emoji-opt" data-emoji="🥤">🥤</button>
+                <button type="button" class="emoji-opt" data-emoji="🍰">🍰</button>
+                <button type="button" class="emoji-opt" data-emoji="🍲">🍲</button>
+              </div>
+              <input type="hidden" id="storeInputEmoji" value="🍱">
+            </div>
+            <div class="form-group">
+              <label class="cust-label" for="storeInputTagline">Slogan / Ghi chú quán</label>
+              <input class="cust-input" id="storeInputTagline" type="text" placeholder="Vd: Cơm tấm sườn bì chả thơm ngon" maxlength="50">
+            </div>
+          </div>
+
+          <!-- Tùy chọn đặt món của quán -->
+          <div class="form-group">
+            <label class="cust-label">Tùy chọn khi đặt món tại quán này</label>
+            <div class="store-checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkOptSize" checked>
+                <span>Có chọn Size (M / L)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkOptSugar">
+                <span>Có chọn mức Đường (0%, 50%, 100%...)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkOptIce">
+                <span>Có chọn mức Đá (Ít đá, Nhiều đá...)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkOptTopping" checked>
+                <span>Có Món thêm / Topping</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Thông tin chuyển khoản VietQR (tùy chọn) -->
+          <div class="form-group store-bank-box">
+            <label class="cust-label">Thông tin nhận tiền chuyển khoản (Sinh mã VietQR tự động)</label>
+            <div class="form-row-3">
+              <input class="cust-input" id="storeBankName" type="text" placeholder="Tên Ngân hàng (MB, VCB...)">
+              <input class="cust-input" id="storeBankAccount" type="text" placeholder="Số tài khoản">
+              <input class="cust-input" id="storeBankOwner" type="text" placeholder="Tên chủ tài khoản">
+            </div>
+          </div>
+
+          <!-- Nhập Menu món nhanh -->
+          <div class="form-group">
+            <div class="quick-paste-header">
+              <label class="cust-label" for="storeInputMenuText">
+                ⚡ Nhập nhanh Danh sách Món (Copy & Paste từ Zalo/Menu)
+              </label>
+              <span class="quick-paste-tip">Hệ thống tự nhận diện tên món và giá tiền</span>
+            </div>
+            <textarea class="cust-textarea" id="storeInputMenuText" rows="6" placeholder="Ví dụ dán vào:
+[Cơm đĩa]
+Cơm sườn nướng 35k
+Cơm sườn bì chả 45.000
+Cơm gà nướng 40k
+[Canh & Món thêm]
+Canh khổ qua 15k
+Trà đá 3k"></textarea>
+            <div class="quick-paste-actions">
+              <button class="btn btn-sm btn-parse-menu" id="btnParseMenuText" type="button">
+                ⚡ Phân tích & Nạp vào Menu (<span id="parsedItemCount">0</span> món)
+              </button>
+            </div>
+          </div>
+
+          <!-- Nhập Topping / Món thêm -->
+          <div class="form-group" id="groupStoreToppings">
+            <div class="quick-paste-header">
+              <label class="cust-label" for="storeInputToppingsText">
+                Thêm Topping / Món thêm (tùy chọn)
+              </label>
+              <span class="quick-paste-tip">Nhập dạng: Tên món giá tiền</span>
+            </div>
+            <textarea class="cust-textarea" id="storeInputToppingsText" rows="3" placeholder="Ví dụ:
+Trứng ốp la 7k
+Chả trứng 8k
+Thêm sườn 22k
+Thêm cơm 5k"></textarea>
+          </div>
+
+          <!-- Danh sách món đã phân tích (Preview) -->
+          <div class="form-group">
+            <label class="cust-label">Danh sách món sẽ lưu (<span id="previewItemCount">0</span> món)</label>
+            <div class="parsed-items-preview" id="parsedItemsPreview">
+              <p class="preview-empty-hint">Chưa có món nào. Hãy dán menu vào ô trên và bấm "Phân tích & Nạp vào Menu".</p>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-footer store-modal-footer">
+      <div id="storeListFooterBtns">
+        <button class="btn ghost" id="btnCloseStoreModalBtn" type="button">Đóng</button>
+      </div>
+      <div id="storeEditFooterBtns" hidden>
+        <button class="btn ghost" id="btnCancelEditStore" type="button">Quay lại</button>
+        <button class="btn btn-primary" id="btnSaveStore" type="button">💾 Lưu quán</button>
+      </div>
     </div>
   </div>
 </div>
