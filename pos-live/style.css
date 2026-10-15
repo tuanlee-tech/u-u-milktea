@@ -594,7 +594,7 @@ body {
 
 /* ================= 5. RIGHT SECTION (HÓA ĐƠN NHÓM LIVE) ================= */
 .cart-section {
-  width: 440px;
+  width: 550px;
   flex-shrink: 0;
   background: #FFFFFF;
   border-radius: 20px;
@@ -821,7 +821,6 @@ body {
   text-overflow: ellipsis;
   box-sizing: border-box;
   flex-shrink: 0;
-  text-transform: capitalize;
 }
 
 /* Item details (Single line text with ellipsis) */
@@ -919,6 +918,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   background: #FAF9F6;
   border: 1px solid #E5E1D7;
   border-radius: 10px;
@@ -926,8 +926,11 @@ body {
   font-size: 11.5px;
   color: var(--sage-muted);
 }
+.sum-input-box span {
+  white-space: nowrap;
+}
 .sum-input-box input {
-  width: 50px;
+  width: 140px;
   text-align: right;
   border: none;
   background: transparent;
@@ -935,6 +938,7 @@ body {
   font-weight: 700;
   color: var(--ink-primary);
   outline: none;
+  padding: 0 4px;
 }
 .summary-totals {
   display: flex;
@@ -1229,12 +1233,10 @@ body {
   box-shadow: 0 0 0 1px var(--forest-accent);
 }
 .top-chip-thumb {
-  width: 38px !important;
-  height: 38px !important;
-  min-width: 38px;
-  min-height: 38px;
-  max-width: 38px;
-  max-height: 38px;
+  max-width: 65px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
   border-radius: 8px;
   object-fit: cover !important;
   background: #F4F1EA;
@@ -1250,9 +1252,6 @@ body {
   font-size: 12px;
   font-weight: 700;
   color: var(--ink-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.25;
 }
 .top-name-price span {
@@ -1460,12 +1459,35 @@ body {
 .drawer-backdrop { display: none; }
 
 /* ================= 9. RESPONSIVE MEDIA QUERIES ================= */
+@media (min-width: 961px) {
+  .modal-box {
+    width: 65%;
+    max-width: 1000px;
+  }
+  .modal-box.modal-sm {
+    width: 100%;
+    max-width: 420px;
+  }
+  .modal-box.modal-lg {
+    width: 65%;
+    max-width: 1000px;
+  }
+  #custToppingsGrid,
+  .toppings-chip-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    max-height: 380px;
+  }
+  .top-chip-card {
+    min-height: 80px;
+  }
+}
+
 @media (max-width: 1400px) {
   .products-grid {
     grid-template-columns: repeat(3, 1fr);
   }
   .cart-section {
-    width: 380px;
+    width: 500px;
   }
 }
 
@@ -1480,7 +1502,7 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
   .cart-section {
-    width: 360px;
+    width: 450px;
   }
 }
 

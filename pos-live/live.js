@@ -235,6 +235,15 @@
     var v = Number(n) || 0;
     return (v >= 1000 ? (v / 1000).toLocaleString('vi-VN') + 'k' : v + 'đ');
   }
+  function parseMoney(v) {
+    if (typeof v === 'number') return Math.max(0, Math.round(v));
+    var s = String(v == null ? '' : v).replace(/[^\d]/g, '');
+    return s ? (parseInt(s, 10) || 0) : 0;
+  }
+  function formatMoneyStr(n) {
+    var num = parseMoney(n);
+    return num > 0 ? num.toLocaleString('vi-VN') : '0';
+  }
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
@@ -272,25 +281,28 @@
     return c.toppings.map(function (t) { return t.name + (t.qty > 1 ? ' x' + t.qty : ''); }).join(', ');
   }
 
-  /* Rút gọn tùy chọn hiển thị trên 1 dòng đơn */
+  /* Tùy chọn hiển thị trên 1 dòng đơn (không viết tắt) */
   function shortOptText(c) {
     var p = [];
     if (c.size !== 'TP') {
       if (c.sugar && c.sugar !== '100%') {
-        p.push(c.sugar === 'Không đường' ? '0%Đ' : c.sugar.replace(' đường', 'Đ').replace('%', '%Đ'));
+        if (c.sugar === 'Không đường') {
+          p.push('Không đường');
+        } else if (c.sugar.indexOf('đường') !== -1) {
+          p.push(c.sugar);
+        } else {
+          p.push(c.sugar + ' đường');
+        }
       }
       if (c.ice && c.ice !== 'Nhiều đá') {
-        p.push(c.ice.toLowerCase());
+        p.push(c.ice);
       }
     }
     if (c.toppings && c.toppings.length) {
       var tpStr = c.toppings.map(function (t) {
-        var n = t.name.replace(/Trân châu/g, 'TC')
-                      .replace(/Rau câu/g, 'RC')
-                      .replace(/Khúc bạch/g, 'KB');
-        return n + (t.qty > 1 ? 'x' + t.qty : '');
-      }).join(',');
-      p.push('+' + tpStr);
+        return t.name + (t.qty > 1 ? ' x' + t.qty : '');
+      }).join(', ');
+      p.push(tpStr);
     }
     if (c.note) p.push('"' + c.note + '"');
     return p.join(' · ');
@@ -381,8 +393,8 @@
       customer: $('customer') ? $('customer').value : '',
       channel: $('channel') ? $('channel').value : 'Ship',
       pay: $('payMethod') ? $('payMethod').value : 'Chuyển khoản',
-      disc: $('discount') ? $('discount').value : 0,
-      ship: $('shipFee') ? $('shipFee').value : 0,
+      disc: $('discount') ? parseMoney($('discount').value) : 0,
+      ship: $('shipFee') ? parseMoney($('shipFee').value) : 0,
       note: $('orderNote') ? $('orderNote').value : ''
     };
     Object.keys(map).forEach(function (k) {
@@ -394,21 +406,25 @@
     if ($('customer')) $('customer').value = F.customer.v || '';
     if ($('channel')) $('channel').value = F.channel.v || 'Ship';
     if ($('payMethod')) $('payMethod').value = F.pay.v || 'Chuyển khoản';
-    if ($('discount')) $('discount').value = F.disc.v || 0;
-    if ($('shipFee')) $('shipFee').value = F.ship.v || 0;
+    if ($('discount')) $('discount').value = formatMoneyStr(F.disc ? F.disc.v : 0);
+    if ($('shipFee')) $('shipFee').value = formatMoneyStr(F.ship ? F.ship.v : 0);
     if ($('orderNote')) $('orderNote').value = F.note.v || '';
   }
 
   function fieldChanged(inputId) {
     var k = FKEY[inputId];
-    var v = $(inputId).value;
+    var v = $(inputId) ? $(inputId).value : '';
+    if (k === 'disc' || k === 'ship') {
+      v = parseMoney(v);
+    }
     if (F[k] && F[k].v === v) return;
     F[k] = { v: v, rev: (F[k] ? F[k].rev + 1 : 1), by: clientId };
     renderCart();
+    schedulePush();
   }
 
   function snapshot() {
-    return { lines: cart, tomb: cartDel, fields: F, by: clientId, dev: deviceName() };
+    return { lines: cart, tomb: cartDel, fields: F, by: clientId, dev: deviceName(), ucolor: myUcolor };
   }
 
   function schedulePush() {
@@ -521,8 +537,12 @@
 
   function onRemote(wrap, from, dev) {
     if (!wrap || from === clientId) return;
+    var authorName = (wrap && wrap.dev) || dev || 'Bạn bè';
+    var hostVal = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
+    if (hostVal && (authorName === 'Đại Gia Trà Sữa' || FUN_NAMES.indexOf(authorName) !== -1 || (wrap && wrap.by && F.customer && F.customer.by === wrap.by))) {
+      authorName = hostVal;
+    }
     if (from) {
-      var authorName = (wrap && wrap.dev) || dev || 'Bạn bè';
       if (!onlineUsers[from]) {
         onlineUsers[from] = {
           cid: from,
@@ -546,7 +566,12 @@
       } finally {
         applying = false;
       }
-      setSyncSt('Cập nhật từ ' + (m.dev || dev || 'bạn bè'));
+      var latestHost = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
+      var sender = m.dev || dev || authorName || 'bạn bè';
+      if (latestHost && (sender === 'Đại Gia Trà Sữa' || FUN_NAMES.indexOf(sender) !== -1 || (wrap && wrap.by && F.customer && F.customer.by === wrap.by))) {
+        sender = latestHost;
+      }
+      setSyncSt('Cập nhật từ ' + sender);
       if (m.needsPush) schedulePush();
     }
     sendPresence({ active: true });
@@ -1043,8 +1068,8 @@
       sub += lineTotal(c);
       if (c.size !== 'TP') totalCups += (c.qty || 1);
     });
-    var disc = Math.max(0, Number($('discount') ? $('discount').value : 0) || 0);
-    var ship = Math.max(0, Number($('shipFee') ? $('shipFee').value : 0) || 0);
+    var disc = Math.max(0, parseMoney($('discount') ? $('discount').value : 0));
+    var ship = Math.max(0, parseMoney($('shipFee') ? $('shipFee').value : 0));
     return {
       sub: sub,
       disc: disc,
@@ -1067,7 +1092,7 @@
 
       var isMine = canEditRow(c);
       var shortOpt = shortOptText(c);
-      var ucol = c.ucolor || '#0A7259';
+      var ucol = (c.uid === myUid ? myUcolor : (c.ucolor || '#0A7259'));
 
       // 0. Border highlight & clean row style
       li.style.borderLeft = '3.5px solid ' + ucol;
@@ -1260,17 +1285,21 @@
     var ctx = canvas.getContext('2d');
 
     var t = totals();
-    var hostName = ($('customer') ? $('customer').value.trim() : '') || myUname || 'Đại diện nhóm';
+    var hostName = ($('customer') ? $('customer').value.trim() : '') ||
+                   (F.customer && F.customer.v ? F.customer.v.trim() : '') ||
+                   myUname ||
+                   'Host';
     var noteVal = ($('orderNote') ? $('orderNote').value.trim() : '');
 
     // Tính tiền theo từng bạn
     var personMap = {};
     cart.forEach(function (c) {
       var name = c.uname || c.owner || 'Bạn';
+      var ucol = (c.uid === myUid ? myUcolor : (c.ucolor || '#0A7259'));
       if (!personMap[name]) {
         personMap[name] = {
           name: name,
-          ucolor: c.ucolor || '#0A7259',
+          ucolor: ucol,
           cups: 0,
           drinkSub: 0
         };
@@ -1284,7 +1313,7 @@
     var netAdj = t.ship - t.disc; // Chênh lệch ship và giảm giá
 
     // Layout Dimensions (Logical pixels)
-    var W = 620;
+    var W = 660;
     var pad = 24;
     var scale = 2; // High-DPI sharpness
 
@@ -1359,7 +1388,7 @@
       curY += itemH;
 
       var authorName = c.uname || c.owner || 'Khách';
-      var ucol = c.ucolor || '#0A7259';
+      var ucol = (c.uid === myUid ? myUcolor : (c.ucolor || '#0A7259'));
 
       ctx.font = '800 10px ' + window.getComputedStyle(document.body).fontFamily;
       var nameMeasure = ctx.measureText(authorName).width;
@@ -1473,7 +1502,7 @@
     ctx.textAlign = 'left';
     ctx.fillStyle = '#D97706';
     ctx.font = '800 12px ' + window.getComputedStyle(document.body).fontFamily;
-    ctx.fillText('💰 BẢNG CHIA TIỀN TỪNG BẠN (CẦN CHUYỂN HOST):', pad, curY);
+    ctx.fillText('💰 BẢNG CHIA TIỀN TỪNG BẠN:', pad, curY);
 
     curY += 8;
     people.forEach(function (p) {
@@ -1505,12 +1534,35 @@
       ctx.fillText('👉 CẦN TRẢ: ' + fmt(finalPay), W - pad, curY);
     });
 
-    // FOOTER
+    // FOOTER (Chuyển khoản cho [Host] theo bill trên - Host in đậm nổi bật)
     curY += 34;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#94A3B8';
-    ctx.font = '500 11px ' + window.getComputedStyle(document.body).fontFamily;
-    ctx.fillText('Chuyển khoản cho Host theo bill trên · Chúc bạn ngon miệng! 🧋', W / 2, curY);
+    var fontFam = window.getComputedStyle(document.body).fontFamily;
+    var preTxt = 'Chuyển khoản cho ';
+    var postTxt = ' theo bill trên · Chúc bạn ngon miệng! 🧋';
+
+    ctx.font = '500 11.5px ' + fontFam;
+    var wPre = ctx.measureText(preTxt).width;
+    var wPost = ctx.measureText(postTxt).width;
+
+    ctx.font = '800 12.5px ' + fontFam;
+    var wHost = ctx.measureText(hostName).width;
+
+    var totalW = wPre + wHost + wPost;
+    var startX = (W - totalW) / 2;
+
+    ctx.textAlign = 'left';
+
+    ctx.font = '500 11.5px ' + fontFam;
+    ctx.fillStyle = '#64748B';
+    ctx.fillText(preTxt, startX, curY);
+
+    ctx.font = '800 12.5px ' + fontFam;
+    ctx.fillStyle = '#0A7259';
+    ctx.fillText(hostName, startX + wPre, curY);
+
+    ctx.font = '500 11.5px ' + fontFam;
+    ctx.fillStyle = '#64748B';
+    ctx.fillText(postTxt, startX + wPre + wHost, curY);
 
     $('imageExportModal').hidden = false;
   }
@@ -1630,7 +1682,9 @@
   }
 
   /* ================= 10. PROFILE MODAL SETUP ================= */
+  var tempSelectedColor = '';
   function setupProfileModal() {
+    tempSelectedColor = myUcolor;
     var pGrid = $('paletteGrid');
     if (!pGrid) return;
     pGrid.innerHTML = '';
@@ -1649,7 +1703,7 @@
         });
         dot.classList.add('is-active');
         dot.textContent = '✓';
-        myUcolor = col.bg;
+        tempSelectedColor = col.bg;
         var prevAv = $('profilePreviewAvatar');
         if (prevAv) prevAv.style.backgroundColor = col.bg;
       };
@@ -1659,9 +1713,14 @@
     var inputNm = $('inputProfileName');
     if (inputNm) {
       inputNm.value = myUname;
+      var prevNm = $('profilePreviewName');
+      var prevAv = $('profilePreviewAvatar');
+      if (prevNm) prevNm.textContent = myUname || 'Bạn';
+      if (prevAv) {
+        prevAv.textContent = userInitial(myUname);
+        prevAv.style.backgroundColor = myUcolor;
+      }
       inputNm.oninput = function () {
-        var prevNm = $('profilePreviewName');
-        var prevAv = $('profilePreviewAvatar');
         if (prevNm) prevNm.textContent = inputNm.value.trim() || 'Bạn';
         if (prevAv) prevAv.textContent = userInitial(inputNm.value);
       };
@@ -1682,12 +1741,52 @@
   // Tìm kiếm
   if ($('search')) $('search').addEventListener('input', renderMenu);
 
-  // Inputs điều chỉnh tiền
-  if ($('discount')) $('discount').addEventListener('input', function () { fieldChanged('discount'); });
-  if ($('shipFee')) $('shipFee').addEventListener('input', function () { fieldChanged('shipFee'); });
+  // Inputs điều chỉnh tiền (tự động phân tách phần nghìn)
+  ['discount', 'shipFee'].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener('input', function () {
+      var raw = el.value;
+      var sel = el.selectionEnd;
+      var num = parseMoney(raw);
+      var formatted = (num === 0 && raw.trim() === '') ? '' : (num > 0 ? num.toLocaleString('vi-VN') : '0');
+      el.value = formatted;
+      if (sel != null && el.setSelectionRange) {
+        var diff = formatted.length - raw.length;
+        var newPos = Math.max(0, sel + diff);
+        el.setSelectionRange(newPos, newPos);
+      }
+      fieldChanged(id);
+    });
+    el.addEventListener('blur', function () {
+      var num = parseMoney(el.value);
+      el.value = num > 0 ? num.toLocaleString('vi-VN') : '0';
+    });
+  });
   ['customer', 'orderNote'].forEach(function (id) {
     if ($(id)) {
-      $(id).addEventListener('input', function () { fieldChanged(id); });
+      $(id).addEventListener('input', function () {
+        if (id === 'customer') {
+          var val = $('customer').value.trim();
+          if (val) {
+            myUname = val;
+            try {
+              sessionStorage.setItem('uu_pos_tab_uname', myUname);
+              sessionStorage.setItem(tabSessionId + '_uname', myUname);
+              localStorage.setItem('uu_pos_uname', myUname);
+            } catch (e) {}
+            updateMyProfileUI();
+            cart.forEach(function (c) {
+              if (c.uid === myUid) {
+                c.uname = val;
+                c.owner = val;
+                touch(c);
+              }
+            });
+          }
+        }
+        fieldChanged(id);
+      });
       $(id).addEventListener('change', function () { fieldChanged(id); });
     }
   });
@@ -1722,7 +1821,11 @@
   if ($('btnSaveProfile')) {
     $('btnSaveProfile').onclick = function () {
       var newName = ($('inputProfileName') ? $('inputProfileName').value.trim() : '') || 'Bạn';
+      var oldName = myUname;
       myUname = newName;
+      if (tempSelectedColor) {
+        myUcolor = tempSelectedColor;
+      }
       try {
         sessionStorage.setItem('uu_pos_tab_uname', myUname);
         sessionStorage.setItem('uu_pos_tab_ucolor', myUcolor);
@@ -1732,8 +1835,28 @@
         localStorage.setItem('uu_pos_ucolor', myUcolor);
       } catch (e) {}
       updateMyProfileUI();
+
+      if ($('customer')) {
+        var curCust = $('customer').value.trim();
+        if (!curCust || curCust === oldName || FUN_NAMES.indexOf(curCust) !== -1) {
+          $('customer').value = newName;
+          fieldChanged('customer');
+        }
+      }
+
+      cart.forEach(function (c) {
+        if (c.uid === myUid || c.uname === oldName || c.owner === oldName) {
+          c.uname = newName;
+          c.owner = newName;
+          c.ucolor = myUcolor;
+          touch(c);
+        }
+      });
+      renderCart();
+
       $('profileModal').hidden = true;
-      sendPresence({ active: true });
+      sendPresence({ active: true, ucolor: myUcolor, uname: myUname });
+      schedulePush();
       showToast('Đã lưu thông tin hồ sơ!');
     };
   }
@@ -1760,8 +1883,8 @@
     try { history.replaceState(null, '', location.href.split('?')[0] + '?bill=' + encodeURIComponent(orderCode)); } catch (e) {}
     if ($('customer')) $('customer').value = '';
     if ($('orderNote')) $('orderNote').value = '';
-    if ($('discount')) $('discount').value = 0;
-    if ($('shipFee')) $('shipFee').value = 0;
+    if ($('discount')) $('discount').value = '0';
+    if ($('shipFee')) $('shipFee').value = '0';
     initFields();
     renderCart();
     wsConnect();
