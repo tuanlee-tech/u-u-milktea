@@ -73,11 +73,15 @@ function ensure_() {
   var m = sheet_( 'MENU',    ['id','ten','nhom','giaM','giaL','gia','note','active']);
   var d = sheet_('DONHANG',  ['ma_don','thoi_gian','ten_khach','kenh','thanh_toan','tam_tinh','giam_gia','ship','tong_cong','ghi_chu']);
   var c = sheet_('CHITIET',  ['ma_don','ten','size','so_luong','don_gia','thanh_tien','chu_ly','topping','duong','da','ghi_chu']);
+  var q = quanSheet_();
   ensureCols_(c, ['ma_don','ten','size','so_luong','don_gia','thanh_tien','chu_ly','topping','duong','da','ghi_chu']);
   if (m.getLastRow() === 1) {
     MENU_DEFAULT.forEach(function(r){ m.appendRow(r); });
   }
-  return {menu:m, don:d, ct:c};
+  if (q.getLastRow() === 1) {
+    STORES_DEFAULT_SHEET.forEach(function(r){ q.appendRow(r); });
+  }
+  return {menu:m, don:d, ct:c, quan:q};
 }
 
 /* Thêm cột thiếu vào sheet cũ (giữ dữ liệu, chỉ gắn header mới) */
@@ -127,17 +131,143 @@ function setState_(key, value) {
   return now.getTime();
 }
 
+/* ===== QUẢN LÝ QUÁN TRÊN GOOGLE SHEET (TAB "QUAN") ===== */
+
+var STORES_DEFAULT_SHEET = [
+  [
+    'uu-milktea', 'Ú Ụ Milk Tea', 'Trà sữa nhà làm · Chuẩn vị đậm trà', '🧋', 'trasua', 'ly',
+    JSON.stringify({ hasSize: true, hasSugar: true, hasIce: true, hasToppings: true }),
+    JSON.stringify({ bank: '', account: '', owner: '' }),
+    JSON.stringify({
+      categories: [
+        { id: 'trasua', name: 'Trà sữa', icon: '🧋', title: 'Trà sữa đậm vị', sub: 'Hương trà mộc đậm đà hòa quyện cùng sữa thơm béo hảo hạng' },
+        { id: 'suatuoi', name: 'Sữa tươi', icon: '🥛', title: 'Sữa tươi thanh mát', sub: 'Sữa tươi Đà Lạt béo ngậy kết hợp sốt đường đen/cà phê' },
+        { id: 'tra', name: 'Trà mộc', icon: '🍃', title: 'Trà trái cây & Trà mộc', sub: 'Trà ủ lạnh thơm thanh giải nhiệt ngày hè' },
+        { id: 'traitraicay', name: 'Trái cây', icon: '🍊', title: 'Trà hoa quả tươi mát', sub: 'Vị chua ngọt tự nhiên từ hoa quả nhiệt đới tươi rói' },
+        { id: 'topping', name: 'Topping', icon: '✨', title: 'Thế giới topping nhà làm', sub: 'Thạch, trân châu, pudding và khúc bạch tự nấu mỗi ngày' }
+      ],
+      items: [],
+      toppings: []
+    }),
+    1, new Date().toISOString()
+  ],
+  [
+    'vua-tron', 'Vua Trộn', 'Mì Quảng · Bún nước tương · Bún mắm nêm · Bánh ướt', '🍜', 'anvat', 'phần',
+    JSON.stringify({ hasSize: true, hasSugar: false, hasIce: false, hasToppings: false }),
+    JSON.stringify({ bank: '', account: '', owner: '' }),
+    JSON.stringify({
+      categories: [
+        { id: 'monchinh', name: 'Món trộn', icon: '🍜', title: 'Món ngon Vua Trộn', sub: 'Đồng giá 25k · Tùy chọn 30k / 35k · Ghi chú điều chỉnh topping theo ý' }
+      ],
+      items: [
+        { id: 'vt01', ten: 'Mì Quảng', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/mi-quang.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt02', ten: 'Bún nước tương', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-nuoc-tuong.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt03', ten: 'Bún mắm nêm', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-mam-nem.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt04', ten: 'Bánh ướt', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/banh-uot.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' }
+      ],
+      toppings: []
+    }),
+    1, new Date().toISOString()
+  ]
+];
+
+function quanSheet_() {
+  return sheet_('QUAN', ['id', 'ten', 'tagline', 'icon', 'category', 'item_unit', 'options_json', 'bank_json', 'menu_json', 'active', 'updated_at']);
+}
+
+function getStoresList_() {
+  var sh = quanSheet_();
+  var rows = sh.getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    if (Number(r[9]) === 0) continue; // active = 0 thì ẩn
+    var st = {
+      id: String(r[0] || ''),
+      name: String(r[1] || ''),
+      tagline: String(r[2] || ''),
+      icon: String(r[3] || '🍱'),
+      category: String(r[4] || 'anvat'),
+      itemUnit: String(r[5] || 'phần'),
+      options: { hasSize: true, hasSugar: false, hasIce: false, hasToppings: false },
+      bankInfo: { bank: '', account: '', owner: '' },
+      categories: [],
+      items: [],
+      toppings: []
+    };
+    try { if (r[6]) st.options = JSON.parse(r[6]); } catch(e){}
+    try { if (r[7]) st.bankInfo = JSON.parse(r[7]); } catch(e){}
+    try {
+      if (r[8]) {
+        var menuData = JSON.parse(r[8]);
+        st.categories = menuData.categories || [];
+        st.items = menuData.items || [];
+        st.toppings = menuData.toppings || [];
+      }
+    } catch(e){}
+    out.push(st);
+  }
+  return out;
+}
+
+function saveStore_(st) {
+  if (!st || !st.id) return {ok:false, error:'Mã quán không hợp lệ'};
+  var sh = quanSheet_();
+  var n = sh.getLastRow();
+  var now = new Date().toISOString();
+  var rowData = [
+    st.id,
+    st.name || '',
+    st.tagline || '',
+    st.icon || '🍱',
+    st.category || 'anvat',
+    st.itemUnit || 'phần',
+    JSON.stringify(st.options || {}),
+    JSON.stringify(st.bankInfo || {}),
+    JSON.stringify({
+      categories: st.categories || [],
+      items: st.items || [],
+      toppings: st.toppings || []
+    }),
+    1,
+    now
+  ];
+  if (n > 1) {
+    var ids = sh.getRange(2, 1, n - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === String(st.id)) {
+        sh.getRange(i + 2, 1, 1, rowData.length).setValues([rowData]);
+        return {ok:true, id:st.id, updated:true};
+      }
+    }
+  }
+  sh.appendRow(rowData);
+  return {ok:true, id:st.id, created:true};
+}
+
+function saveStoresBatch_(stores) {
+  if (!Array.isArray(stores)) return {ok:false, error:'Danh sách quán không hợp lệ'};
+  var res = [];
+  stores.forEach(function(st) {
+    res.push(saveStore_(st));
+  });
+  return {ok:true, count: stores.length, results: res};
+}
+
 function doGet(e) {
   ensure_();
   var action = (e && e.parameter && e.parameter.action) || '';
   if (action === 'menu') {
     return json_({ok:true, menu: getMenuList_()});
   }
+  if (action === 'stores') {
+    return json_({ok:true, stores: getStoresList_()});
+  }
   if (action === 'state') {
     var st = getState_((e.parameter && e.parameter.key) || '');
     return json_({ok:true, state: st, serverNow: new Date().getTime()});
   }
-  return json_({ok:true, msg:'POS UU online. Dung ?action=menu'});
+  return json_({ok:true, msg:'Office Order POS online. Dung ?action=stores hoac ?action=menu'});
 }
 
 function doPost(e) {
@@ -145,6 +275,8 @@ function doPost(e) {
   try {
     var body = JSON.parse(e.postData.contents);
     if (body.action === 'save') return saveOrder_(body.order);
+    if (body.action === 'save_store') return json_(saveStore_(body.store));
+    if (body.action === 'save_stores_batch') return json_(saveStoresBatch_(body.stores));
     if (body.action === 'state') {
       var t = setState_(body.key || '', body.value || '');
       return json_({ok:true, serverNow: t});

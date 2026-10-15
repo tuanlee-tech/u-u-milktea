@@ -324,13 +324,13 @@
     <div class="modal-body customizer-body">
       <!-- Tên người uống -->
       <div class="cust-section">
-        <label class="cust-label">Ly của ai?</label>
+        <label class="cust-label" id="custDrinkerLabel">Ly của ai?</label>
         <input class="cust-input" id="custDrinkerName" type="text" placeholder="Tên bạn (vd: Minh, Tuấn, Vy)...">
       </div>
 
       <!-- Chọn Size -->
       <div class="cust-section" id="custSizeSection">
-        <label class="cust-label">Chọn Size</label>
+        <label class="cust-label" id="custSizeLabel">Chọn Size</label>
         <div class="pill-group" id="custSizeGroup">
           <button class="pill-btn is-active" type="button" data-size="M" id="btnSizeM">Size M · 18k</button>
           <button class="pill-btn" type="button" data-size="L" id="btnSizeL">Size L · 22k</button>
@@ -486,6 +486,9 @@
             ➕ Tạo thêm quán yêu thích mới
           </button>
           <div class="store-backup-actions">
+            <button class="btn-link-action" id="btnSyncStoresSheet" type="button" title="Đồng bộ danh sách quán từ Google Sheet">
+              🔄 Đồng bộ Google Sheet
+            </button>
             <button class="btn-link-action" id="btnExportStores" type="button" title="Sao lưu danh sách quán ra file JSON">
               📥 Xuất file JSON
             </button>

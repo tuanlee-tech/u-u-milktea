@@ -78,69 +78,71 @@
     ]
   };
 
-  var STORE_COMTAM = {
-    id: 'com-tam',
-    name: 'Cơm Tấm Văn Phòng',
-    tagline: 'Cơm sườn nướng than hoa · Đậm đà chuẩn vị',
-    icon: '🍱',
-    category: 'comtrua',
+  var STORE_VUATRON = {
+    id: 'vua-tron',
+    name: 'Vua Trộn',
+    tagline: 'Mì Quảng · Bún nước tương · Bún mắm nêm · Bánh ướt',
+    icon: '🍜',
+    category: 'anvat',
     itemUnit: 'phần',
     isBuiltin: true,
-    options: { hasSize: false, hasSugar: false, hasIce: false, hasToppings: true },
+    options: { hasSize: true, hasSugar: false, hasIce: false, hasToppings: false },
     bankInfo: { bank: '', account: '', owner: '' },
     categories: [
-      { id: 'com', name: 'Cơm đĩa', icon: '🍱', title: 'Cơm đĩa nóng hổi', sub: 'Cơm tấm dẻo thơm hạt tấm vỡ cùng các món mặn nướng nóng hổi' },
-      { id: 'canh', name: 'Canh & Món thêm', icon: '🍲', title: 'Canh nóng trong ngày', sub: 'Canh ngọt thanh đạm ăn kèm cơm' },
-      { id: 'douong', name: 'Đồ uống', icon: '🥤', title: 'Nước giải khát', sub: 'Trà đá, nước sâm, nước ngọt ướp lạnh' }
+      {
+        id: 'monchinh',
+        name: 'Món trộn',
+        icon: '🍜',
+        title: 'Món ngon Vua Trộn',
+        sub: 'Đồng giá 25k · Tùy chọn 30k / 35k · Ghi chú điều chỉnh topping theo ý'
+      }
     ],
     items: [
-      { id: 'ct01', ten: 'Cơm sườn nướng than', nhom: 'com', giaM: 38000, note: 'Sườn nướng mật ong' },
-      { id: 'ct02', ten: 'Cơm sườn bì chả', nhom: 'com', giaM: 48000, note: 'Bộ ba truyền thống' },
-      { id: 'ct03', ten: 'Cơm sườn trứng ốp la', nhom: 'com', giaM: 45000 },
-      { id: 'ct04', ten: 'Cơm sườn bì chả trứng (Đặc biệt)', nhom: 'com', giaM: 55000, note: 'Đầy đủ món' },
-      { id: 'ct05', ten: 'Cơm đùi gà nướng sốt cay', nhom: 'com', giaM: 42000 },
-      { id: 'ct06', ten: 'Cơm thịt kho tàu hột vịt', nhom: 'com', giaM: 40000 },
-      { id: 'ct07', ten: 'Canh khổ qua nhồi thịt', nhom: 'canh', giaM: 15000 },
-      { id: 'ct08', ten: 'Canh rong biển thịt bằm', nhom: 'canh', giaM: 12000 },
-      { id: 'ct09', ten: 'Trà đá giải nhiệt', nhom: 'douong', giaM: 3000 },
-      { id: 'ct10', ten: 'Nước ngọt lon các loại', nhom: 'douong', giaM: 15000 }
-    ],
-    toppings: [
-      { id: 'tp_ct01', ten: 'Trứng ốp la lòng đào', nhom: 'topping', gia: 7000 },
-      { id: 'tp_ct02', ten: 'Chả trứng chưng thịt', nhom: 'topping', gia: 8000 },
-      { id: 'tp_ct03', ten: 'Thêm miếng sườn nướng', nhom: 'topping', gia: 22000 },
-      { id: 'tp_ct04', ten: 'Thêm cơm tấm', nhom: 'topping', gia: 5000 }
-    ]
-  };
-
-  var STORE_CAFE = {
-    id: 'cafe-sang',
-    name: 'Cà Phê & Bánh Mì Sáng',
-    tagline: 'Năng lượng tươi mới khởi đầu ngày làm việc',
-    icon: '☕',
-    category: 'cafe',
-    itemUnit: 'món',
-    isBuiltin: true,
-    options: { hasSize: true, hasSugar: true, hasIce: true, hasToppings: false },
-    bankInfo: { bank: '', account: '', owner: '' },
-    categories: [
-      { id: 'cafe', name: 'Cà phê', icon: '☕', title: 'Cà phê phin truyền thống', sub: 'Hạt Robusta mộc đậm đà thơm nồng' },
-      { id: 'banhmi', name: 'Bánh mì', icon: '🥖', title: 'Bánh mì giòn rụm', sub: 'Bánh mì nóng hổi đầy ắp nhân pate bơ' },
-      { id: 'nuoc', name: 'Nước ép & Trà', icon: '🧃', title: 'Thức uống giải khát', sub: 'Nước cam vắt nguyên chất và trà thanh nhiệt' }
-    ],
-    items: [
-      { id: 'cf01', ten: 'Cà phê đen đá', nhom: 'cafe', giaM: 18000, giaL: 22000 },
-      { id: 'cf02', ten: 'Cà phê sữa đá', nhom: 'cafe', giaM: 22000, giaL: 26000 },
-      { id: 'cf03', ten: 'Bạc xỉu 3 tầng', nhom: 'cafe', giaM: 25000, giaL: 30000 },
-      { id: 'bm01', ten: 'Bánh mì chả lụa pate bơ', nhom: 'banhmi', giaM: 22000 },
-      { id: 'bm02', ten: 'Bánh mì ốp la xúc xích', nhom: 'banhmi', giaM: 25000 },
-      { id: 'bm03', ten: 'Bánh mì thập cẩm đặc biệt', nhom: 'banhmi', giaM: 30000 },
-      { id: 'ne01', ten: 'Cam vắt nguyên chất mật ong', nhom: 'nuoc', giaM: 25000, giaL: 30000 }
+      {
+        id: 'vt01',
+        ten: 'Mì Quảng',
+        nhom: 'monchinh',
+        giaM: 25000,
+        giaL: 30000,
+        giaXL: 35000,
+        img: 'assets/img/vua-tron/mi-quang.webp',
+        note: 'Đồng giá 25k (tùy chọn 30k · 35k)'
+      },
+      {
+        id: 'vt02',
+        ten: 'Bún nước tương',
+        nhom: 'monchinh',
+        giaM: 25000,
+        giaL: 30000,
+        giaXL: 35000,
+        img: 'assets/img/vua-tron/bun-nuoc-tuong.webp',
+        note: 'Đồng giá 25k (tùy chọn 30k · 35k)'
+      },
+      {
+        id: 'vt03',
+        ten: 'Bún mắm nêm',
+        nhom: 'monchinh',
+        giaM: 25000,
+        giaL: 30000,
+        giaXL: 35000,
+        img: 'assets/img/vua-tron/bun-mam-nem.webp',
+        note: 'Đồng giá 25k (tùy chọn 30k · 35k)'
+      },
+      {
+        id: 'vt04',
+        ten: 'Bánh ướt',
+        nhom: 'monchinh',
+        giaM: 25000,
+        giaL: 30000,
+        giaXL: 35000,
+        img: 'assets/img/vua-tron/banh-uot.webp',
+        note: 'Đồng giá 25k (tùy chọn 30k · 35k)'
+      }
     ],
     toppings: []
   };
 
-  var BUILTIN_STORES = [ STORE_UU, STORE_COMTAM, STORE_CAFE ];
+  var BUILTIN_STORES = [ STORE_UU, STORE_VUATRON ];
   var currentStore = STORE_UU;
   var MENU = (STORE_UU.items || []).concat(STORE_UU.toppings || []);
   var cart = [];
@@ -164,6 +166,58 @@
   function saveCustomStores(list) {
     try {
       localStorage.setItem('office_order_custom_stores', JSON.stringify(list));
+    } catch (e) {}
+  }
+
+  /* Đồng bộ danh sách quán từ Google Sheet */
+  function syncStoresFromSheet(isSilent) {
+    var apiUrl = DEFAULT_API;
+    if (!apiUrl) return;
+    var fetchUrl = apiUrl + (apiUrl.indexOf('?') === -1 ? '?' : '&') + 'action=stores&t=' + Date.now();
+    fetch(fetchUrl)
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.ok && Array.isArray(data.stores) && data.stores.length) {
+          var customs = getCustomStores();
+          data.stores.forEach(function (sheetStore) {
+            var bIdx = -1;
+            for (var i = 0; i < BUILTIN_STORES.length; i++) {
+              if (BUILTIN_STORES[i].id === sheetStore.id) { bIdx = i; break; }
+            }
+            if (bIdx !== -1) {
+              Object.assign(BUILTIN_STORES[bIdx], sheetStore);
+            } else {
+              var cIdx = -1;
+              for (var j = 0; j < customs.length; j++) {
+                if (customs[j].id === sheetStore.id) { cIdx = j; break; }
+              }
+              if (cIdx !== -1) {
+                Object.assign(customs[cIdx], sheetStore);
+              } else {
+                customs.push(sheetStore);
+              }
+            }
+          });
+          saveCustomStores(customs);
+          renderStoreListGrid();
+          if (!isSilent) showToast('✓ Đã đồng bộ ' + data.stores.length + ' quán từ Google Sheet!');
+        }
+      })
+      .catch(function (err) {
+        if (!isSilent) showToast('Không thể kết nối Google Sheet: ' + (err.message || 'Lỗi mạng'));
+      });
+  }
+
+  /* Đẩy quán mới / cập nhật lên Google Sheet */
+  function pushStoreToSheet(storeObj) {
+    var apiUrl = DEFAULT_API;
+    if (!apiUrl || !storeObj) return;
+    try {
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'save_store', store: storeObj })
+      }).catch(function () {});
     } catch (e) {}
   }
 
@@ -447,7 +501,11 @@
     'tc06': 'assets/img/products/25._Trà_tắc_xí_muội_20261014152238.jpg',
     'tc07': 'assets/img/products/26._Trà_dưa_lưới_v3_20261014152238.jpg',
     'tc08': 'assets/img/products/27._Trà_dâu_v3_20261014152238.jpg',
-    'tc09': 'assets/img/products/28._Trà_đắc_thơm_v3_20261014152238.jpg'
+    'tc09': 'assets/img/products/28._Trà_đắc_thơm_v3_20261014152238.jpg',
+    'vt01': 'assets/img/vua-tron/mi-quang.webp',
+    'vt02': 'assets/img/vua-tron/bun-nuoc-tuong.webp',
+    'vt03': 'assets/img/vua-tron/bun-mam-nem.webp',
+    'vt04': 'assets/img/vua-tron/banh-uot.webp'
   };
 
   // Quản lý Identity người dùng: Mỗi tab/cửa sổ có danh tính độc lập (kể cả khi duplicate tab)
@@ -557,6 +615,18 @@
   }
   function lineUnit(c) { return (c.price || 0) + topSum(c); }
   function lineTotal(c) { return lineUnit(c) * (c.qty || 1); }
+
+  function formatSizeLabel(size, store) {
+    if (!size || size === 'TP') return '';
+    var st = store || currentStore;
+    var isFood = (st && (st.itemUnit === 'phần' || st.category === 'anvat' || st.category === 'comtrua'));
+    if (isFood) {
+      if (size === 'M') return 'Thường';
+      if (size === 'L') return 'Lớn';
+      if (size === 'XL') return 'Đặc biệt';
+    }
+    return size;
+  }
 
   function topText(c) {
     if (!c.toppings || !c.toppings.length) return '';
@@ -1154,6 +1224,8 @@
       var priceHtml = '';
       if (isTopping) {
         priceHtml = fmt(m.gia) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '');
+      } else if (hasOptSize && m.giaXL) {
+        priceHtml = fmtK(m.giaM) + ' · ' + fmtK(m.giaL) + ' · ' + fmtK(m.giaXL);
       } else if (hasOptSize && m.giaL) {
         priceHtml = 'M ' + fmtK(m.giaM) + ' · L ' + fmtK(m.giaL) + (m.note ? ' <span class="subnote">(' + esc(m.note) + ')</span>' : '');
       } else {
@@ -1216,8 +1288,11 @@
 
     if (!modal) return;
 
+    var isFood = (currentStore && (currentStore.itemUnit === 'phần' || currentStore.category === 'anvat' || currentStore.category === 'comtrua'));
+    var titleLbl = $('custDrinkerLabel');
+    if (titleLbl) titleLbl.textContent = isFood ? 'Phần của ai?' : 'Ly của ai?';
     title.textContent = (menuItem ? menuItem.ten : (cartLine ? cartLine.name : 'Tùy chọn'));
-    sub.textContent = cartLine ? 'Chỉnh sửa ly của bạn' : 'Tùy chọn ly của bạn';
+    sub.textContent = isFood ? (cartLine ? 'Chỉnh sửa phần ăn của bạn' : 'Tùy chọn phần ăn của bạn') : (cartLine ? 'Chỉnh sửa ly của bạn' : 'Tùy chọn ly của bạn');
 
     // Default or existing values
     if (cartLine) {
@@ -1227,9 +1302,9 @@
       curSelectedToppings = (cartLine.toppings || []).map(function (t) { return Object.assign({}, t); });
       drinker.value = cartLine.uname || cartLine.owner || myUname;
       note.value = cartLine.note || '';
-      btnConfirm.textContent = 'Cập nhật ly này';
+      btnConfirm.textContent = isFood ? 'Cập nhật phần này' : 'Cập nhật ly này';
       // Broadcast presence focus
-      sendPresence({ lid: cartLine.lid, action: 'sửa ly' });
+      sendPresence({ lid: cartLine.lid, action: isFood ? 'sửa phần ăn' : 'sửa ly' });
     } else {
       curSelectedSize = isToppingOnly ? 'TP' : 'M';
       curSelectedSugar = '100%';
@@ -1237,29 +1312,55 @@
       curSelectedToppings = [];
       drinker.value = myUname;
       note.value = '';
-      btnConfirm.textContent = 'Thêm vào bill nhóm';
+      btnConfirm.textContent = isFood ? 'Thêm vào bill nhóm' : 'Thêm vào bill nhóm';
       // Broadcast presence focus
       sendPresence({ lid: 'new', action: 'chọn ' + (menuItem ? menuItem.ten : 'món') });
+    }
+
+    if (note) {
+      note.placeholder = isFood ? 'Ghi chú (vd: nhiều rau, ít cay, thêm chả, không hành…)' : 'Ít trà, đậm vị, trân châu mềm…';
     }
 
     var opts = (currentStore && currentStore.options) || { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
     var hideOptions = isToppingOnly || (menuItem && menuItem.nhom === 'topping') || (cartLine && cartLine.size === 'TP');
 
-    // Hide/show size
+    // Hide/show size or portion
     var secSize = $('custSizeSection');
-    if (secSize) {
-      if (!hideOptions && opts.hasSize && menuItem && menuItem.giaL) {
+    var sizeGrp = $('custSizeGroup');
+    var sizeLbl = $('custSizeLabel');
+    if (secSize && sizeGrp) {
+      if (!hideOptions && opts.hasSize && menuItem && (menuItem.giaL || menuItem.giaXL)) {
         secSize.style.display = 'block';
-        var bm = $('btnSizeM');
-        var bl = $('btnSizeL');
-        if (bm) {
-          bm.textContent = 'Size M · ' + fmtK(menuItem.giaM);
-          bm.classList.toggle('is-active', curSelectedSize === 'M');
+        if (sizeLbl) sizeLbl.textContent = isFood ? 'Chọn Phần' : 'Chọn Size';
+
+        var sizeOptions = [];
+        if (menuItem.giaXL) {
+          sizeOptions = [
+            { id: 'M', label: isFood ? 'Thường' : 'Size M', price: menuItem.giaM },
+            { id: 'L', label: isFood ? 'Lớn' : 'Size L', price: menuItem.giaL },
+            { id: 'XL', label: isFood ? 'Đặc biệt' : 'Size XL', price: menuItem.giaXL }
+          ];
+        } else if (menuItem.giaL) {
+          sizeOptions = [
+            { id: 'M', label: isFood ? 'Thường' : 'Size M', price: menuItem.giaM },
+            { id: 'L', label: isFood ? 'Lớn' : 'Size L', price: menuItem.giaL }
+          ];
         }
-        if (bl) {
-          bl.textContent = 'Size L · ' + fmtK(menuItem.giaL);
-          bl.classList.toggle('is-active', curSelectedSize === 'L');
-        }
+        sizeGrp.innerHTML = '';
+        sizeOptions.forEach(function (so) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'pill-btn' + (curSelectedSize === so.id ? ' is-active' : '');
+          btn.dataset.size = so.id;
+          btn.textContent = so.label + ' · ' + fmtK(so.price);
+          btn.onclick = function () {
+            curSelectedSize = so.id;
+            sizeGrp.querySelectorAll('.pill-btn').forEach(function (x) { x.classList.remove('is-active'); });
+            btn.classList.add('is-active');
+            updateCustomizerPrice();
+          };
+          sizeGrp.appendChild(btn);
+        });
       } else {
         secSize.style.display = 'none';
         curSelectedSize = 'M';
@@ -1364,16 +1465,19 @@
 
   function updateCustomizerPrice() {
     var basePrice = 0;
-    if (curCustomItem) {
-      if (curCustomItem.nhom === 'topping') basePrice = curCustomItem.gia;
-      else basePrice = (curSelectedSize === 'L') ? curCustomItem.giaL : curCustomItem.giaM;
-    } else if (curEditingLine) {
-      var m = menuById(curEditingLine.id);
-      if (m && m.nhom !== 'topping') {
-        basePrice = (curSelectedSize === 'L') ? m.giaL : m.giaM;
+    var it = curCustomItem || (curEditingLine ? menuById(curEditingLine.id) : null);
+    if (it) {
+      if (it.nhom === 'topping') {
+        basePrice = it.gia;
+      } else if (curSelectedSize === 'XL') {
+        basePrice = it.giaXL || it.giaL || it.giaM || 0;
+      } else if (curSelectedSize === 'L') {
+        basePrice = it.giaL || it.giaM || 0;
       } else {
-        basePrice = curEditingLine.price;
+        basePrice = it.giaM || it.gia || 0;
       }
+    } else if (curEditingLine) {
+      basePrice = curEditingLine.price || 0;
     }
     var topSumVal = 0;
     curSelectedToppings.forEach(function (t) { topSumVal += (t.price || 0) * (t.qty || 1); });
@@ -1445,10 +1549,11 @@
 
       var desc = document.createElement('div');
       desc.className = 'c-desc';
-      desc.title = c.name + (c.size !== 'TP' ? ' (' + c.size + ')' : '') + (shortOpt ? ' · ' + shortOpt : '');
+      var szStr = formatSizeLabel(c.size);
+      desc.title = c.name + (szStr ? ' (' + szStr + ')' : '') + (shortOpt ? ' · ' + shortOpt : '');
       desc.innerHTML =
         '<strong class="c-name">' + esc(c.name) + '</strong>' +
-        (c.size !== 'TP' ? '<span class="c-sz">(' + esc(c.size) + ')</span>' : '') +
+        (szStr ? '<span class="c-sz">(' + esc(szStr) + ')</span>' : '') +
         (shortOpt ? '<span class="c-opts">· ' + esc(shortOpt) + '</span>' : '');
 
       itemCol.appendChild(desc);
@@ -1746,7 +1851,8 @@
       ctx.textAlign = 'left';
       ctx.fillStyle = '#0F172A';
       ctx.font = '700 12px ' + window.getComputedStyle(document.body).fontFamily;
-      var itemName = c.name + (c.size !== 'TP' ? ' (' + c.size + ')' : '');
+      var szStr = formatSizeLabel(c.size);
+      var itemName = c.name + (szStr ? ' (' + szStr + ')' : '');
       ctx.fillText(itemName, itemStartX, curY);
 
       var nameW = ctx.measureText(itemName).width;
@@ -2152,6 +2258,13 @@
       };
     }
 
+    // Sync stores from Google Sheet
+    if ($('btnSyncStoresSheet')) {
+      $('btnSyncStoresSheet').onclick = function () {
+        syncStoresFromSheet(false);
+      };
+    }
+
     // Import stores JSON
     if ($('btnImportStores') && $('inputImportStoresFile')) {
       $('btnImportStores').onclick = function () {
@@ -2171,17 +2284,18 @@
             }
             var currentCustoms = getCustomStores();
             importedStores.forEach(function (st) {
-              if (st.id === 'uu-milktea' || st.id === 'com-tam' || st.id === 'cafe-sang') return;
+              if (st.id === 'uu-milktea' || st.id === 'vua-tron') return;
               var existing = currentCustoms.find(function (x) { return x.id === st.id; });
               if (existing) {
                 Object.assign(existing, st);
               } else {
                 currentCustoms.push(st);
               }
+              pushStoreToSheet(st);
             });
             saveCustomStores(currentCustoms);
             renderStoreListGrid();
-            showToast('✓ Đã nạp thành công các quán từ file JSON!');
+            showToast('✓ Đã nạp thành công các quán và đồng bộ với Google Sheet!');
           } catch (err) {
             alert('Lỗi đọc file JSON: ' + err.message);
           }
@@ -2538,6 +2652,7 @@
       customs.push(storeObj);
     }
     saveCustomStores(customs);
+    pushStoreToSheet(storeObj);
 
     if (cart.length > 0) {
       if (confirm('Đã lưu quán! Bạn có muốn mở ngay quán này để đặt đơn không? (Lưu ý giỏ hàng hiện tại sẽ làm mới)')) {
@@ -2778,12 +2893,15 @@
       var drinkerName = ($('custDrinkerName') ? $('custDrinkerName').value.trim() : '') || myUname;
       var noteVal = ($('custItemNote') ? $('custItemNote').value.trim() : '');
 
+      var isFood = (currentStore && (currentStore.itemUnit === 'phần' || currentStore.category === 'anvat' || currentStore.category === 'comtrua'));
       if (curEditingLine) {
         // Cập nhật dòng hiện có
         var m = menuById(curEditingLine.id);
         if (m && m.nhom !== 'topping') {
           curEditingLine.size = curSelectedSize;
-          curEditingLine.price = (curSelectedSize === 'L') ? m.giaL : m.giaM;
+          if (curSelectedSize === 'XL') curEditingLine.price = m.giaXL || m.giaL || m.giaM;
+          else if (curSelectedSize === 'L') curEditingLine.price = m.giaL || m.giaM;
+          else curEditingLine.price = m.giaM;
         }
         curEditingLine.sugar = curSelectedSugar;
         curEditingLine.ice = curSelectedIce;
@@ -2792,11 +2910,14 @@
         curEditingLine.uname = drinkerName;
         curEditingLine.owner = drinkerName;
         touch(curEditingLine);
-        showToast('Đã cập nhật ly của ' + drinkerName);
+        showToast(isFood ? ('Đã cập nhật phần của ' + drinkerName) : ('Đã cập nhật ly của ' + drinkerName));
       } else if (curCustomItem) {
         // Thêm ly mới
         var isTp = (curCustomItem.nhom === 'topping');
-        var price = isTp ? curCustomItem.gia : ((curSelectedSize === 'L') ? curCustomItem.giaL : curCustomItem.giaM);
+        var price = isTp ? curCustomItem.gia : (
+          (curSelectedSize === 'XL') ? (curCustomItem.giaXL || curCustomItem.giaL || curCustomItem.giaM) :
+          ((curSelectedSize === 'L') ? curCustomItem.giaL : curCustomItem.giaM)
+        );
         var newLineObj = {
           lid: newLid(),
           rev: 1,
@@ -2816,7 +2937,7 @@
           note: noteVal
         };
         cart.push(newLineObj);
-        showToast('Đã thêm 1 ly cho ' + drinkerName);
+        showToast(isFood ? ('Đã thêm 1 phần cho ' + drinkerName) : ('Đã thêm 1 ly cho ' + drinkerName));
       }
 
       closeItemCustomizer();
@@ -2940,6 +3061,7 @@
     }
     renderCart();
     fetchMenuFromSheet();
+    syncStoresFromSheet(true);
     setupLive();
   })();
 
