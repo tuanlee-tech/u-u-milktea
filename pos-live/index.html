@@ -533,17 +533,30 @@
                 <button type="button" class="emoji-opt" data-emoji="🍗">🍗</button>
                 <button type="button" class="emoji-opt" data-emoji="🍜">🍜</button>
                 <button type="button" class="emoji-opt" data-emoji="🥖">🥖</button>
+                <button type="button" class="emoji-opt" data-emoji="🥢">🥢</button>
+                <button type="button" class="emoji-opt" data-emoji="🫓">🫓</button>
+                <button type="button" class="emoji-opt" data-emoji="🥟">🥟</button>
+                <button type="button" class="emoji-opt" data-emoji="🍢">🍢</button>
+                <button type="button" class="emoji-opt" data-emoji="🌯">🌯</button>
                 <button type="button" class="emoji-opt" data-emoji="🍕">🍕</button>
                 <button type="button" class="emoji-opt" data-emoji="🥪">🥪</button>
                 <button type="button" class="emoji-opt" data-emoji="🥤">🥤</button>
                 <button type="button" class="emoji-opt" data-emoji="🍰">🍰</button>
                 <button type="button" class="emoji-opt" data-emoji="🍲">🍲</button>
+                <button type="button" class="emoji-opt" data-emoji="🍿">🍿</button>
+                <button type="button" class="emoji-opt" data-emoji="🥗">🥗</button>
+                <button type="button" class="emoji-opt" data-emoji="🍧">🍧</button>
+                <button type="button" class="emoji-opt" data-emoji="🧃">🧃</button>
+              </div>
+              <div class="emoji-custom-row" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+                <span style="font-size:12px; color:#64748B;">Hoặc tự nhập emoji khác:</span>
+                <input type="text" id="storeCustomEmojiInput" class="cust-input" style="width:70px; text-align:center; font-size:18px; padding:4px;" placeholder="🫓" maxlength="4">
               </div>
               <input type="hidden" id="storeInputEmoji" value="🍱">
             </div>
             <div class="form-group">
               <label class="cust-label" for="storeInputTagline">Slogan / Ghi chú quán</label>
-              <input class="cust-input" id="storeInputTagline" type="text" placeholder="Vd: Cơm tấm sườn bì chả thơm ngon" maxlength="50">
+              <input class="cust-input" id="storeInputTagline" type="text" placeholder="Vd: Bánh tráng trộn, cuộn, sa tế · Thử là mê, ăn là ghiền · ĐT: 0367 284 186" maxlength="200">
             </div>
           </div>
 
@@ -580,50 +593,71 @@
             </div>
           </div>
 
-          <!-- Nhập Menu món nhanh -->
-          <div class="form-group">
-            <div class="quick-paste-header">
-              <label class="cust-label" for="storeInputMenuText">
-                ⚡ Nhập nhanh Danh sách Món (Copy & Paste từ Zalo/Menu)
-              </label>
-              <span class="quick-paste-tip">Hệ thống tự nhận diện tên món và giá tiền</span>
-            </div>
-            <textarea class="cust-textarea" id="storeInputMenuText" rows="6" placeholder="Ví dụ dán vào:
-[Cơm đĩa]
-Cơm sườn nướng 35k
-Cơm sườn bì chả 45.000
-Cơm gà nướng 40k
-[Canh & Món thêm]
-Canh khổ qua 15k
-Trà đá 3k"></textarea>
-            <div class="quick-paste-actions">
-              <button class="btn btn-sm btn-parse-menu" id="btnParseMenuText" type="button">
-                ⚡ Phân tích & Nạp vào Menu (<span id="parsedItemCount">0</span> món)
+          <!-- QUẢN LÝ THỰC ĐƠN: PHÂN LOẠI & MÓN ĂN TRỰC QUAN -->
+          <div class="form-group store-menu-builder-box">
+            <div class="menu-builder-header">
+              <div>
+                <label class="cust-label" style="margin-bottom:2px;">📋 Thực đơn của quán (<span id="builderTotalCount">0</span> món)</label>
+                <span class="quick-paste-tip">Tạo phân loại rồi thêm món trực quan, hoặc bấm "Nhập nhanh từ văn bản"</span>
+              </div>
+              <button type="button" class="btn btn-sm btn-ghost-primary" id="btnToggleQuickPaste">
+                ⚡ Nhập nhanh từ văn bản
               </button>
             </div>
+
+            <!-- Khu vực nhập văn bản nhanh (Toggle ẩn/hiện) -->
+            <div id="quickPastePanel" class="quick-paste-panel" hidden>
+              <div class="quick-paste-tip" style="margin-bottom:6px; color:#475569; line-height:1.5;">
+                💡 <b>Mẹo dán menu</b>: Hỗ trợ cả <code>[Tên phân loại]</code> hoặc <code># Tên phân loại</code>. Giá tiền hỗ trợ: <code>20k</code>, <code>20.000</code> hoặc <code>20k - 25k</code> (Size M - L).
+              </div>
+              <textarea class="cust-textarea" id="storeInputMenuText" rows="6" placeholder="Ví dụ dán vào:
+[Bánh tráng]
+Bánh tráng trộn 20k - 25k
+Bánh tráng chấm 20k - 25k
+Bánh tráng mỡ hành 20k - 25k
+
+[Nước giải khát]
+Trà tắc 12k
+Cam vắt 12k
+Đá me 15k"></textarea>
+              <div class="quick-paste-actions">
+                <button class="btn btn-sm btn-parse-menu" id="btnParseMenuText" type="button">
+                  ⚡ Phân tích & Nạp vào Menu (<span id="parsedItemCount">0</span> món)
+                </button>
+              </div>
+            </div>
+
+            <!-- Khu vực tạo phân loại mới -->
+            <div class="add-cat-bar">
+              <input type="text" id="inputNewCatName" class="cust-input" placeholder="Tên phân loại mới (Vd: Bánh tráng, Nước giải khát...)" maxlength="40">
+              <button type="button" class="btn btn-sm btn-primary" id="btnAddCategory">
+                + Thêm phân loại
+              </button>
+            </div>
+
+            <!-- Container chứa các card phân loại & món ăn -->
+            <div id="storeCategoryCardsContainer" class="store-category-cards-container"></div>
           </div>
 
           <!-- Nhập Topping / Món thêm -->
           <div class="form-group" id="groupStoreToppings">
-            <div class="quick-paste-header">
-              <label class="cust-label" for="storeInputToppingsText">
-                Thêm Topping / Món thêm (tùy chọn)
-              </label>
-              <span class="quick-paste-tip">Nhập dạng: Tên món giá tiền</span>
+            <label class="cust-label">Thêm Topping / Món thêm (tùy chọn)</label>
+            <div class="add-cat-bar">
+              <input type="text" id="inputNewTopName" class="cust-input" placeholder="Tên topping (Vd: Trứng ốp la, Khô bò...)" style="flex:2;">
+              <input type="text" id="inputNewTopPrice" class="cust-input" placeholder="Giá (vd: 7k hoặc 7000)" style="flex:1;">
+              <button type="button" class="btn btn-sm btn-ghost-primary" id="btnAddSingleTop">+ Thêm topping</button>
             </div>
-            <textarea class="cust-textarea" id="storeInputToppingsText" rows="3" placeholder="Ví dụ:
+            <div id="storeToppingsList" class="cat-items-list" style="margin-bottom:8px;"></div>
+            <details style="margin-top:6px;">
+              <summary style="font-size:12px; color:#0A7259; cursor:pointer; font-weight:600;">Hoặc dán nhanh danh sách topping bằng văn bản</summary>
+              <textarea class="cust-textarea" id="storeInputToppingsText" rows="3" style="margin-top:6px;" placeholder="Ví dụ:
 Trứng ốp la 7k
-Chả trứng 8k
-Thêm sườn 22k
-Thêm cơm 5k"></textarea>
-          </div>
-
-          <!-- Danh sách món đã phân tích (Preview) -->
-          <div class="form-group">
-            <label class="cust-label">Danh sách món sẽ lưu (<span id="previewItemCount">0</span> món)</label>
-            <div class="parsed-items-preview" id="parsedItemsPreview">
-              <p class="preview-empty-hint">Chưa có món nào. Hãy dán menu vào ô trên và bấm "Phân tích & Nạp vào Menu".</p>
-            </div>
+Khô bò thêm 10k
+Tóp mỡ thêm 5k"></textarea>
+              <div class="quick-paste-actions">
+                <button class="btn btn-sm btn-parse-menu" id="btnParseToppings" type="button">Nạp danh sách Topping</button>
+              </div>
+            </details>
           </div>
         </form>
       </div>

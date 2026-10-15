@@ -2176,6 +2176,7 @@
   /* ================= 10.5. STORE MODAL & MANAGEMENT ================= */
   var parsedStoreItems = [];
   var parsedStoreToppings = [];
+  var parsedStoreCategories = [];
 
   function setupStoreModal() {
     var modal = $('storeModal');
@@ -2218,10 +2219,114 @@
         document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (x) { x.classList.remove('is-active'); });
         opt.classList.add('is-active');
         if ($('storeInputEmoji')) $('storeInputEmoji').value = opt.dataset.emoji;
+        if ($('storeCustomEmojiInput')) $('storeCustomEmojiInput').value = opt.dataset.emoji;
       };
     });
 
-    // Toggle toppings textarea visibility
+    if ($('storeCustomEmojiInput')) {
+      $('storeCustomEmojiInput').oninput = function () {
+        var val = $('storeCustomEmojiInput').value.trim();
+        if (val) {
+          if ($('storeInputEmoji')) $('storeInputEmoji').value = val;
+          document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (x) { x.classList.remove('is-active'); });
+        }
+      };
+    }
+
+    // Toggle size checkbox
+    if ($('chkOptSize')) {
+      $('chkOptSize').onchange = function () {
+        renderStoreMenuBuilder();
+      };
+    }
+
+    // Toggle quick paste panel
+    if ($('btnToggleQuickPaste')) {
+      $('btnToggleQuickPaste').onclick = function () {
+        var p = $('quickPastePanel');
+        if (!p) return;
+        p.hidden = !p.hidden;
+        if (!p.hidden && $('storeInputMenuText')) $('storeInputMenuText').focus();
+      };
+    }
+
+    // Add category button & Enter key
+    function handleAddNewCategory() {
+      var inp = $('inputNewCatName');
+      if (!inp) return;
+      var name = inp.value.trim();
+      if (!name) {
+        alert('Vui lòng nhập tên phân loại mới (Vd: Bánh tráng, Nước giải khát...)');
+        inp.focus();
+        return;
+      }
+      if (parsedStoreCategories.indexOf(name) !== -1) {
+        alert('Phân loại "' + name + '" đã có trong thực đơn.');
+        inp.focus();
+        return;
+      }
+      parsedStoreCategories.push(name);
+      inp.value = '';
+      renderStoreMenuBuilder();
+    }
+    if ($('btnAddCategory')) $('btnAddCategory').onclick = handleAddNewCategory;
+    if ($('inputNewCatName')) {
+      $('inputNewCatName').onkeydown = function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleAddNewCategory();
+        }
+      };
+    }
+
+    // Add single topping
+    function handleAddSingleTop() {
+      var nInp = $('inputNewTopName');
+      var pInp = $('inputNewTopPrice');
+      if (!nInp) return;
+      var tName = nInp.value.trim();
+      if (!tName) {
+        nInp.focus();
+        return;
+      }
+      var tPrice = cleanPrice(pInp ? pInp.value : 0);
+      parsedStoreToppings.push({
+        id: 'top_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4),
+        ten: tName,
+        gia: tPrice
+      });
+      nInp.value = '';
+      if (pInp) pInp.value = '';
+      renderToppingsBuilder();
+      nInp.focus();
+    }
+    if ($('btnAddSingleTop')) $('btnAddSingleTop').onclick = handleAddSingleTop;
+    if ($('inputNewTopName')) {
+      $('inputNewTopName').onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); handleAddSingleTop(); }
+      };
+    }
+    if ($('inputNewTopPrice')) {
+      $('inputNewTopPrice').onkeydown = function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); handleAddSingleTop(); }
+      };
+    }
+    if ($('btnParseToppings')) {
+      $('btnParseToppings').onclick = function () {
+        var rawTops = ($('storeInputToppingsText') ? $('storeInputToppingsText').value : '');
+        if (!rawTops.trim()) return;
+        var tops = parseToppingsText(rawTops);
+        tops.forEach(function (t) {
+          var ex = parsedStoreToppings.find(function (x) { return x.ten.toLowerCase() === t.ten.toLowerCase(); });
+          if (ex) ex.gia = t.gia;
+          else parsedStoreToppings.push(t);
+        });
+        renderToppingsBuilder();
+        showToast('Đã nạp ' + tops.length + ' topping vào danh sách');
+      };
+    }
+
+    // Toggle toppings section visibility
     if ($('chkOptTopping')) {
       $('chkOptTopping').onchange = function () {
         if ($('groupStoreToppings')) {
@@ -2401,6 +2506,16 @@
     });
   }
 
+  function cleanPrice(val) {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    var s = String(val).trim().replace(/[\.,\sđd]/gi, '');
+    var isK = /k/i.test(String(val));
+    var num = parseInt(s, 10) || 0;
+    if (isK || (num > 0 && num < 1000)) num = num * 1000;
+    return num;
+  }
+
   function openStoreEditView(storeToEdit) {
     if ($('storeListView')) $('storeListView').hidden = true;
     if ($('storeEditView')) $('storeEditView').hidden = false;
@@ -2415,16 +2530,19 @@
 
     parsedStoreItems = [];
     parsedStoreToppings = [];
+    parsedStoreCategories = [];
 
     if (storeToEdit) {
       $('editStoreId').value = storeToEdit.id;
       $('storeInputName').value = storeToEdit.name || '';
-      $('storeInputCategory').value = storeToEdit.category || 'comtrua';
+      $('storeInputCategory').value = storeToEdit.category || 'anvat';
       $('storeInputTagline').value = storeToEdit.tagline || '';
-      $('storeInputEmoji').value = storeToEdit.icon || '🍱';
+      var curIcon = storeToEdit.icon || '🫓';
+      $('storeInputEmoji').value = curIcon;
+      if ($('storeCustomEmojiInput')) $('storeCustomEmojiInput').value = curIcon;
 
       document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
-        opt.classList.toggle('is-active', opt.dataset.emoji === (storeToEdit.icon || '🍱'));
+        opt.classList.toggle('is-active', opt.dataset.emoji === curIcon);
       });
 
       var opts = storeToEdit.options || {};
@@ -2439,42 +2557,34 @@
       $('storeBankAccount').value = bInfo.account || '';
       $('storeBankOwner').value = bInfo.owner || '';
 
-      var itemsTextArr = [];
-      var curCat = '';
-      (storeToEdit.items || []).forEach(function (it) {
-        if (it.nhom !== curCat) {
-          curCat = it.nhom;
-          itemsTextArr.push('[' + curCat + ']');
-        }
-        var priceStr = it.giaM ? (it.giaM >= 1000 ? (it.giaM / 1000) + 'k' : it.giaM) : '0';
-        if (it.giaL) priceStr += ' - ' + (it.giaL >= 1000 ? (it.giaL / 1000) + 'k' : it.giaL);
-        itemsTextArr.push(it.ten + ' ' + priceStr);
-      });
-      $('storeInputMenuText').value = itemsTextArr.join('\n');
-
-      var topTextArr = [];
-      (storeToEdit.toppings || []).forEach(function (tp) {
-        var pStr = tp.gia >= 1000 ? (tp.gia / 1000) + 'k' : tp.gia;
-        topTextArr.push(tp.ten + ' ' + pStr);
-      });
-      $('storeInputToppingsText').value = topTextArr.join('\n');
-
       parsedStoreItems = (storeToEdit.items || []).slice();
       parsedStoreToppings = (storeToEdit.toppings || []).slice();
+
+      (storeToEdit.categories || []).forEach(function (c) {
+        if (c.id !== 'topping' && parsedStoreCategories.indexOf(c.name || c.id) === -1) {
+          parsedStoreCategories.push(c.name || c.id);
+        }
+      });
+      parsedStoreItems.forEach(function (it) {
+        if (it.nhom && it.nhom !== 'topping' && parsedStoreCategories.indexOf(it.nhom) === -1) {
+          parsedStoreCategories.push(it.nhom);
+        }
+      });
     } else {
       $('editStoreId').value = '';
       $('storeInputName').value = '';
-      $('storeInputCategory').value = 'comtrua';
+      $('storeInputCategory').value = 'anvat';
       $('storeInputTagline').value = '';
-      $('storeInputEmoji').value = '🍱';
+      $('storeInputEmoji').value = '🫓';
+      if ($('storeCustomEmojiInput')) $('storeCustomEmojiInput').value = '🫓';
       document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
-        opt.classList.toggle('is-active', opt.dataset.emoji === '🍱');
+        opt.classList.toggle('is-active', opt.dataset.emoji === '🫓');
       });
-      $('chkOptSize').checked = false;
+      $('chkOptSize').checked = true;
       $('chkOptSugar').checked = false;
       $('chkOptIce').checked = false;
-      $('chkOptTopping').checked = true;
-      if ($('groupStoreToppings')) $('groupStoreToppings').style.display = 'block';
+      $('chkOptTopping').checked = false;
+      if ($('groupStoreToppings')) $('groupStoreToppings').style.display = 'none';
 
       $('storeBankName').value = '';
       $('storeBankAccount').value = '';
@@ -2482,85 +2592,225 @@
 
       $('storeInputMenuText').value = '';
       $('storeInputToppingsText').value = '';
+      parsedStoreCategories = [];
     }
 
-    renderParsedItemsPreview();
+    if ($('quickPastePanel')) $('quickPastePanel').hidden = true;
+    renderStoreMenuBuilder();
+  }
+
+  function renderStoreMenuBuilder() {
+    var container = $('storeCategoryCardsContainer');
+    if (!container) return;
+    container.innerHTML = '';
+
+    var totalCount = parsedStoreItems.length;
+    if ($('builderTotalCount')) $('builderTotalCount').textContent = totalCount;
+    if ($('parsedItemCount')) $('parsedItemCount').textContent = totalCount;
+    var hasSize = $('chkOptSize') ? $('chkOptSize').checked : false;
+
+    // Ensure all items have their category listed in parsedStoreCategories
+    var cats = parsedStoreCategories.slice();
+    parsedStoreItems.forEach(function (it) {
+      if (it.nhom && cats.indexOf(it.nhom) === -1) {
+        cats.push(it.nhom);
+      }
+    });
+    parsedStoreCategories = cats;
+
+    if (!cats.length) {
+      container.innerHTML =
+        '<div class="menu-builder-empty" style="text-align:center; padding:24px 16px; background:#FFFFFF; border:1px dashed #CBD5E1; border-radius:10px;">' +
+          '<div style="font-size:32px; margin-bottom:8px;">📂</div>' +
+          '<p style="font-weight:700; color:#334155; margin:0 0 4px; font-size:14px;">Chưa có phân loại món nào</p>' +
+          '<p style="font-size:12.5px; color:#64748B; margin:0 0 12px; line-height:1.5;">' +
+            'Bạn có thể nhập tên phân loại ở trên (Ví dụ: <b>Bánh tráng</b>, <b>Nước giải khát</b>) rồi bấm <b>+ Thêm phân loại</b>,<br>' +
+            'hoặc bấm nút <b>⚡ Nhập nhanh từ văn bản</b> ở góc trên để dán menu từ Zalo.' +
+          '</p>' +
+        '</div>';
+      renderToppingsBuilder();
+      return;
+    }
+
+    cats.forEach(function (catName) {
+      var card = document.createElement('div');
+      card.className = 'cat-card-item';
+
+      var catItems = parsedStoreItems.filter(function (x) { return x.nhom === catName; });
+
+      var cardHeader = document.createElement('div');
+      cardHeader.className = 'cat-card-header';
+      cardHeader.innerHTML =
+        '<div class="cat-card-title-wrap">' +
+          '<span class="cat-card-icon">📂</span>' +
+          '<span class="cat-card-title">' + esc(catName) + '</span>' +
+          '<span class="cat-card-badge">' + catItems.length + ' món</span>' +
+        '</div>' +
+        '<div class="cat-card-actions">' +
+          '<button type="button" class="btn-del-cat" title="Xóa phân loại và tất cả món trong nhóm này">✕ Xóa nhóm</button>' +
+        '</div>';
+
+      cardHeader.querySelector('.btn-del-cat').onclick = function () {
+        if (!confirm('Bạn có chắc muốn xóa phân loại "' + catName + '" và toàn bộ ' + catItems.length + ' món trong nhóm này?')) return;
+        parsedStoreItems = parsedStoreItems.filter(function (x) { return x.nhom !== catName; });
+        parsedStoreCategories = parsedStoreCategories.filter(function (c) { return c !== catName; });
+        renderStoreMenuBuilder();
+      };
+      card.appendChild(cardHeader);
+
+      var itemsList = document.createElement('div');
+      itemsList.className = 'cat-items-list';
+
+      if (!catItems.length) {
+        itemsList.innerHTML = '<p class="cat-empty-hint">Chưa có món nào. Thêm món bên dưới:</p>';
+      } else {
+        catItems.forEach(function (it) {
+          var row = document.createElement('div');
+          row.className = 'cat-item-row';
+          var pStr = '';
+          if (hasSize && it.giaL) {
+            pStr = 'M ' + fmtK(it.giaM) + ' · L ' + fmtK(it.giaL);
+          } else {
+            pStr = fmt(it.giaM);
+          }
+
+          row.innerHTML =
+            '<span class="cat-item-name">' + esc(it.ten) + '</span>' +
+            '<span class="cat-item-price">' + pStr + '</span>' +
+            '<button type="button" class="btn-del-item" title="Xóa món này">✕</button>';
+
+          row.querySelector('.btn-del-item').onclick = function () {
+            var iIdx = parsedStoreItems.indexOf(it);
+            if (iIdx !== -1) {
+              parsedStoreItems.splice(iIdx, 1);
+              renderStoreMenuBuilder();
+            }
+          };
+          itemsList.appendChild(row);
+        });
+      }
+      card.appendChild(itemsList);
+
+      // Form thêm món mới vào phân loại này
+      var addForm = document.createElement('div');
+      addForm.className = 'cat-add-item-form';
+      addForm.innerHTML =
+        '<input type="text" class="input-add-name cust-input" placeholder="Tên món mới (Vd: Bánh tráng cuốn...)">' +
+        '<input type="text" class="input-add-price-m cust-input" placeholder="' + (hasSize ? 'Giá M (vd: 20k)' : 'Đơn giá (vd: 20k)') + '">' +
+        (hasSize ? '<input type="text" class="input-add-price-l cust-input" placeholder="Giá L (vd: 25k)">' : '') +
+        '<button type="button" class="btn btn-sm btn-ghost-primary btn-add-item-to-cat">+ Thêm món</button>';
+
+      var inpName = addForm.querySelector('.input-add-name');
+      var inpPriceM = addForm.querySelector('.input-add-price-m');
+      var inpPriceL = addForm.querySelector('.input-add-price-l');
+      var btnAdd = addForm.querySelector('.btn-add-item-to-cat');
+
+      function handleAddItem() {
+        var tName = inpName.value.trim();
+        if (!tName) {
+          inpName.focus();
+          return;
+        }
+        var pM = cleanPrice(inpPriceM.value);
+        var pL = inpPriceL ? cleanPrice(inpPriceL.value) : 0;
+        parsedStoreItems.push({
+          id: 'item_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4),
+          ten: tName,
+          nhom: catName,
+          giaM: pM,
+          giaL: pL
+        });
+        inpName.value = '';
+        inpPriceM.value = '';
+        if (inpPriceL) inpPriceL.value = '';
+        renderStoreMenuBuilder();
+        inpName.focus();
+      }
+
+      btnAdd.onclick = handleAddItem;
+      [inpName, inpPriceM, inpPriceL].forEach(function (inp) {
+        if (inp) {
+          inp.onkeydown = function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleAddItem();
+            }
+          };
+        }
+      });
+
+      card.appendChild(addForm);
+      container.appendChild(card);
+    });
+
+    renderToppingsBuilder();
+  }
+
+  function renderToppingsBuilder() {
+    var topList = $('storeToppingsList');
+    if (!topList) return;
+    topList.innerHTML = '';
+    if (!parsedStoreToppings.length) {
+      topList.innerHTML = '<p class="cat-empty-hint" style="margin:4px 0;">Chưa có topping / món thêm nào.</p>';
+      return;
+    }
+    parsedStoreToppings.forEach(function (tp, idx) {
+      var row = document.createElement('div');
+      row.className = 'cat-item-row';
+      row.innerHTML =
+        '<span class="cat-item-name">✨ ' + esc(tp.ten) + '</span>' +
+        '<span class="cat-item-price">+' + fmt(tp.gia) + '</span>' +
+        '<button type="button" class="btn-del-item" title="Xóa topping này">✕</button>';
+      row.querySelector('.btn-del-item').onclick = function () {
+        parsedStoreToppings.splice(idx, 1);
+        renderToppingsBuilder();
+      };
+      topList.appendChild(row);
+    });
   }
 
   function doParseMenuInputs() {
     var rawMenu = ($('storeInputMenuText') ? $('storeInputMenuText').value : '');
-    var rawTops = ($('storeInputToppingsText') ? $('storeInputToppingsText').value : '');
-    var catVal = ($('storeInputCategory') ? $('storeInputCategory').value : 'comtrua');
+    var catVal = ($('storeInputCategory') ? $('storeInputCategory').value : 'anvat');
     var defaultCatName = 'Món chính';
     if (catVal === 'comtrua') defaultCatName = 'Cơm đĩa';
     else if (catVal === 'trasua') defaultCatName = 'Trà sữa';
     else if (catVal === 'cafe') defaultCatName = 'Cà phê';
+    else if (catVal === 'anvat') defaultCatName = 'Bánh tráng & Ăn vặt';
 
-    parsedStoreItems = parseMenuText(rawMenu, defaultCatName);
-    parsedStoreToppings = parseToppingsText(rawTops);
-
-    renderParsedItemsPreview();
-    showToast('Đã phân tích được ' + parsedStoreItems.length + ' món và ' + parsedStoreToppings.length + ' topping!');
-  }
-
-  function renderParsedItemsPreview() {
-    var preview = $('parsedItemsPreview');
-    if (!preview) return;
-    preview.innerHTML = '';
-
-    if ($('parsedItemCount')) $('parsedItemCount').textContent = parsedStoreItems.length;
-    if ($('previewItemCount')) $('previewItemCount').textContent = parsedStoreItems.length + (parsedStoreToppings.length ? ' (+ ' + parsedStoreToppings.length + ' topping)' : '');
-
-    if (!parsedStoreItems.length && !parsedStoreToppings.length) {
-      preview.innerHTML = '<p class="preview-empty-hint">Chưa có món nào. Hãy dán menu vào ô trên và bấm "Phân tích & Nạp vào Menu".</p>';
+    var parsed = parseMenuText(rawMenu, defaultCatName);
+    if (!parsed.length) {
+      alert('Không phân tích được món nào. Vui lòng kiểm tra lại văn bản dán vào.');
       return;
     }
 
-    parsedStoreItems.forEach(function (it, idx) {
-      var row = document.createElement('div');
-      row.className = 'preview-item-row';
-      var priceStr = it.giaL ? ('M ' + fmtK(it.giaM) + ' · L ' + fmtK(it.giaL)) : fmt(it.giaM);
-      row.innerHTML =
-        '<div>' +
-          '<span class="p-item-name">' + esc(it.ten) + '</span>' +
-          '<span class="p-item-cat">' + esc(it.nhom) + '</span>' +
-        '</div>' +
-        '<div>' +
-          '<span class="p-item-price">' + priceStr + '</span>' +
-          '<button type="button" class="p-item-del" title="Xóa món này">✕</button>' +
-        '</div>';
-      row.querySelector('.p-item-del').onclick = function () {
-        parsedStoreItems.splice(idx, 1);
-        renderParsedItemsPreview();
-      };
-      preview.appendChild(row);
+    parsed.forEach(function (newItem) {
+      var exIdx = parsedStoreItems.findIndex(function (x) {
+        return x.ten.toLowerCase() === newItem.ten.toLowerCase() && x.nhom.toLowerCase() === newItem.nhom.toLowerCase();
+      });
+      if (exIdx !== -1) {
+        parsedStoreItems[exIdx] = newItem;
+      } else {
+        parsedStoreItems.push(newItem);
+      }
+      if (parsedStoreCategories.indexOf(newItem.nhom) === -1) {
+        parsedStoreCategories.push(newItem.nhom);
+      }
     });
 
-    if (parsedStoreToppings.length) {
-      var topHead = document.createElement('div');
-      topHead.style.cssText = 'font-weight:700; font-size:11.5px; color:#0A7259; margin: 8px 0 4px; border-top: 1px dashed #CBD5E1; padding-top: 6px;';
-      topHead.textContent = '✨ MÓN THÊM / TOPPING:';
-      preview.appendChild(topHead);
-
-      parsedStoreToppings.forEach(function (tp, idx) {
-        var row = document.createElement('div');
-        row.className = 'preview-item-row';
-        row.innerHTML =
-          '<div>' +
-            '<span class="p-item-name">' + esc(tp.ten) + '</span>' +
-            '<span class="p-item-cat">Topping</span>' +
-          '</div>' +
-          '<div>' +
-            '<span class="p-item-price">+' + fmt(tp.gia) + '</span>' +
-            '<button type="button" class="p-item-del" title="Xóa topping này">✕</button>' +
-          '</div>';
-        row.querySelector('.p-item-del').onclick = function () {
-          parsedStoreToppings.splice(idx, 1);
-          renderParsedItemsPreview();
-        };
-        preview.appendChild(row);
+    var rawTops = ($('storeInputToppingsText') ? $('storeInputToppingsText').value : '');
+    if (rawTops.trim()) {
+      var tops = parseToppingsText(rawTops);
+      tops.forEach(function (t) {
+        var tIdx = parsedStoreToppings.findIndex(function (x) { return x.ten.toLowerCase() === t.ten.toLowerCase(); });
+        if (tIdx !== -1) parsedStoreToppings[tIdx] = t;
+        else parsedStoreToppings.push(t);
       });
     }
+
+    renderStoreMenuBuilder();
+    if ($('quickPastePanel')) $('quickPastePanel').hidden = true;
+    showToast('✓ Đã nạp thành công ' + parsed.length + ' món vào Thực đơn!');
   }
 
   function doSaveStore() {
@@ -2587,6 +2837,9 @@
     var storeTagline = ($('storeInputTagline') ? $('storeInputTagline').value.trim() : '');
 
     var uniqueNhom = [];
+    parsedStoreCategories.forEach(function (c) {
+      if (uniqueNhom.indexOf(c) === -1) uniqueNhom.push(c);
+    });
     parsedStoreItems.forEach(function (it) {
       var nh = it.nhom || 'Món chính';
       if (uniqueNhom.indexOf(nh) === -1) uniqueNhom.push(nh);
@@ -2603,7 +2856,10 @@
       else if (lower.indexOf('nước') !== -1 || lower.indexOf('uống') !== -1 || lower.indexOf('giải khát') !== -1) icon = '🥤';
       else if (lower.indexOf('trà') !== -1) icon = '🧋';
       else if (lower.indexOf('cà phê') !== -1) icon = '☕';
+      else if (lower.indexOf('bánh tráng') !== -1) icon = '🫓';
       else if (lower.indexOf('bánh') !== -1) icon = '🥖';
+      else if (lower.indexOf('bún') !== -1 || lower.indexOf('mì') !== -1 || lower.indexOf('phở') !== -1) icon = '🍜';
+      else if (lower.indexOf('ăn vặt') !== -1) icon = '🥢';
       else if (nh === 'topping') icon = '✨';
 
       return {
