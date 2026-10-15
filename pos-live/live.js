@@ -329,13 +329,13 @@
       var line = raw.trim();
       if (!line) return;
 
-      var catHeader = line.match(/^\[(.*?)\]$/) || line.match(/^={2,}\s*(.*?)\s*={2,}$/) || line.match(/^(.*?):$/);
+      var catHeader = line.match(/^\[(.*?)\]$/) || line.match(/^={2,}\s*(.*?)\s*={2,}$/) || line.match(/^(.*?):$/) || line.match(/^#+\s*(.*?)$/);
       if (catHeader) {
         curCategory = catHeader[1].trim();
         return;
       }
 
-      var priceMatch = line.match(/(\d+[\.,]?\d*)\s*(k|K|đ|d|dong|nghìn|ngan)?(?:\s*[-–]\s*(\d+[\.,]?\d*)\s*(k|K|đ)?)?$/i);
+      var priceMatch = line.match(/(\d+[\.,]?\d*)\s*(k|K|đ|d|dong|nghìn|ngan)?(?:\s*[-–\/]\s*(\d+[\.,]?\d*)\s*(k|K|đ)?)?$/i);
       var itemName = line;
       var priceM = 0;
       var priceL = 0;
