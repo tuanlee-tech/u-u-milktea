@@ -202,13 +202,13 @@ body {
 .sidebar-decor-cup {
   width: 100%;
   height: 155px;
-  background-image: url('assets/img/opt/hero-cup.webp');
+  background-image: url('assets/img/opt/hero-food.webp');
   background-size: cover;
-  background-position: center bottom;
+  background-position: center 65%;
   background-repeat: no-repeat;
   border-radius: 14px;
-  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%);
-  mask-image: linear-gradient(to top, rgba(0,0,0,1) 75%, rgba(0,0,0,0) 100%);
+  -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(to top, rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%);
   transition: transform .35s ease;
 }
 .sidebar-decor-cup:hover {

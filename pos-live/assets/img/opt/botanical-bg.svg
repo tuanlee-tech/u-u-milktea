@@ -64,19 +64,19 @@
     <path d="M300 220 C325 195 360 200 370 220 C345 235 315 230 300 220 Z" fill="url(#leafGrad1)"/>
   </g>
 
-  <!-- Delicate golden dots / sparkles of morning tea essence -->
+  <!-- Delicate golden dots / culinary warm sparkles -->
   <circle cx="270" cy="170" r="2.5" fill="#D8C49E" opacity="0.6"/>
   <circle cx="340" cy="110" r="2" fill="#D8C49E" opacity="0.5"/>
   <circle cx="210" cy="210" r="1.8" fill="#D8C49E" opacity="0.6"/>
   <circle cx="390" cy="150" r="2.2" fill="#D8C49E" opacity="0.45"/>
   <circle cx="160" cy="250" r="1.5" fill="#D8C49E" opacity="0.5"/>
 
-  <!-- Right side calligraphy: "Trà sữa nhà làm" with leaf flourish -->
-  <g transform="translate(430, 240)">
-    <text x="0" y="50" font-family="'Alex Brush', 'Playfair Display', cursive, serif" font-size="52" font-style="italic" fill="#3D5A4B" opacity="0.82" letter-spacing="1">Trà sữa</text>
-    <text x="55" y="105" font-family="'Alex Brush', 'Playfair Display', cursive, serif" font-size="52" font-style="italic" fill="#3D5A4B" opacity="0.82" letter-spacing="1">nhà làm</text>
-    <!-- Little leaf next to text -->
-    <path d="M225 80 C240 70 255 72 260 85 C248 95 232 92 225 80 Z" fill="#5E7D6D" opacity="0.8"/>
-    <path d="M225 80 Q244 80 260 85" stroke="#2D4638" stroke-width="0.8" fill="none"/>
+  <!-- Right side calligraphy: "Bữa ngon cùng nhau" with olive flourish -->
+  <g transform="translate(425, 235)">
+    <text x="0" y="50" font-family="'Playfair Display', Georgia, serif" font-size="46" font-style="italic" font-weight="600" fill="#3D5A4B" opacity="0.88" letter-spacing="0.5">Bữa ngon</text>
+    <text x="35" y="105" font-family="'Playfair Display', Georgia, serif" font-size="46" font-style="italic" font-weight="600" fill="#3D5A4B" opacity="0.88" letter-spacing="0.5">cùng nhau</text>
+    <!-- Little olive sprig flourish next to text -->
+    <path d="M245 80 C260 70 275 72 280 85 C268 95 252 92 245 80 Z" fill="#5E7D6D" opacity="0.85"/>
+    <path d="M245 80 Q264 80 280 85" stroke="#2D4638" stroke-width="0.8" fill="none"/>
   </g>
 </svg>
