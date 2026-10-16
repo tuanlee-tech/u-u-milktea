@@ -3165,6 +3165,9 @@
     var rawChips = ($('storeInputNoteChips') ? $('storeInputNoteChips').value : '');
     var noteChipsList = rawChips ? rawChips.split(/[,;\n]+/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
 
+    var exStore = editId ? getStoreById(editId) : null;
+    var unitStr = (exStore && exStore.itemUnit) ? exStore.itemUnit : (storeCat === 'comtrua' ? 'phần' : (storeCat === 'trasua' ? 'ly' : 'món'));
+
     var storeObj = {
       id: storeId,
       name: name,
@@ -3172,7 +3175,7 @@
       icon: storeEmoji,
       category: storeCat,
       itemUnit: unitStr,
-      isBuiltin: false,
+      isBuiltin: exStore ? !!exStore.isBuiltin : false,
       options: {
         hasSize: $('chkOptSize') ? $('chkOptSize').checked : false,
         hasSugar: $('chkOptSugar') ? $('chkOptSugar').checked : false,
