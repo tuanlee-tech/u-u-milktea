@@ -143,6 +143,8 @@
   };
 
   var BUILTIN_STORES = [ STORE_UU, STORE_VUATRON ];
+  var STORE_UU_ITEMS_DEFAULT = (STORE_UU.items || []).slice();
+  var STORE_UU_TOPPINGS_DEFAULT = (STORE_UU.toppings || []).slice();
   var currentStore = STORE_UU;
   var MENU = (STORE_UU.items || []).concat(STORE_UU.toppings || []);
   var cart = [];
@@ -150,6 +152,34 @@
   var currentCat = 'trasua';
   var orderCode = newOrderCode();
   var isInitialSyncing = false; // Flag to prevent pushing empty cart on initial load
+
+  var urlBillCode = '';
+  var urlStoreId = '';
+  try {
+    var search = location.search || '';
+    var mBill = search.match(/[?&]bill=([^&]+)/);
+    if (mBill && decodeURIComponent(mBill[1])) urlBillCode = decodeURIComponent(mBill[1]);
+    var mStore = search.match(/[?&]store=([^&]+)/);
+    if (mStore && decodeURIComponent(mStore[1])) urlStoreId = decodeURIComponent(mStore[1]);
+  } catch (e) {}
+
+  if (urlBillCode) {
+    orderCode = urlBillCode;
+  }
+
+  function getShareUrl() {
+    var base = location.href.split('?')[0];
+    var params = [];
+    if (orderCode) params.push('bill=' + encodeURIComponent(orderCode));
+    if (currentStore && currentStore.id) params.push('store=' + encodeURIComponent(currentStore.id));
+    return base + (params.length ? '?' + params.join('&') : '');
+  }
+
+  function updateUrlParams() {
+    try {
+      history.replaceState(null, '', getShareUrl());
+    } catch (e) {}
+  }
 
   /* ================= STORE MANAGER LOGIC ================= */
   function getCustomStores() {
@@ -185,14 +215,30 @@
               if (BUILTIN_STORES[i].id === sheetStore.id) { bIdx = i; break; }
             }
             if (bIdx !== -1) {
+              var oldItems = BUILTIN_STORES[bIdx].items || [];
+              var oldToppings = BUILTIN_STORES[bIdx].toppings || [];
               Object.assign(BUILTIN_STORES[bIdx], sheetStore);
+              if ((!sheetStore.items || !sheetStore.items.length) && oldItems.length) {
+                BUILTIN_STORES[bIdx].items = oldItems;
+              }
+              if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldToppings.length) {
+                BUILTIN_STORES[bIdx].toppings = oldToppings;
+              }
             } else {
               var cIdx = -1;
               for (var j = 0; j < customs.length; j++) {
                 if (customs[j].id === sheetStore.id) { cIdx = j; break; }
               }
               if (cIdx !== -1) {
+                var oldCItems = customs[cIdx].items || [];
+                var oldCToppings = customs[cIdx].toppings || [];
                 Object.assign(customs[cIdx], sheetStore);
+                if ((!sheetStore.items || !sheetStore.items.length) && oldCItems.length) {
+                  customs[cIdx].items = oldCItems;
+                }
+                if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldCToppings.length) {
+                  customs[cIdx].toppings = oldCToppings;
+                }
               } else {
                 customs.push(sheetStore);
               }
@@ -200,6 +246,17 @@
           });
           saveCustomStores(customs);
           renderStoreListGrid();
+
+          // Nếu URL có chỉ định store và hiện tại chưa chuyển đúng
+          if (urlStoreId && (!currentStore || currentStore.id !== urlStoreId)) {
+            var target = getStoreById(urlStoreId);
+            if (target && target.id === urlStoreId) {
+              switchStore(target, false);
+            }
+          } else if (currentStore && (!MENU || !MENU.length)) {
+            switchStore(currentStore.id, false);
+          }
+
           if (!isSilent) showToast('✓ Đã đồng bộ ' + data.stores.length + ' quán từ Google Sheet!');
         }
       })
@@ -244,6 +301,12 @@
     } catch (e) {}
 
     var allItems = (currentStore.items || []).concat(currentStore.toppings || []);
+    // Nếu là quán Ú Ụ mà items bị rỗng thì lấy fallback gốc
+    if (!allItems.length && currentStore.id === 'uu-milktea') {
+      allItems = STORE_UU_ITEMS_DEFAULT.concat(STORE_UU_TOPPINGS_DEFAULT);
+      currentStore.items = STORE_UU_ITEMS_DEFAULT.slice();
+      currentStore.toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+    }
     MENU = allItems.slice();
 
     if (currentStore.categories && currentStore.categories.length) {
@@ -255,6 +318,11 @@
     updateStoreBranding();
     renderCategoryTabs();
     renderMenu();
+    updateUrlParams();
+
+    if (currentStore.id === 'uu-milktea') {
+      fetchMenuFromSheet();
+    }
 
     if (broadcast) {
       schedulePush();
@@ -946,8 +1014,10 @@
       dev = wrap.dev || '';
     } else return { changed: false, needsPush: false, dev: '' };
 
-    if (wrap.storeData && (!currentStore || currentStore.id !== wrap.storeData.id)) {
-      switchStore(wrap.storeData, false);
+    var remoteStoreId = wrap.storeId || (wrap.storeData && wrap.storeData.id);
+    if (remoteStoreId && (!currentStore || currentStore.id !== remoteStoreId)) {
+      var targetStore = wrap.storeData || getStoreById(remoteStoreId);
+      switchStore(targetStore, false);
       changed = true;
     }
 
@@ -1292,7 +1362,7 @@
     var titleLbl = $('custDrinkerLabel');
     if (titleLbl) titleLbl.textContent = isFood ? 'Phần của ai?' : 'Ly của ai?';
     title.textContent = (menuItem ? menuItem.ten : (cartLine ? cartLine.name : 'Tùy chọn'));
-    sub.textContent = isFood ? (cartLine ? 'Chỉnh sửa phần ăn của bạn' : 'Tùy chọn phần ăn của bạn') : (cartLine ? 'Chỉnh sửa ly của bạn' : 'Tùy chọn ly của bạn');
+    sub.textContent = cartLine ? 'Chỉnh sửa món của bạn' : 'Tùy chọn món của bạn';
 
     // Default or existing values
     if (cartLine) {
@@ -1302,9 +1372,9 @@
       curSelectedToppings = (cartLine.toppings || []).map(function (t) { return Object.assign({}, t); });
       drinker.value = cartLine.uname || cartLine.owner || myUname;
       note.value = cartLine.note || '';
-      btnConfirm.textContent = isFood ? 'Cập nhật phần này' : 'Cập nhật ly này';
+      btnConfirm.textContent = 'Cập nhật món này';
       // Broadcast presence focus
-      sendPresence({ lid: cartLine.lid, action: isFood ? 'sửa phần ăn' : 'sửa ly' });
+      sendPresence({ lid: cartLine.lid, action: 'sửa món' });
     } else {
       curSelectedSize = isToppingOnly ? 'TP' : 'M';
       curSelectedSugar = '100%';
@@ -1312,13 +1382,14 @@
       curSelectedToppings = [];
       drinker.value = myUname;
       note.value = '';
-      btnConfirm.textContent = isFood ? 'Thêm vào bill nhóm' : 'Thêm vào bill nhóm';
+      btnConfirm.textContent = 'Thêm vào bill nhóm';
       // Broadcast presence focus
       sendPresence({ lid: 'new', action: 'chọn ' + (menuItem ? menuItem.ten : 'món') });
     }
 
+    if ($('custNoteLabel')) $('custNoteLabel').textContent = 'Ghi chú món';
     if (note) {
-      note.placeholder = isFood ? 'Ghi chú (vd: nhiều rau, ít cay, thêm chả, không hành…)' : 'Ít trà, đậm vị, trân châu mềm…';
+      note.placeholder = isFood ? 'Ghi chú (vd: nhiều rau, ít cay, thêm chả, không hành…)' : 'Ghi chú (vd: ít ngọt, nhiều đá, trân châu mềm…)';
     }
 
     var opts = (currentStore && currentStore.options) || { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
@@ -1417,6 +1488,8 @@
         ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;\\\'>✨</span>\');">') :
         ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;">✨</span>');
 
+      var div = document.createElement('div');
+      div.className = 'top-chip' + (found ? ' is-selected' : '');
       div.innerHTML =
         thumbHtml +
         '<div class="top-name-price">' +
@@ -2049,7 +2122,11 @@
       .then(function (j) {
         if (j && j.menu && j.menu.length) {
           MENU = j.menu;
-          renderMenu();
+          STORE_UU.items = j.menu.filter(function (x) { return x.nhom !== 'topping'; });
+          STORE_UU.toppings = j.menu.filter(function (x) { return x.nhom === 'topping'; });
+          if (currentStore && currentStore.id === 'uu-milktea') {
+            renderMenu();
+          }
           var dot = $('statusDot');
           if (dot) dot.className = 'dot on';
           if ($('statusText')) $('statusText').textContent = 'Đã nối Sheet (' + MENU.length + ' món)';
@@ -2469,11 +2546,33 @@
       var btnSelect = card.querySelector('.btn-select-store');
       if (btnSelect) {
         btnSelect.onclick = function () {
+          if (currentStore && currentStore.id === st.id) {
+            $('storeModal').hidden = true;
+            return;
+          }
+
           if (cart.length > 0) {
-            if (!confirm('Đổi sang quán mới sẽ làm mới giỏ hàng hiện tại. Bạn có chắc muốn đổi quán không?')) return;
+            var msg =
+              '⚠️ Bill hiện tại (' + orderCode + ') đang có ' + cart.length + ' món đặt chung của nhóm.\n\n' +
+              'Để tránh làm mất giỏ hàng của các bạn khác, hệ thống sẽ TẠO BILL MỚI cho quán "' + st.name + '".\n' +
+              '(Bill cũ vẫn được giữ nguyên an toàn cho mọi người tiếp tục đặt).\n\n' +
+              'Bạn có muốn tạo Bill mới và chuyển sang quán "' + st.name + '" không?';
+
+            if (!confirm(msg)) return;
+
+            orderCode = newOrderCode();
             cart = [];
             cartDel = {};
+            F = {};
+            initFields();
+            switchStore(st.id, false);
+            setupLive();
+            renderCart();
+            $('storeModal').hidden = true;
+            showToast('✓ Đã tạo Bill mới (' + orderCode + ') cho quán: ' + st.name);
+            return;
           }
+
           switchStore(st.id, true);
           renderCart();
           $('storeModal').hidden = true;
@@ -2911,10 +3010,14 @@
     pushStoreToSheet(storeObj);
 
     if (cart.length > 0) {
-      if (confirm('Đã lưu quán! Bạn có muốn mở ngay quán này để đặt đơn không? (Lưu ý giỏ hàng hiện tại sẽ làm mới)')) {
+      if (confirm('Đã lưu quán! Bạn có muốn mở ngay quán này để đặt đơn không?\n(Hệ thống sẽ tạo Bill mới cho quán này để không làm mất giỏ hàng đang đặt của nhóm)')) {
+        orderCode = newOrderCode();
         cart = [];
         cartDel = {};
-        switchStore(storeObj, true);
+        F = {};
+        initFields();
+        switchStore(storeObj, false);
+        setupLive();
         renderCart();
       }
     } else {
@@ -2983,7 +3086,7 @@
   // Share bill link
   if ($('btnShare')) {
     $('btnShare').onclick = function () {
-      var url = location.href.split('?')[0] + '?bill=' + encodeURIComponent(orderCode);
+      var url = getShareUrl();
       try { history.replaceState(null, '', url); } catch (e) {}
       function copyDone() {
         showToast('Đã copy link bill chung! Gửi ngay cho bạn bè.');
@@ -3069,7 +3172,7 @@
     cart = [];
     cartDel = {};
     orderCode = newOrderCode();
-    try { history.replaceState(null, '', location.href.split('?')[0] + '?bill=' + encodeURIComponent(orderCode)); } catch (e) {}
+    updateUrlParams();
     if ($('customer')) $('customer').value = '';
     if ($('orderNote')) $('orderNote').value = '';
     if ($('discount')) $('discount').value = '0';
@@ -3257,18 +3360,18 @@
           var file = new File([blob], orderCode + '-bill.png', { type: 'image/png' });
           if (navigator.canShare({ files: [file] })) {
             navigator.share({
-              title: 'Hóa đơn Ú Ụ Milk Tea: ' + orderCode,
-              text: 'Đơn đặt trà sữa chung nhóm',
+              title: 'Hóa đơn ' + (currentStore ? currentStore.name : 'Office Order') + ': ' + orderCode,
+              text: 'Đơn đặt món chung nhóm tại ' + (currentStore ? currentStore.name : 'quán'),
               files: [file]
             }).catch(function () {});
             return;
           }
           // Fallback share url
-          var url = location.href.split('?')[0] + '?bill=' + encodeURIComponent(orderCode);
+          var url = getShareUrl();
           navigator.share({ title: 'Bill ' + orderCode, url: url }).catch(function () {});
         }, 'image/png');
       } else {
-        var url = location.href.split('?')[0] + '?bill=' + encodeURIComponent(orderCode);
+        var url = getShareUrl();
         if (navigator.share) navigator.share({ title: 'Bill ' + orderCode, url: url }).catch(function () {});
         else window.prompt('Copy link bill:', url);
       }
@@ -3298,27 +3401,23 @@
   if ($('drawerBackdrop')) $('drawerBackdrop').onclick = closeMobileDrawer;
 
   /* ================= 12. KHỞI TẠO HỆ THỐNG ================= */
-  var initialStoreId = '';
-  try { initialStoreId = localStorage.getItem('office_order_active_store_id') || 'uu-milktea'; } catch (e) {}
+  var initialStoreId = urlStoreId;
+  if (!initialStoreId) {
+    try { initialStoreId = localStorage.getItem('office_order_active_store_id') || 'uu-milktea'; } catch (e) {}
+  }
   switchStore(initialStoreId, false);
   setupStoreModal();
   setupProfileModal();
   updateMyProfileUI();
   initFields();
 
-  // Kiểm tra link URL: ?bill=MÃ
-  (function () {
-    var m = null;
-    try { m = (location.search || '').match(/[?&]bill=([^&]+)/); } catch (e) {}
-    if (m && decodeURIComponent(m[1])) {
-      orderCode = decodeURIComponent(m[1]);
-      isInitialSyncing = true; // Chờ sync từ server/peer, không đè cart rỗng
-      setTimeout(function () { isInitialSyncing = false; }, 2000);
-    }
-    renderCart();
-    fetchMenuFromSheet();
-    syncStoresFromSheet(true);
-    setupLive();
-  })();
+  if (urlBillCode) {
+    isInitialSyncing = true; // Chờ sync từ server/peer, không đè cart rỗng
+    setTimeout(function () { isInitialSyncing = false; }, 2500);
+  }
+  renderCart();
+  fetchMenuFromSheet();
+  syncStoresFromSheet(true);
+  setupLive();
 
 })();
