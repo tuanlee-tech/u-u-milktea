@@ -197,6 +197,21 @@
     if (!store) return store;
     if (!Array.isArray(store.categories)) store.categories = [];
     if (!Array.isArray(store.items)) store.items = [];
+    if (!Array.isArray(store.toppings)) store.toppings = [];
+    if (!store.options) {
+      store.options = { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
+    }
+
+    if (store.id === 'uu-milktea') {
+      if (!store.items.length && typeof STORE_UU_ITEMS_DEFAULT !== 'undefined') {
+        store.items = STORE_UU_ITEMS_DEFAULT.slice();
+      }
+      if (!store.toppings.length && typeof STORE_UU_TOPPINGS_DEFAULT !== 'undefined') {
+        store.toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+      }
+      store.options = Object.assign({ hasSize: true, hasSugar: true, hasIce: true, hasToppings: true }, store.options || {});
+      store.options.hasToppings = true;
+    }
 
     // Kiểm tra và xử lý quán Vua Trộn hoặc quán có lẫn 'monchinh' và 'Món trộn'
     var catNames = store.categories.map(function (c) { return (c.name || '').trim().toLowerCase(); });
@@ -270,9 +285,9 @@
         if (Array.isArray(parsed)) {
           var needResave = false;
           parsed = parsed.map(function (st) {
-            var rawBefore = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }) });
+            var rawBefore = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }), t: st.toppings || [], opt: st.options || {} });
             sanitizeStore(st);
-            var rawAfter = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }) });
+            var rawAfter = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }), t: st.toppings || [], opt: st.options || {} });
             if (rawBefore !== rawAfter) needResave = true;
             return st;
           });
@@ -352,7 +367,26 @@
 
             // Cập nhật ngay store đang active nếu trùng id
             if (currentStore && currentStore.id === sheetStore.id) {
+              var oldActiveItems = currentStore.items || [];
+              var oldActiveToppings = currentStore.toppings || [];
+              var oldActiveChips = currentStore.noteChips || [];
               Object.assign(currentStore, sheetStore);
+              if ((!sheetStore.items || !sheetStore.items.length) && oldActiveItems.length) {
+                currentStore.items = oldActiveItems;
+              }
+              if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldActiveToppings.length) {
+                currentStore.toppings = oldActiveToppings;
+              }
+              if ((!sheetStore.noteChips || !sheetStore.noteChips.length) && oldActiveChips.length) {
+                currentStore.noteChips = oldActiveChips;
+              }
+              if (currentStore.id === 'uu-milktea') {
+                if (!currentStore.items || !currentStore.items.length) currentStore.items = STORE_UU_ITEMS_DEFAULT.slice();
+                if (!currentStore.toppings || !currentStore.toppings.length) currentStore.toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+                if (!currentStore.options) currentStore.options = { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
+                currentStore.options.hasToppings = true;
+                MENU = (currentStore.items || []).concat(currentStore.toppings || []);
+              }
               updateStoreBranding();
             }
           });
@@ -400,6 +434,16 @@
     customs.forEach(function (st) {
       sanitizeStore(st);
       map[st.id] = Object.assign(map[st.id] || {}, st);
+      if (st.id === 'uu-milktea') {
+        if (!map[st.id].toppings || !map[st.id].toppings.length) {
+          map[st.id].toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+        }
+        if (!map[st.id].items || !map[st.id].items.length) {
+          map[st.id].items = STORE_UU_ITEMS_DEFAULT.slice();
+        }
+        if (!map[st.id].options) map[st.id].options = {};
+        map[st.id].options.hasToppings = true;
+      }
     });
     var list = [];
     Object.keys(map).forEach(function (k) { list.push(map[k]); });
@@ -424,13 +468,19 @@
       localStorage.setItem('office_order_active_store_id', currentStore.id);
     } catch (e) {}
 
-    var allItems = (currentStore.items || []).concat(currentStore.toppings || []);
-    // Nếu là quán Ú Ụ mà items bị rỗng thì lấy fallback gốc
-    if (!allItems.length && currentStore.id === 'uu-milktea') {
-      allItems = STORE_UU_ITEMS_DEFAULT.concat(STORE_UU_TOPPINGS_DEFAULT);
-      currentStore.items = STORE_UU_ITEMS_DEFAULT.slice();
-      currentStore.toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+    // Nếu là quán Ú Ụ mà items hoặc toppings bị rỗng thì lấy fallback gốc
+    if (currentStore.id === 'uu-milktea') {
+      if (!currentStore.items || !currentStore.items.length) {
+        currentStore.items = STORE_UU_ITEMS_DEFAULT.slice();
+      }
+      if (!currentStore.toppings || !currentStore.toppings.length) {
+        currentStore.toppings = STORE_UU_TOPPINGS_DEFAULT.slice();
+      }
+      if (!currentStore.options) currentStore.options = { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
+      currentStore.options.hasToppings = true;
     }
+
+    var allItems = (currentStore.items || []).concat(currentStore.toppings || []);
     MENU = allItems.slice();
 
     if (currentStore.categories && currentStore.categories.length) {
@@ -897,7 +947,14 @@
   }
 
   function toppingsList() {
-    return MENU.filter(function (m) { return m.nhom === 'topping'; });
+    var tops = MENU.filter(function (m) { return m.nhom === 'topping'; });
+    if (!tops.length && currentStore && Array.isArray(currentStore.toppings) && currentStore.toppings.length) {
+      tops = currentStore.toppings;
+    }
+    if (!tops.length && currentStore && currentStore.id === 'uu-milktea') {
+      tops = STORE_UU_TOPPINGS_DEFAULT || [];
+    }
+    return tops;
   }
   function menuById(id) {
     var f = null;
@@ -1697,8 +1754,9 @@
     // Hide/show topping section
     var secTopping = $('custToppingSection');
     if (secTopping) {
-      var storeTops = (currentStore && currentStore.toppings) || [];
-      secTopping.style.display = (!hideOptions && opts.hasToppings && storeTops.length > 0) ? 'block' : 'none';
+      var tops = toppingsList();
+      var showTopping = !hideOptions && (opts.hasToppings !== false) && (tops.length > 0);
+      secTopping.style.display = showTopping ? 'block' : 'none';
     }
 
     // Sugar chips
@@ -2459,6 +2517,10 @@
           STORE_UU.items = j.menu.filter(function (x) { return x.nhom !== 'topping'; });
           STORE_UU.toppings = j.menu.filter(function (x) { return x.nhom === 'topping'; });
           if (currentStore && currentStore.id === 'uu-milktea') {
+            currentStore.items = STORE_UU.items.slice();
+            currentStore.toppings = STORE_UU.toppings.slice();
+            if (!currentStore.options) currentStore.options = { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true };
+            currentStore.options.hasToppings = true;
             renderMenu();
           }
           var dot = $('statusDot');
@@ -3050,6 +3112,9 @@
         return clone;
       });
       parsedStoreToppings = (storeToEdit.toppings || []).map(function (t) { return Object.assign({}, t); });
+      if (storeToEdit.id === 'uu-milktea' && (!parsedStoreToppings || !parsedStoreToppings.length)) {
+        parsedStoreToppings = (STORE_UU_TOPPINGS_DEFAULT || []).map(function (t) { return Object.assign({}, t); });
+      }
 
       (storeToEdit.categories || []).forEach(function (c) {
         var displayName = c.name || c.id;

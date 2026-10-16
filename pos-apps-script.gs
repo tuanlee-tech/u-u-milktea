@@ -209,6 +209,15 @@ function getStoresList_() {
         st.toppings = menuData.toppings || [];
         st.noteChips = menuData.noteChips || [];
       }
+      if (st.id === 'uu-milktea' && (!st.items || !st.items.length || !st.toppings || !st.toppings.length)) {
+        try {
+          var fullMenu = getMenuList_();
+          if (fullMenu && fullMenu.length) {
+            if (!st.items || !st.items.length) st.items = fullMenu.filter(function(x){ return x.nhom !== 'topping'; });
+            if (!st.toppings || !st.toppings.length) st.toppings = fullMenu.filter(function(x){ return x.nhom === 'topping'; });
+          }
+        } catch(e){}
+      }
     } catch(e){}
     out.push(st);
   }
