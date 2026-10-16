@@ -17,6 +17,7 @@
     itemUnit: 'ly',
     isBuiltin: true,
     options: { hasSize: true, hasSugar: true, hasIce: true, hasToppings: true },
+    noteChips: [],
     bankInfo: { bank: '', account: '', owner: '' },
     categories: [
       { id: 'trasua', name: 'Trà sữa', icon: '🧋', title: 'Trà sữa đậm vị', sub: 'Hương trà mộc đậm đà hòa quyện cùng sữa thơm béo hảo hạng' },
@@ -87,6 +88,14 @@
     itemUnit: 'phần',
     isBuiltin: true,
     options: { hasSize: true, hasSugar: false, hasIce: false, hasToppings: false },
+    noteChips: [
+      'không giá (đỗ)',
+      'không rau',
+      'không tai heo',
+      'không ớt',
+      'không hành phi',
+      'không đậu phộng'
+    ],
     bankInfo: { bank: '', account: '', owner: '' },
     categories: [
       {
@@ -596,17 +605,37 @@
   }
 
   var myUname = '';
-  try { myUname = sessionStorage.getItem(tabSessionId + '_uname') || ''; } catch (e) {}
+  try {
+    myUname = localStorage.getItem('uu_pos_uname') || sessionStorage.getItem(tabSessionId + '_uname') || '';
+  } catch (e) {}
   if (!myUname || /^Bạn #?\d+$/.test(myUname)) {
     myUname = getRandomFunName();
-    try { sessionStorage.setItem(tabSessionId + '_uname', myUname); } catch (e) {}
+    try {
+      localStorage.setItem('uu_pos_uname', myUname);
+      sessionStorage.setItem(tabSessionId + '_uname', myUname);
+    } catch (e) {}
+  } else {
+    try {
+      localStorage.setItem('uu_pos_uname', myUname);
+      sessionStorage.setItem(tabSessionId + '_uname', myUname);
+    } catch (e) {}
   }
 
   var myUcolor = '';
-  try { myUcolor = sessionStorage.getItem(tabSessionId + '_ucolor') || ''; } catch (e) {}
+  try {
+    myUcolor = localStorage.getItem('uu_pos_ucolor') || sessionStorage.getItem(tabSessionId + '_ucolor') || '';
+  } catch (e) {}
   if (!myUcolor) {
     myUcolor = USER_PALETTE[Math.floor(Math.random() * USER_PALETTE.length)].bg;
-    try { sessionStorage.setItem(tabSessionId + '_ucolor', myUcolor); } catch (e) {}
+    try {
+      localStorage.setItem('uu_pos_ucolor', myUcolor);
+      sessionStorage.setItem(tabSessionId + '_ucolor', myUcolor);
+    } catch (e) {}
+  } else {
+    try {
+      localStorage.setItem('uu_pos_ucolor', myUcolor);
+      sessionStorage.setItem(tabSessionId + '_ucolor', myUcolor);
+    } catch (e) {}
   }
 
   function userInitial(name) {
@@ -1419,18 +1448,20 @@
         }
         sizeGrp.innerHTML = '';
         sizeOptions.forEach(function (so) {
-          var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'pill-btn' + (curSelectedSize === so.id ? ' is-active' : '');
-          btn.dataset.size = so.id;
-          btn.textContent = so.label + ' · ' + fmtK(so.price);
-          btn.onclick = function () {
+          var card = document.createElement('button');
+          card.type = 'button';
+          card.className = 'size-card' + (curSelectedSize === so.id ? ' is-active' : '');
+          card.dataset.size = so.id;
+          card.innerHTML =
+            '<span class="size-card-name">' + esc(so.label) + '</span>' +
+            '<span class="size-card-price">' + fmt(so.price) + '</span>';
+          card.onclick = function () {
             curSelectedSize = so.id;
-            sizeGrp.querySelectorAll('.pill-btn').forEach(function (x) { x.classList.remove('is-active'); });
-            btn.classList.add('is-active');
+            sizeGrp.querySelectorAll('.size-card').forEach(function (x) { x.classList.remove('is-active'); });
+            card.classList.add('is-active');
             updateCustomizerPrice();
           };
-          sizeGrp.appendChild(btn);
+          sizeGrp.appendChild(card);
         });
       } else {
         secSize.style.display = 'none';
@@ -1467,11 +1498,86 @@
       btn.classList.toggle('is-active', btn.dataset.ice === curSelectedIce);
     });
 
+    // Render Note Chips
+    renderNoteChips();
+
     // Render Toppings
     renderCustomizerToppings();
     updateCustomizerPrice();
 
     modal.hidden = false;
+  }
+
+  function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function renderNoteChips() {
+    var sec = $('custNoteChipsGroup');
+    var input = $('custItemNote');
+    if (!sec || !input) return;
+
+    var chips = (currentStore && currentStore.noteChips) || [];
+    if (!chips || chips.length === 0) {
+      sec.style.display = 'none';
+      sec.innerHTML = '';
+      return;
+    }
+
+    sec.style.display = 'flex';
+    sec.innerHTML = '';
+
+    function getActiveChips() {
+      var noteVal = (input.value || '').toLowerCase();
+      var active = [];
+      chips.forEach(function (c) {
+        if (noteVal.indexOf(c.toLowerCase()) !== -1) {
+          active.push(c);
+        }
+      });
+      return active;
+    }
+
+    function syncChipsActive() {
+      var activeList = getActiveChips();
+      sec.querySelectorAll('.note-chip-btn').forEach(function (btn) {
+        var chipText = btn.dataset.chip;
+        btn.classList.toggle('is-active', activeList.indexOf(chipText) !== -1);
+      });
+    }
+
+    chips.forEach(function (chipText) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'note-chip-btn';
+      btn.dataset.chip = chipText;
+      btn.textContent = chipText;
+
+      btn.onclick = function (e) {
+        e.preventDefault();
+        var curVal = input.value.trim();
+        var regex = new RegExp('(?:,\\s*)?' + escapeRegExp(chipText) + '(?:\\s*,)?', 'gi');
+        if (regex.test(curVal)) {
+          var newVal = curVal.replace(regex, ', ').replace(/^,\s*/, '').replace(/,\s*$/, '').trim();
+          input.value = newVal;
+        } else {
+          if (curVal.length > 0) {
+            input.value = curVal + ', ' + chipText;
+          } else {
+            input.value = chipText;
+          }
+        }
+        syncChipsActive();
+        sendPresence({ lid: curEditingLine ? curEditingLine.lid : 'new', action: 'chọn ghi chú' });
+      };
+
+      sec.appendChild(btn);
+    });
+
+    syncChipsActive();
+    input.oninput = function () {
+      syncChipsActive();
+    };
   }
 
   function renderCustomizerToppings() {
@@ -1485,8 +1591,8 @@
 
       var topImg = TOPPING_IMGS[tp.id] || tp.img || '';
       var thumbHtml = topImg ?
-        ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;\\\'>✨</span>\');">') :
-        ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;font-size:20px;background:#F1F5F9;">✨</span>');
+        ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;font-size:18px;background:#F1F5F9;\\\'>✨</span>\');">') :
+        ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:#F1F5F9;">✨</span>');
 
       var div = document.createElement('div');
       div.className = 'top-chip' + (found ? ' is-selected' : '');
@@ -1497,15 +1603,12 @@
           '<span>+' + fmtK(tp.gia) + '</span>' +
         '</div>' +
         '<div class="top-stepper">' +
-          (found ? '<button type="button" class="btn-dec">−</button><span>' + found.qty + '</span>' : '') +
-          '<button type="button" class="btn-inc">+</button>' +
+          (found ? '<button type="button" class="btn-dec" title="Bớt số lượng">−</button><span>' + found.qty + '</span>' : '') +
+          '<button type="button" class="btn-inc" title="Thêm số lượng">+</button>' +
         '</div>';
 
-      var btnInc = div.querySelector('.btn-inc');
-      var btnDec = div.querySelector('.btn-dec');
-
-      btnInc.onclick = function (e) {
-        e.stopPropagation();
+      // Full card click adds / increments
+      div.onclick = function (e) {
         if (!found) {
           found = { id: tp.id, name: tp.ten, price: tp.gia, qty: 1 };
           curSelectedToppings.push(found);
@@ -1516,6 +1619,24 @@
         renderCustomizerToppings();
         updateCustomizerPrice();
       };
+
+      var btnInc = div.querySelector('.btn-inc');
+      var btnDec = div.querySelector('.btn-dec');
+
+      if (btnInc) {
+        btnInc.onclick = function (e) {
+          e.stopPropagation();
+          if (!found) {
+            found = { id: tp.id, name: tp.ten, price: tp.gia, qty: 1 };
+            curSelectedToppings.push(found);
+          } else {
+            found.qty++;
+          }
+          sendPresence({ lid: curEditingLine ? curEditingLine.lid : 'new', action: 'chọn topping' });
+          renderCustomizerToppings();
+          updateCustomizerPrice();
+        };
+      }
 
       if (btnDec) {
         btnDec.onclick = function (e) {
@@ -2650,6 +2771,7 @@
       $('chkOptIce').checked = !!opts.hasIce;
       $('chkOptTopping').checked = opts.hasToppings !== false;
       if ($('groupStoreToppings')) $('groupStoreToppings').style.display = $('chkOptTopping').checked ? 'block' : 'none';
+      if ($('storeInputNoteChips')) $('storeInputNoteChips').value = (storeToEdit.noteChips || []).join(', ');
 
       var bInfo = storeToEdit.bankInfo || {};
       $('storeBankName').value = bInfo.bank || '';
@@ -2676,6 +2798,7 @@
       $('storeInputTagline').value = '';
       $('storeInputEmoji').value = '🫓';
       if ($('storeCustomEmojiInput')) $('storeCustomEmojiInput').value = '🫓';
+      if ($('storeInputNoteChips')) $('storeInputNoteChips').value = '';
       document.querySelectorAll('#emojiPickerRow .emoji-opt').forEach(function (opt) {
         opt.classList.toggle('is-active', opt.dataset.emoji === '🫓');
       });
@@ -2970,7 +3093,8 @@
       };
     });
 
-    var unitStr = (storeCat === 'comtrua' ? 'phần' : (storeCat === 'trasua' ? 'ly' : 'món'));
+    var rawChips = ($('storeInputNoteChips') ? $('storeInputNoteChips').value : '');
+    var noteChipsList = rawChips ? rawChips.split(/[,;\n]+/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
 
     var storeObj = {
       id: storeId,
@@ -2986,6 +3110,7 @@
         hasIce: $('chkOptIce') ? $('chkOptIce').checked : false,
         hasToppings: $('chkOptTopping') ? $('chkOptTopping').checked : true
       },
+      noteChips: noteChipsList,
       bankInfo: {
         bank: ($('storeBankName') ? $('storeBankName').value.trim() : ''),
         account: ($('storeBankAccount') ? $('storeBankAccount').value.trim() : ''),
@@ -3250,6 +3375,14 @@
   if ($('btnConfirmItem')) {
     $('btnConfirmItem').onclick = function () {
       var drinkerName = ($('custDrinkerName') ? $('custDrinkerName').value.trim() : '') || myUname;
+      if (drinkerName && drinkerName !== myUname && (!myUname || FUN_NAMES.indexOf(myUname) !== -1 || /^Bạn #?\d+$/.test(myUname))) {
+        myUname = drinkerName;
+        try {
+          localStorage.setItem('uu_pos_uname', myUname);
+          sessionStorage.setItem(tabSessionId + '_uname', myUname);
+        } catch (e) {}
+        updateMyProfileUI();
+      }
       var noteVal = ($('custItemNote') ? $('custItemNote').value.trim() : '');
 
       var isFood = (currentStore && (currentStore.itemUnit === 'phần' || currentStore.category === 'anvat' || currentStore.category === 'comtrua'));

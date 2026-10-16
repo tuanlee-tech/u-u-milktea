@@ -25,7 +25,10 @@
       <div class="brand-info-wrap">
         <div class="brand-title-row">
           <span class="brand-name-text" id="sidebarStoreName">Ú Ụ Milk Tea</span>
-          <svg class="brand-switch-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="brand-switch-pill">
+          <span>Đổi quán</span>
+          <svg class="brand-switch-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
         </div>
         <div class="brand-cursive" id="sidebarStoreTagline">Trà sữa nhà làm</div>
       </div>
@@ -170,18 +173,14 @@
       <section class="menu-content-area">
         <div class="cat-header-banner">
           <div>
-            <div class="store-current-pill" id="btnOpenStoreBanner" role="button" tabindex="0" title="Bấm để đổi quán hoặc tạo quán mới">
+            <div class="store-current-pill" id="btnOpenStoreBanner" role="button" tabindex="0" title="Bấm để xem danh sách quán">
               <span class="store-pill-emoji" id="bannerStoreEmoji">🧋</span>
               <span class="store-pill-title" id="bannerStoreName">Ú Ụ Milk Tea</span>
-              <span class="store-pill-badge">Đổi quán ▾</span>
             </div>
             <h2 id="currentCatTitle">Trà sữa đậm vị</h2>
             <p class="cat-sub" id="currentCatSub">Hương trà mộc đậm đà hòa quyện cùng sữa thơm béo hảo hạng</p>
           </div>
           <div class="cat-header-actions">
-            <button class="btn btn-sm btn-store-switch" id="btnOpenStoreAction" type="button" title="Đổi quán ăn/uống khác">
-              🏪 Đổi quán
-            </button>
             <span class="cat-count-badge" id="currentCatCount">9 món</span>
           </div>
         </div>
@@ -331,9 +330,15 @@
       <!-- Chọn Size -->
       <div class="cust-section" id="custSizeSection">
         <label class="cust-label" id="custSizeLabel">Chọn Size</label>
-        <div class="pill-group" id="custSizeGroup">
-          <button class="pill-btn is-active" type="button" data-size="M" id="btnSizeM">Size M · 18k</button>
-          <button class="pill-btn" type="button" data-size="L" id="btnSizeL">Size L · 22k</button>
+        <div class="size-card-group" id="custSizeGroup">
+          <button class="size-card is-active" type="button" data-size="M" id="btnSizeM">
+            <span class="size-card-name">Size M</span>
+            <span class="size-card-price">18.000đ</span>
+          </button>
+          <button class="size-card" type="button" data-size="L" id="btnSizeL">
+            <span class="size-card-name">Size L</span>
+            <span class="size-card-price">22.000đ</span>
+          </button>
         </div>
       </div>
 
@@ -367,8 +372,9 @@
       </div>
 
       <!-- Ghi chú cho món -->
-      <div class="cust-section">
+      <div class="cust-section" id="custNoteSection">
         <label class="cust-label" id="custNoteLabel">Ghi chú món</label>
+        <div class="note-chips-group" id="custNoteChipsGroup" style="display:none"></div>
         <input class="cust-input" id="custItemNote" type="text" placeholder="Ghi chú thêm cho món này…">
       </div>
     </div>
@@ -581,6 +587,12 @@
                 <span>Có Món thêm / Topping</span>
               </label>
             </div>
+          </div>
+
+          <!-- Chip ghi chú nhanh -->
+          <div class="form-group">
+            <label class="cust-label" for="storeInputNoteChips">Chip ghi chú nhanh cho khách (phân cách bằng dấu phẩy)</label>
+            <input class="cust-input" id="storeInputNoteChips" type="text" placeholder="Vd: không giá (đỗ), không rau, không tai heo, không ớt, không hành phi, không đậu phộng...">
           </div>
 
           <!-- Thông tin chuyển khoản VietQR (tùy chọn) -->
