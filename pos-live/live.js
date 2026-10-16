@@ -101,7 +101,7 @@
     bankInfo: { bank: '', account: '', owner: '' },
     categories: [
       {
-        id: 'monchinh',
+        id: 'Món trộn',
         name: 'Món trộn',
         icon: '🍜',
         title: 'Món ngon Vua Trộn',
@@ -112,7 +112,7 @@
       {
         id: 'vt01',
         ten: 'Mì Quảng',
-        nhom: 'monchinh',
+        nhom: 'Món trộn',
         giaM: 25000,
         giaL: 30000,
         giaXL: 35000,
@@ -122,7 +122,7 @@
       {
         id: 'vt02',
         ten: 'Bún nước tương',
-        nhom: 'monchinh',
+        nhom: 'Món trộn',
         giaM: 25000,
         giaL: 30000,
         giaXL: 35000,
@@ -132,7 +132,7 @@
       {
         id: 'vt03',
         ten: 'Bún mắm nêm',
-        nhom: 'monchinh',
+        nhom: 'Món trộn',
         giaM: 25000,
         giaL: 30000,
         giaXL: 35000,
@@ -142,7 +142,7 @@
       {
         id: 'vt04',
         ten: 'Bánh ướt',
-        nhom: 'monchinh',
+        nhom: 'Món trộn',
         giaM: 25000,
         giaL: 30000,
         giaXL: 35000,
@@ -193,12 +193,94 @@
   }
 
   /* ================= STORE MANAGER LOGIC ================= */
+  function sanitizeStore(store) {
+    if (!store) return store;
+    if (!Array.isArray(store.categories)) store.categories = [];
+    if (!Array.isArray(store.items)) store.items = [];
+
+    // Kiểm tra và xử lý quán Vua Trộn hoặc quán có lẫn 'monchinh' và 'Món trộn'
+    var catNames = store.categories.map(function (c) { return (c.name || '').trim().toLowerCase(); });
+    var catIds = store.categories.map(function (c) { return (c.id || '').trim().toLowerCase(); });
+
+    var hasMonTron = catNames.indexOf('món trộn') !== -1 || catIds.indexOf('món trộn') !== -1 || catIds.indexOf('montron') !== -1;
+    var hasMonChinh = catIds.indexOf('monchinh') !== -1 || catNames.indexOf('monchinh') !== -1;
+
+    if (hasMonTron && hasMonChinh) {
+      // Loại bỏ category ảo 'monchinh'
+      store.categories = store.categories.filter(function (c) {
+        var cid = (c.id || '').toLowerCase();
+        var cname = (c.name || '').toLowerCase();
+        return cid !== 'monchinh' && cname !== 'monchinh';
+      });
+      // Đưa toàn bộ món có nhom 'monchinh' về 'Món trộn'
+      store.items.forEach(function (it) {
+        if ((it.nhom || '').toLowerCase() === 'monchinh') {
+          it.nhom = 'Món trộn';
+        }
+      });
+    } else if (!hasMonTron && hasMonChinh && (store.id === 'vua-tron' || store.name === 'Vua Trộn')) {
+      store.categories.forEach(function (c) {
+        if ((c.id || '').toLowerCase() === 'monchinh' || (c.name || '').toLowerCase() === 'monchinh') {
+          c.id = 'Món trộn';
+          c.name = 'Món trộn';
+          c.title = 'Món ngon Vua Trộn';
+          c.sub = 'Đồng giá 25k · Tùy chọn 30k / 35k · Ghi chú điều chỉnh topping theo ý';
+          c.icon = '🍜';
+        }
+      });
+      store.items.forEach(function (it) {
+        if ((it.nhom || '').toLowerCase() === 'monchinh') {
+          it.nhom = 'Món trộn';
+        }
+      });
+    }
+
+    // Khử trùng lặp danh mục (theo tên hoặc ID)
+    var seen = {};
+    var cleanCats = [];
+    store.categories.forEach(function (c) {
+      var key = (c.name || c.id || '').trim().toLowerCase();
+      if (!key) return;
+      if (!seen[key]) {
+        seen[key] = true;
+        cleanCats.push(c);
+      }
+    });
+    store.categories = cleanCats;
+
+    // Đảm bảo mọi item đều thuộc về 1 category hợp lệ
+    if (store.categories.length > 0) {
+      var validCatKeys = store.categories.map(function (c) { return (c.name || c.id || '').trim().toLowerCase(); });
+      store.items.forEach(function (it) {
+        var k = (it.nhom || '').trim().toLowerCase();
+        if (k !== 'topping' && validCatKeys.indexOf(k) === -1) {
+          it.nhom = store.categories[0].name || store.categories[0].id;
+        }
+      });
+    }
+
+    return store;
+  }
+
   function getCustomStores() {
     try {
       var raw = localStorage.getItem('office_order_custom_stores');
       if (raw) {
         var parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          var needResave = false;
+          parsed = parsed.map(function (st) {
+            var rawBefore = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }) });
+            sanitizeStore(st);
+            var rawAfter = JSON.stringify({ c: st.categories || [], i: (st.items || []).map(function (x) { return x.nhom; }) });
+            if (rawBefore !== rawAfter) needResave = true;
+            return st;
+          });
+          if (needResave) {
+            saveCustomStores(parsed);
+          }
+          return parsed;
+        }
       }
     } catch (e) {}
     return [];
@@ -221,6 +303,11 @@
         if (data && data.ok && Array.isArray(data.stores) && data.stores.length) {
           var customs = getCustomStores();
           data.stores.forEach(function (sheetStore) {
+            var hadMonChinh = JSON.stringify(sheetStore).indexOf('monchinh') !== -1;
+            sanitizeStore(sheetStore);
+            if (hadMonChinh && sheetStore.id === 'vua-tron') {
+              pushStoreToSheet(sheetStore);
+            }
             var bIdx = -1;
             for (var i = 0; i < BUILTIN_STORES.length; i++) {
               if (BUILTIN_STORES[i].id === sheetStore.id) { bIdx = i; break; }
@@ -307,9 +394,11 @@
     var customs = getCustomStores();
     var map = {};
     BUILTIN_STORES.forEach(function (st) {
+      sanitizeStore(st);
       map[st.id] = Object.assign({}, st);
     });
     customs.forEach(function (st) {
+      sanitizeStore(st);
       map[st.id] = Object.assign(map[st.id] || {}, st);
     });
     var list = [];
@@ -328,6 +417,7 @@
   function switchStore(storeOrId, broadcast) {
     var store = typeof storeOrId === 'string' ? getStoreById(storeOrId) : storeOrId;
     if (!store) store = STORE_UU;
+    sanitizeStore(store);
 
     currentStore = store;
     try {
@@ -344,7 +434,14 @@
     MENU = allItems.slice();
 
     if (currentStore.categories && currentStore.categories.length) {
-      currentCat = currentStore.categories[0].id;
+      var foundCat = currentStore.categories.find(function (c) {
+        return c.id === currentCat || c.name === currentCat;
+      });
+      if (foundCat) {
+        currentCat = foundCat.id;
+      } else {
+        currentCat = currentStore.categories[0].id;
+      }
     } else {
       currentCat = 'all';
     }
@@ -469,11 +566,17 @@
     nav.innerHTML = '';
 
     var cats = currentStore.categories || [];
+    var foundActive = cats.some(function (c) { return c.id === currentCat || c.name === currentCat; });
+    if (!foundActive && cats.length) {
+      currentCat = cats[0].id;
+    }
+
     cats.forEach(function (cat) {
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.role = 'tab';
-      btn.className = 'v-tab' + (cat.id === currentCat ? ' is-active' : '');
+      var isActive = (cat.id === currentCat || cat.name === currentCat);
+      btn.className = 'v-tab' + (isActive ? ' is-active' : '');
       btn.dataset.cat = cat.id;
 
       var iconSvg = getCategorySvg(cat.id, cat.name, cat.icon, 18);
@@ -1398,13 +1501,27 @@
     if (!grid) return;
     grid.innerHTML = '';
 
+    var catObj = (currentStore.categories || []).find(function (c) {
+      return c.id === currentCat || c.name === currentCat;
+    });
+
     var filtered = MENU.filter(function (m) {
-      if (currentCat !== 'all' && m.nhom !== currentCat) return false;
+      if (currentCat !== 'all') {
+        var match = (m.nhom === currentCat);
+        if (!match && catObj) {
+          match = (m.nhom === catObj.id || m.nhom === catObj.name);
+        }
+        if (!match && (currentCat === 'Món trộn' || currentCat === 'montron') && m.nhom === 'monchinh') {
+          match = true;
+        }
+        if (!match && currentCat === 'monchinh' && (m.nhom === 'Món trộn' || m.nhom === 'montron')) {
+          match = true;
+        }
+        if (!match) return false;
+      }
       if (q && m.ten.toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
-
-    var catObj = (currentStore.categories || []).find(function (c) { return c.id === currentCat; });
     if ($('currentCatTitle')) $('currentCatTitle').textContent = (catObj && catObj.title) || (catObj && catObj.name) || (CAT_INFO[currentCat] && CAT_INFO[currentCat].title) || 'Danh sách món';
     if ($('currentCatSub')) $('currentCatSub').textContent = (catObj && catObj.sub) || (CAT_INFO[currentCat] && CAT_INFO[currentCat].sub) || '';
     var unitStr = (currentStore && currentStore.itemUnit) || 'món';
@@ -2919,17 +3036,31 @@
       $('storeBankAccount').value = bInfo.account || '';
       $('storeBankOwner').value = bInfo.owner || '';
 
-      parsedStoreItems = (storeToEdit.items || []).slice();
-      parsedStoreToppings = (storeToEdit.toppings || []).slice();
+      var catIdToName = {};
+      (storeToEdit.categories || []).forEach(function (c) {
+        if (c.id) catIdToName[c.id] = c.name || c.id;
+        if (c.name) catIdToName[c.name] = c.name;
+      });
+
+      parsedStoreItems = (storeToEdit.items || []).map(function (it) {
+        var clone = Object.assign({}, it);
+        if (clone.nhom && catIdToName[clone.nhom]) {
+          clone.nhom = catIdToName[clone.nhom];
+        }
+        return clone;
+      });
+      parsedStoreToppings = (storeToEdit.toppings || []).map(function (t) { return Object.assign({}, t); });
 
       (storeToEdit.categories || []).forEach(function (c) {
-        if (c.id !== 'topping' && parsedStoreCategories.indexOf(c.name || c.id) === -1) {
-          parsedStoreCategories.push(c.name || c.id);
+        var displayName = c.name || c.id;
+        if (c.id !== 'topping' && displayName !== 'Topping' && parsedStoreCategories.indexOf(displayName) === -1) {
+          parsedStoreCategories.push(displayName);
         }
       });
       parsedStoreItems.forEach(function (it) {
-        if (it.nhom && it.nhom !== 'topping' && parsedStoreCategories.indexOf(it.nhom) === -1) {
-          parsedStoreCategories.push(it.nhom);
+        var nh = it.nhom;
+        if (nh && nh !== 'topping' && nh !== 'Topping' && parsedStoreCategories.indexOf(nh) === -1) {
+          parsedStoreCategories.push(nh);
         }
       });
     } else {
@@ -3290,6 +3421,8 @@
       toppings: parsedStoreToppings
     };
 
+    sanitizeStore(storeObj);
+
     // Update BUILTIN_STORES if matching
     for (var b = 0; b < BUILTIN_STORES.length; b++) {
       if (BUILTIN_STORES[b].id === storeId) {
@@ -3314,6 +3447,9 @@
     if (currentStore && currentStore.id === storeId) {
       Object.assign(currentStore, storeObj);
       MENU = (currentStore.items || []).concat(currentStore.toppings || []);
+      if (!currentStore.categories.some(function(c) { return c.id === currentCat || c.name === currentCat; })) {
+        currentCat = currentStore.categories[0] ? currentStore.categories[0].id : 'all';
+      }
       updateStoreBranding();
       renderCategoryTabs();
       renderMenu();

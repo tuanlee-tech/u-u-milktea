@@ -157,13 +157,13 @@ var STORES_DEFAULT_SHEET = [
     JSON.stringify({ bank: '', account: '', owner: '' }),
     JSON.stringify({
       categories: [
-        { id: 'monchinh', name: 'Món trộn', icon: '🍜', title: 'Món ngon Vua Trộn', sub: 'Đồng giá 25k · Tùy chọn 30k / 35k · Ghi chú điều chỉnh topping theo ý' }
+        { id: 'Món trộn', name: 'Món trộn', icon: '🍜', title: 'Món ngon Vua Trộn', sub: 'Đồng giá 25k · Tùy chọn 30k / 35k · Ghi chú điều chỉnh topping theo ý' }
       ],
       items: [
-        { id: 'vt01', ten: 'Mì Quảng', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/mi-quang.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
-        { id: 'vt02', ten: 'Bún nước tương', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-nuoc-tuong.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
-        { id: 'vt03', ten: 'Bún mắm nêm', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-mam-nem.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
-        { id: 'vt04', ten: 'Bánh ướt', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/banh-uot.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' }
+        { id: 'vt01', ten: 'Mì Quảng', nhom: 'Món trộn', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/mi-quang.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt02', ten: 'Bún nước tương', nhom: 'Món trộn', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-nuoc-tuong.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt03', ten: 'Bún mắm nêm', nhom: 'Món trộn', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-mam-nem.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
+        { id: 'vt04', ten: 'Bánh ướt', nhom: 'Món trộn', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/banh-uot.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' }
       ],
       toppings: [],
       noteChips: [
