@@ -458,6 +458,39 @@
       </button>
     </div>
     <div class="modal-body export-canvas-body">
+      <!-- Toolbar điều khiển chia tiền & ảnh -->
+      <div class="split-controls-bar">
+        <button class="btn btn-toggle-split" id="btnToggleSplitHtml" type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span id="btnToggleSplitText">Xem Bảng chia tiền từng bạn</span>
+        </button>
+        <label class="chk-split-canvas-label" title="Vẽ bảng chia tiền trực tiếp vào ảnh PNG">
+          <input type="checkbox" id="chkIncludeSplitInCanvas">
+          <span>Kèm bảng chia tiền vào ảnh</span>
+        </label>
+      </div>
+
+      <!-- Phần HTML Bảng chia tiền từng bạn (Mặc định ẩn, bấm nút để trigger show) -->
+      <div id="splitBillHtmlSection" class="split-bill-html-section" hidden>
+        <div class="split-bill-card">
+          <div class="split-bill-header">
+            <div class="split-bill-title">
+              <span class="split-bill-icon">💰</span>
+              <strong>BẢNG CHIA TIỀN TỪNG BẠN</strong>
+              <span class="split-bill-badge" id="splitPersonCount">0 người</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-copy-split" id="btnCopySplitText" title="Sao chép bảng chia tiền dạng tin nhắn văn bản để gửi vào nhóm chat">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Sao chép tin nhắn
+            </button>
+          </div>
+          <div class="split-bill-table-wrap">
+            <div id="splitBillHtmlList" class="split-bill-rows"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Khung hiển thị Canvas Ảnh Bill -->
       <div class="canvas-scroll-wrapper">
         <canvas id="billCanvas"></canvas>
       </div>

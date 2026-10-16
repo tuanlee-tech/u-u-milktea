@@ -2218,6 +2218,7 @@
     var W = 660;
     var pad = 24;
     var scale = 2; // High-DPI sharpness
+    var includeSplit = ($('chkIncludeSplitInCanvas') && $('chkIncludeSplitInCanvas').checked);
 
     var headerH = 100;
     var tableHeadH = 26;
@@ -2227,9 +2228,10 @@
     var splitHeadH = 34;
     var splitItemH = 25;
     var splitTotalH = people.length * splitItemH;
+    var splitSectionH = includeSplit ? (splitHeadH + splitTotalH + 24) : 0;
     var footerH = 46;
 
-    var totalH = headerH + tableHeadH + itemsTotalH + totalsH + splitHeadH + splitTotalH + footerH + (noteVal ? 24 : 0);
+    var totalH = headerH + tableHeadH + itemsTotalH + totalsH + splitSectionH + footerH + (noteVal ? 24 : 0);
 
     // Setup Canvas Resolution
     canvas.width = W * scale;
@@ -2396,50 +2398,52 @@
       ctx.fillText('Ghi chú: ' + noteVal, pad, curY);
     }
 
-    // SPLIT BILL SECTION (Chia tiền từng bạn)
-    curY += 24;
-    ctx.fillStyle = '#F8FAFC';
-    ctx.fillRect(pad - 8, curY - 14, W - (pad * 2) + 16, splitHeadH + splitTotalH + 4);
-    ctx.strokeStyle = '#E2E8F0';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pad - 8, curY - 14, W - (pad * 2) + 16, splitHeadH + splitTotalH + 4);
+    if (includeSplit) {
+      // SPLIT BILL SECTION (Chia tiền từng bạn)
+      curY += 24;
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fillRect(pad - 8, curY - 14, W - (pad * 2) + 16, splitHeadH + splitTotalH + 4);
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(pad - 8, curY - 14, W - (pad * 2) + 16, splitHeadH + splitTotalH + 4);
 
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#D97706';
-    ctx.font = '800 12px ' + window.getComputedStyle(document.body).fontFamily;
-    ctx.fillText('💰 BẢNG CHIA TIỀN TỪNG BẠN:', pad, curY);
-
-    curY += 8;
-    people.forEach(function (p) {
-      curY += splitItemH;
-
-      // Tỷ lệ phân bổ ship/giảm giá theo giá trị món
-      var share = (t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0;
-      var finalPay = Math.max(0, p.drinkSub + share);
-
-      var cUnit = (currentStore && currentStore.itemUnit) || 'món';
-      ctx.fillStyle = '#1E293B';
-      ctx.font = '700 12px ' + window.getComputedStyle(document.body).fontFamily;
       ctx.textAlign = 'left';
-      var personLineLabel = '● ' + p.name + ' (' + p.cups + ' ' + cUnit + '): ' + fmt(p.drinkSub);
-      ctx.fillText(personLineLabel, pad, curY);
+      ctx.fillStyle = '#D97706';
+      ctx.font = '800 12px ' + window.getComputedStyle(document.body).fontFamily;
+      ctx.fillText('💰 BẢNG CHIA TIỀN TỪNG BẠN:', pad, curY);
 
-      var adjStr = '';
-      if (share > 0) adjStr = ' (+ship ' + fmt(share) + ')';
-      else if (share < 0) adjStr = ' (-giảm ' + fmt(Math.abs(share)) + ')';
+      curY += 8;
+      people.forEach(function (p) {
+        curY += splitItemH;
 
-      if (adjStr) {
-        var preW = ctx.measureText(personLineLabel).width;
-        ctx.fillStyle = '#64748B';
-        ctx.font = '500 11px ' + window.getComputedStyle(document.body).fontFamily;
-        ctx.fillText(adjStr, pad + preW, curY);
-      }
+        // Tỷ lệ phân bổ ship/giảm giá theo giá trị món
+        var share = (t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0;
+        var finalPay = Math.max(0, p.drinkSub + share);
 
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#0A7259';
-      ctx.font = '800 12.5px ' + window.getComputedStyle(document.body).fontFamily;
-      ctx.fillText('👉 CẦN TRẢ: ' + fmt(finalPay), W - pad, curY);
-    });
+        var cUnit = (currentStore && currentStore.itemUnit) || 'món';
+        ctx.fillStyle = '#1E293B';
+        ctx.font = '700 12px ' + window.getComputedStyle(document.body).fontFamily;
+        ctx.textAlign = 'left';
+        var personLineLabel = '● ' + p.name + ' (' + p.cups + ' ' + cUnit + '): ' + fmt(p.drinkSub);
+        ctx.fillText(personLineLabel, pad, curY);
+
+        var adjStr = '';
+        if (share > 0) adjStr = ' (+ship ' + fmt(share) + ')';
+        else if (share < 0) adjStr = ' (-giảm ' + fmt(Math.abs(share)) + ')';
+
+        if (adjStr) {
+          var preW = ctx.measureText(personLineLabel).width;
+          ctx.fillStyle = '#64748B';
+          ctx.font = '500 11px ' + window.getComputedStyle(document.body).fontFamily;
+          ctx.fillText(adjStr, pad + preW, curY);
+        }
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#0A7259';
+        ctx.font = '800 12.5px ' + window.getComputedStyle(document.body).fontFamily;
+        ctx.fillText('👉 CẦN TRẢ: ' + fmt(finalPay), W - pad, curY);
+      });
+    }
 
     // FOOTER (Chuyển khoản cho [Host] theo bill trên - Host in đậm nổi bật)
     curY += 34;
@@ -2474,7 +2478,80 @@
     ctx.fillStyle = '#64748B';
     ctx.fillText(postTxt, startX + wPre + wHost, curY);
 
+    // Luôn cập nhật phần HTML bảng chia tiền
+    renderSplitBillHtml(people, t, netAdj, hostName);
+
     $('imageExportModal').hidden = false;
+  }
+
+  function renderSplitBillHtml(people, t, netAdj, hostName) {
+    var container = $('splitBillHtmlList');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if ($('splitPersonCount')) {
+      $('splitPersonCount').textContent = people.length + ' người';
+    }
+
+    var cUnit = (currentStore && currentStore.itemUnit) || 'món';
+
+    people.forEach(function (p) {
+      var share = (t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0;
+      var finalPay = Math.max(0, p.drinkSub + share);
+
+      var adjStr = '';
+      if (share > 0) adjStr = ' · <span class="split-adj plus">+ship ' + fmt(share) + '</span>';
+      else if (share < 0) adjStr = ' · <span class="split-adj minus">-giảm ' + fmt(Math.abs(share)) + '</span>';
+
+      var row = document.createElement('div');
+      row.className = 'split-person-row';
+      row.style.borderLeft = '3.5px solid ' + p.ucolor;
+      row.innerHTML =
+        '<div class="split-person-info">' +
+          '<span class="split-person-badge" style="background-color:' + p.ucolor + '18;color:' + p.ucolor + ';border:1.5px solid ' + p.ucolor + ';">' + esc(p.name) + '</span>' +
+          '<span class="split-person-cups">' + p.cups + ' ' + esc(cUnit) + ' (' + fmt(p.drinkSub) + ')' + adjStr + '</span>' +
+        '</div>' +
+        '<div class="split-person-pay">' +
+          '<span class="split-pay-lbl">Cần trả:</span>' +
+          '<strong class="split-pay-amount">' + fmt(finalPay) + '</strong>' +
+        '</div>';
+
+      container.appendChild(row);
+    });
+
+    if ($('btnCopySplitText')) {
+      $('btnCopySplitText').onclick = function () {
+        var textLines = [];
+        var stName = currentStore ? currentStore.name : 'Đơn Đặt Món';
+        textLines.push('💰 BẢNG CHIA TIỀN: ' + stName.toUpperCase());
+        textLines.push('Mã đơn: ' + orderCode);
+        textLines.push('----------------------------------------');
+        people.forEach(function (p) {
+          var share = (t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0;
+          var finalPay = Math.max(0, p.drinkSub + share);
+          var adj = '';
+          if (share > 0) adj = ' (+ship ' + fmt(share) + ')';
+          else if (share < 0) adj = ' (-giảm ' + fmt(Math.abs(share)) + ')';
+          textLines.push('● ' + p.name + ' (' + p.cups + ' ' + cUnit + '): ' + fmt(p.drinkSub) + adj + ' 👉 Cần trả: ' + fmt(finalPay));
+        });
+        textLines.push('----------------------------------------');
+        textLines.push('Tổng bill: ' + fmt(t.grand));
+        var bInfo = (currentStore && currentStore.bankInfo && currentStore.bankInfo.account) ?
+          (' (STK: ' + currentStore.bankInfo.bank + ' ' + currentStore.bankInfo.account + ' - ' + (currentStore.bankInfo.owner || hostName) + ')') : '';
+        textLines.push('Chuyển khoản cho: ' + hostName + bInfo);
+
+        var copyStr = textLines.join('\n');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(copyStr).then(function () {
+            showToast('✓ Đã sao chép bảng chia tiền dạng text!');
+          }).catch(function () {
+            prompt('Copy nội dung chia tiền:', copyStr);
+          });
+        } else {
+          prompt('Copy nội dung chia tiền:', copyStr);
+        }
+      };
+    }
   }
 
   function drawRoundedRect(ctx, x, y, width, height, radius, fill, stroke) {
@@ -3822,8 +3899,38 @@
   }
 
   // Xuất ảnh Bill Canvas
-  if ($('btnExportImage')) $('btnExportImage').onclick = exportCanvasBill;
+  if ($('btnExportImage')) {
+    $('btnExportImage').onclick = function () {
+      if ($('splitBillHtmlSection')) $('splitBillHtmlSection').hidden = true;
+      if ($('btnToggleSplitHtml')) $('btnToggleSplitHtml').classList.remove('is-active');
+      if ($('btnToggleSplitText')) $('btnToggleSplitText').textContent = 'Xem Bảng chia tiền từng bạn';
+      if ($('chkIncludeSplitInCanvas')) $('chkIncludeSplitInCanvas').checked = false;
+      exportCanvasBill();
+    };
+  }
   if ($('btnCloseImageModal')) $('btnCloseImageModal').onclick = function () { $('imageExportModal').hidden = true; };
+
+  // Nút trigger show/hide phần HTML Bảng chia tiền từng bạn
+  if ($('btnToggleSplitHtml')) {
+    $('btnToggleSplitHtml').onclick = function () {
+      var sec = $('splitBillHtmlSection');
+      if (!sec) return;
+      var isHidden = sec.hidden;
+      sec.hidden = !isHidden;
+      $('btnToggleSplitHtml').classList.toggle('is-active', isHidden);
+      var textSpan = $('btnToggleSplitText');
+      if (textSpan) {
+        textSpan.textContent = isHidden ? 'Ẩn Bảng chia tiền từng bạn' : 'Xem Bảng chia tiền từng bạn';
+      }
+    };
+  }
+
+  // Tùy chọn kèm bảng chia tiền vào ảnh Canvas
+  if ($('chkIncludeSplitInCanvas')) {
+    $('chkIncludeSplitInCanvas').onchange = function () {
+      exportCanvasBill();
+    };
+  }
 
   // Canvas Actions (Copy, Download, Share)
   if ($('btnCopyImage')) {

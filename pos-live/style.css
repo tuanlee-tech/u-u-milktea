@@ -1519,16 +1519,207 @@ body {
 /* Export canvas modal */
 .export-canvas-body {
   display: flex;
-  justify-content: center;
-  background: #E5E7EB;
+  flex-direction: column;
+  align-items: center;
+  background: #F1F5F9;
   padding: 16px;
+  gap: 12px;
+  max-height: calc(85vh - 130px);
+  overflow-y: auto;
 }
+.split-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 660px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.btn-toggle-split {
+  background: #FFFFFF;
+  color: #0A7259;
+  border: 1.5px solid #0A7259;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(10, 114, 89, 0.08);
+}
+.btn-toggle-split:hover {
+  background: #F0FDF4;
+  border-color: #065F46;
+  color: #065F46;
+  transform: translateY(-1px);
+}
+.btn-toggle-split.is-active {
+  background: #0A7259;
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(10, 114, 89, 0.2);
+}
+.chk-split-canvas-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+  background: #FFFFFF;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #CBD5E1;
+  transition: all 0.15s;
+}
+.chk-split-canvas-label:hover {
+  border-color: #94A3B8;
+  background: #F8FAFC;
+}
+.chk-split-canvas-label input[type="checkbox"] {
+  accent-color: #0A7259;
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.split-bill-html-section {
+  width: 100%;
+  max-width: 660px;
+  animation: fadeInDown 0.2s ease-out;
+}
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.split-bill-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.split-bill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #E2E8F0;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.split-bill-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: #B45309;
+}
+.split-bill-badge {
+  background: #FEF3C7;
+  color: #92400E;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+.btn-copy-split {
+  background: #F0FDF4;
+  color: #0A7259;
+  border: 1px solid #BBF7D0;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+.btn-copy-split:hover {
+  background: #DCFCE7;
+  border-color: #86EFAC;
+}
+.split-bill-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.split-person-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid #EDF2F7;
+  gap: 10px;
+  transition: background 0.15s;
+}
+.split-person-row:hover {
+  background: #F1F5F9;
+}
+.split-person-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.split-person-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.split-person-cups {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.split-adj.plus { color: #D97706; font-weight: 700; }
+.split-adj.minus { color: #DC2626; font-weight: 700; }
+.split-person-pay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.split-pay-lbl {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 600;
+}
+.split-pay-amount {
+  font-size: 13.5px;
+  color: #0A7259;
+  font-weight: 800;
+}
+
 .canvas-scroll-wrapper {
-  max-height: 65vh;
+  max-height: 52vh;
   overflow-y: auto;
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
   background: #FFF;
+  width: 100%;
+  max-width: 660px;
+  display: flex;
+  justify-content: center;
 }
 #billCanvas {
   display: block;
