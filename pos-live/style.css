@@ -133,6 +133,14 @@ body {
   line-height: 1.25;
   letter-spacing: -0.01em;
 }
+.brand-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
 .brand-switch-pill {
   display: inline-flex;
   align-items: center;
@@ -144,11 +152,30 @@ body {
   color: #F0E8DC;
   font-size: 11px;
   font-weight: 600;
-  margin-top: 2px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.brand-switch-pill:hover, .sidebar-brand:hover .brand-switch-pill {
+  background: rgba(216, 196, 158, 0.32);
+  color: #FFFFFF;
+  border-color: var(--gold-accent);
+}
+.brand-setting-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #F0E8DC;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
-.sidebar-brand:hover .brand-switch-pill {
-  background: rgba(216, 196, 158, 0.32);
+.brand-setting-btn:hover {
+  background: rgba(216, 196, 158, 0.28);
   color: #FFFFFF;
   border-color: var(--gold-accent);
 }

@@ -165,7 +165,11 @@ var STORES_DEFAULT_SHEET = [
         { id: 'vt03', ten: 'Bún mắm nêm', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/bun-mam-nem.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' },
         { id: 'vt04', ten: 'Bánh ướt', nhom: 'monchinh', giaM: 25000, giaL: 30000, giaXL: 35000, img: 'assets/img/vua-tron/banh-uot.webp', note: 'Đồng giá 25k (tùy chọn 30k · 35k)' }
       ],
-      toppings: []
+      toppings: [],
+      noteChips: [
+        'không giá (đỗ)', 'không rau', 'không dưa leo', 'không đậu phụ',
+        'không tai heo', 'không ớt', 'không hành phi', 'không đậu phộng'
+      ]
     }),
     1, new Date().toISOString()
   ]
@@ -203,6 +207,7 @@ function getStoresList_() {
         st.categories = menuData.categories || [];
         st.items = menuData.items || [];
         st.toppings = menuData.toppings || [];
+        st.noteChips = menuData.noteChips || [];
       }
     } catch(e){}
     out.push(st);
@@ -227,7 +232,8 @@ function saveStore_(st) {
     JSON.stringify({
       categories: st.categories || [],
       items: st.items || [],
-      toppings: st.toppings || []
+      toppings: st.toppings || [],
+      noteChips: st.noteChips || []
     }),
     1,
     now

@@ -212,7 +212,7 @@
 
   /* Đồng bộ danh sách quán từ Google Sheet */
   function syncStoresFromSheet(isSilent) {
-    var apiUrl = DEFAULT_API;
+    var apiUrl = (typeof api === 'function' ? api() : (typeof DEFAULT_API !== 'undefined' ? DEFAULT_API : ''));
     if (!apiUrl) return;
     var fetchUrl = apiUrl + (apiUrl.indexOf('?') === -1 ? '?' : '&') + 'action=stores&t=' + Date.now();
     fetch(fetchUrl)
@@ -247,6 +247,7 @@
               if (cIdx !== -1) {
                 var oldCItems = customs[cIdx].items || [];
                 var oldCToppings = customs[cIdx].toppings || [];
+                var oldCNoteChips = customs[cIdx].noteChips || [];
                 Object.assign(customs[cIdx], sheetStore);
                 if ((!sheetStore.items || !sheetStore.items.length) && oldCItems.length) {
                   customs[cIdx].items = oldCItems;
@@ -254,9 +255,18 @@
                 if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldCToppings.length) {
                   customs[cIdx].toppings = oldCToppings;
                 }
+                if ((!sheetStore.noteChips || !sheetStore.noteChips.length) && oldCNoteChips.length) {
+                  customs[cIdx].noteChips = oldCNoteChips;
+                }
               } else {
                 customs.push(sheetStore);
               }
+            }
+
+            // Cập nhật ngay store đang active nếu trùng id
+            if (currentStore && currentStore.id === sheetStore.id) {
+              Object.assign(currentStore, sheetStore);
+              updateStoreBranding();
             }
           });
           saveCustomStores(customs);
@@ -282,7 +292,7 @@
 
   /* Đẩy quán mới / cập nhật lên Google Sheet */
   function pushStoreToSheet(storeObj) {
-    var apiUrl = DEFAULT_API;
+    var apiUrl = (typeof api === 'function' ? api() : (typeof DEFAULT_API !== 'undefined' ? DEFAULT_API : ''));
     if (!apiUrl || !storeObj) return;
     try {
       fetch(apiUrl, {
@@ -295,7 +305,16 @@
 
   function getAllStores() {
     var customs = getCustomStores();
-    return BUILTIN_STORES.concat(customs);
+    var map = {};
+    BUILTIN_STORES.forEach(function (st) {
+      map[st.id] = Object.assign({}, st);
+    });
+    customs.forEach(function (st) {
+      map[st.id] = Object.assign(map[st.id] || {}, st);
+    });
+    var list = [];
+    Object.keys(map).forEach(function (k) { list.push(map[k]); });
+    return list;
   }
 
   function getStoreById(id) {
@@ -2387,16 +2406,35 @@
     if (!modal) return;
 
     // Open store modal triggers
-    var openBtns = ['btnOpenStoreSidebar', 'btnOpenStoreBanner', 'btnOpenStoreAction', 'btnMenuStores'];
+    var openBtns = ['btnOpenStoreSidebar', 'btnBrandSwitchPill', 'btnOpenStoreBanner', 'btnOpenStoreAction', 'btnMenuStores'];
     openBtns.forEach(function (bid) {
       if ($(bid)) {
-        $(bid).onclick = function () {
+        $(bid).onclick = function (e) {
+          if (e && e.stopPropagation) e.stopPropagation();
           if ($('moreDropdown')) $('moreDropdown').hidden = true;
           openStoreListView();
           modal.hidden = false;
         };
       }
     });
+
+    // Direct Store Settings triggers
+    if ($('btnSidebarStoreSettings')) {
+      $('btnSidebarStoreSettings').onclick = function (e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if ($('moreDropdown')) $('moreDropdown').hidden = true;
+        openStoreEditView(currentStore);
+        modal.hidden = false;
+      };
+    }
+    if ($('btnMenuEditCurrentStore')) {
+      $('btnMenuEditCurrentStore').onclick = function (e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if ($('moreDropdown')) $('moreDropdown').hidden = true;
+        openStoreEditView(currentStore);
+        modal.hidden = false;
+      };
+    }
 
     // Close buttons
     ['btnCloseStoreModal', 'btnCloseStoreModalBtn'].forEach(function (bid) {
@@ -2649,8 +2687,8 @@
         actionBtnsHtml += '<span style="font-size:12px; font-weight:700; color:#0A7259; padding: 7px 0;">Đang mở quán này</span>';
       }
 
-      if (!st.isBuiltin) {
-        actionBtnsHtml += '<button class="btn-store-subaction btn-edit-store" type="button" title="Chỉnh sửa quán">✏️ Sửa</button>';
+      actionBtnsHtml += '<button class="btn-store-subaction btn-edit-store" type="button" title="Cài đặt quán & chip ghi chú">⚙️ Cài đặt</button>';
+      if (!st.isBuiltin || st.id !== 'uu-milktea') {
         actionBtnsHtml += '<button class="btn-store-subaction danger btn-del-store" type="button" title="Xóa quán">🗑️</button>';
       }
 
@@ -2821,6 +2859,31 @@
       $('storeInputMenuText').value = '';
       $('storeInputToppingsText').value = '';
       parsedStoreCategories = [];
+    }
+
+    function updateStoreChipsPreview() {
+      var preview = $('storeChipsPreview');
+      var input = $('storeInputNoteChips');
+      if (!preview || !input) return;
+      var raw = input.value || '';
+      var chips = raw.split(/[,;\n]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!chips.length) {
+        preview.innerHTML = '<span style="font-size:11.5px; color:#94A3B8; font-style:italic;">(Chưa có chip nào — gõ vào ô trên để thêm)</span>';
+        return;
+      }
+      preview.innerHTML = '';
+      chips.forEach(function (c) {
+        var span = document.createElement('span');
+        span.className = 'note-chip-btn is-active';
+        span.style.cursor = 'default';
+        span.textContent = c;
+        preview.appendChild(span);
+      });
+    }
+
+    if ($('storeInputNoteChips')) {
+      $('storeInputNoteChips').oninput = updateStoreChipsPreview;
+      updateStoreChipsPreview();
     }
 
     if ($('quickPastePanel')) $('quickPastePanel').hidden = true;
@@ -3127,6 +3190,14 @@
       toppings: parsedStoreToppings
     };
 
+    // Update BUILTIN_STORES if matching
+    for (var b = 0; b < BUILTIN_STORES.length; b++) {
+      if (BUILTIN_STORES[b].id === storeId) {
+        Object.assign(BUILTIN_STORES[b], storeObj);
+        break;
+      }
+    }
+
     var customs = getCustomStores();
     var idx = -1;
     for (var i = 0; i < customs.length; i++) {
@@ -3140,8 +3211,14 @@
     saveCustomStores(customs);
     pushStoreToSheet(storeObj);
 
-    if (cart.length > 0) {
-      if (confirm('Đã lưu quán! Bạn có muốn mở ngay quán này để đặt đơn không?\n(Hệ thống sẽ tạo Bill mới cho quán này để không làm mất giỏ hàng đang đặt của nhóm)')) {
+    if (currentStore && currentStore.id === storeId) {
+      Object.assign(currentStore, storeObj);
+      MENU = (currentStore.items || []).concat(currentStore.toppings || []);
+      updateStoreBranding();
+      renderCategoryTabs();
+      renderProducts();
+    } else if (cart.length > 0) {
+      if (confirm('Đã lưu quán! Bạn có muốn chuyển sang đặt đơn tại quán "' + name + '" ngay không?\n(Hệ thống sẽ tạo Bill mới cho quán này để không làm mất giỏ hàng đang đặt của nhóm)')) {
         orderCode = newOrderCode();
         cart = [];
         cartDel = {};
@@ -3156,7 +3233,7 @@
     }
 
     $('storeModal').hidden = true;
-    showToast('✓ Đã lưu quán: ' + name);
+    showToast('✓ Đã lưu cài đặt quán "' + name + '" và đồng bộ Google Sheet!');
   }
 
   /* ================= 11. WIRING & EVENTS ================= */

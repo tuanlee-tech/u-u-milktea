@@ -26,9 +26,14 @@
         <div class="brand-title-row">
           <span class="brand-name-text" id="sidebarStoreName">Ú Ụ Milk Tea</span>
         </div>
-        <div class="brand-switch-pill">
-          <span>Đổi quán</span>
-          <svg class="brand-switch-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+        <div class="brand-actions-row">
+          <div class="brand-switch-pill" id="btnBrandSwitchPill" title="Chọn quán khác">
+            <span>Đổi quán</span>
+            <svg class="brand-switch-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <button class="brand-setting-btn" id="btnSidebarStoreSettings" type="button" title="Cài đặt quán & chip ghi chú">
+            ⚙️ Cài đặt
+          </button>
         </div>
         <div class="brand-cursive" id="sidebarStoreTagline">Trà sữa nhà làm</div>
       </div>
@@ -159,6 +164,7 @@
             </svg>
           </button>
           <div class="dropdown-panel" id="moreDropdown" hidden>
+            <button class="dropdown-item" id="btnMenuEditCurrentStore" type="button">⚙️ Cài đặt quán đang chọn</button>
             <button class="dropdown-item" id="btnMenuStores" type="button">🏪 Quán & Menu yêu thích</button>
             <button class="dropdown-item" id="btnMenuNew" type="button">✨ Tạo bill mới</button>
             <button class="dropdown-item" id="btnMenuHistory" type="button">📋 Lịch sử đơn máy này</button>
@@ -590,9 +596,13 @@
           </div>
 
           <!-- Chip ghi chú nhanh -->
-          <div class="form-group">
-            <label class="cust-label" for="storeInputNoteChips">Chip ghi chú nhanh cho khách (phân cách bằng dấu phẩy)</label>
-            <input class="cust-input" id="storeInputNoteChips" type="text" placeholder="Vd: không giá (đỗ), không rau, không tai heo, không ớt, không hành phi, không đậu phộng...">
+          <div class="form-group store-chips-box">
+            <label class="cust-label" for="storeInputNoteChips">⚡ Chip ghi chú nhanh khi order (khách bấm chọn thay vì gõ tay)</label>
+            <p class="form-help-sub" style="font-size:12px; color:#64748B; margin: 2px 0 6px;">
+              Nhập các yêu cầu thường gặp, phân cách bằng dấu phẩy (vd: không giá (đỗ), không rau, không dưa leo, không đậu phụ, không ớt...)
+            </p>
+            <input class="cust-input" id="storeInputNoteChips" type="text" placeholder="Vd: không giá (đỗ), không rau, không dưa leo, không đậu phụ, không tai heo, không ớt...">
+            <div class="builder-chips-preview" id="storeChipsPreview" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
           </div>
 
           <!-- Thông tin chuyển khoản VietQR (tùy chọn) -->
