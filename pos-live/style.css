@@ -842,7 +842,7 @@ body {
 .peer-focus-pill {
   position: absolute;
   right: 6px;
-  top: -8px;
+  top: -1px;
   z-index: 10;
   font-size: 9.5px;
   font-weight: 800;
