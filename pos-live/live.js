@@ -91,6 +91,8 @@
     noteChips: [
       'không giá (đỗ)',
       'không rau',
+      'không dưa leo',
+      'không đậu phụ',
       'không tai heo',
       'không ớt',
       'không hành phi',
@@ -226,12 +228,16 @@
             if (bIdx !== -1) {
               var oldItems = BUILTIN_STORES[bIdx].items || [];
               var oldToppings = BUILTIN_STORES[bIdx].toppings || [];
+              var oldNoteChips = BUILTIN_STORES[bIdx].noteChips || [];
               Object.assign(BUILTIN_STORES[bIdx], sheetStore);
               if ((!sheetStore.items || !sheetStore.items.length) && oldItems.length) {
                 BUILTIN_STORES[bIdx].items = oldItems;
               }
               if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldToppings.length) {
                 BUILTIN_STORES[bIdx].toppings = oldToppings;
+              }
+              if ((!sheetStore.noteChips || !sheetStore.noteChips.length) && oldNoteChips.length) {
+                BUILTIN_STORES[bIdx].noteChips = oldNoteChips;
               }
             } else {
               var cIdx = -1;
