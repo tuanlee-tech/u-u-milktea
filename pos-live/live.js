@@ -363,6 +363,77 @@
     }
   }
 
+  function getCategorySvg(catId, catName, catIcon, size) {
+    var sz = size || 18;
+    if (catIcon && typeof catIcon === 'string' && catIcon.indexOf('<svg') !== -1) return catIcon;
+
+    var id = (catId || '').toLowerCase();
+    var name = (catName || '').toLowerCase();
+    var ic = (catIcon || '');
+
+    if (id === 'trasua' || name.indexOf('trà sữa') !== -1 || ic === '🧋') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="currentColor"><path d="M7 6l1.2 13.2c.1 1.5 1.4 2.8 3 2.8h1.6c1.6 0 2.9-1.3 3-2.8L17 6H7zm7.5 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm2-3a1 1 0 1 1 0-2 1 1 0 0 1 0 2zM5 5h14v2H5V5zm8-4h-2l-1 4h4l-1-4z"/></svg>';
+    }
+    if (id === 'suatuoi' || name.indexOf('sữa tươi') !== -1 || ic === '🥛') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8v4H8z"/><path d="M6 6h12l1 15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1L6 6z"/><line x1="6" y1="11" x2="18" y2="11"/></svg>';
+    }
+    if (id === 'tra' || name.indexOf('trà') !== -1 || ic === '🍃') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="currentColor"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20C19 20 22 3 22 3c-1 2-8 2.25-13 3.25S2 11.5 2 13.5s1.75 3.75 1.75 3.75C7 8 17 8 17 8z"/></svg>';
+    }
+    if (id === 'traitraicay' || name.indexOf('trái cây') !== -1 || name.indexOf('nước') !== -1 || ic === '🍊' || ic === '🥤') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 5V2"/><path d="M12 5c2-1 4-1 6 0"/></svg>';
+    }
+    if (id === 'topping' || name.indexOf('topping') !== -1 || ic === '✨') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 5.6L20 10l-4.2 4 1.2 5.8-5-3-5 3 1.2-5.8L4 10l5.6-2.4L12 2z"/></svg>';
+    }
+    if (name.indexOf('cơm') !== -1 || ic === '🍱') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M7 20h10"/><path d="M9 11a3 3 0 0 1 6 0"/><line x1="19" y1="3" x2="15" y2="9"/><line x1="21" y1="5" x2="17" y2="10"/></svg>';
+    }
+    if (name.indexOf('bún') !== -1 || name.indexOf('phở') !== -1 || name.indexOf('mì') !== -1 || name.indexOf('hủ tiếu') !== -1 || ic === '🍜') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M6 19h12"/><path d="M8 8V4"/><path d="M12 8V3"/><path d="M16 8V5"/></svg>';
+    }
+    if (name.indexOf('cà phê') !== -1 || name.indexOf('cafe') !== -1 || ic === '☕') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>';
+    }
+    if (name.indexOf('bánh') !== -1 || ic === '🥖' || ic === '🫓') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="6"/><path d="M7 10c1 1 3 1 4 0"/><path d="M13 10c1 1 3 1 4 0"/></svg>';
+    }
+    if (name.indexOf('ăn vặt') !== -1 || ic === '🥢' || ic === '🍗') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3"/><circle cx="12" cy="14" r="3"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+    }
+    return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 5.6L20 10l-4.2 4 1.2 5.8-5-3-5 3 1.2-5.8L4 10l5.6-2.4L12 2z"/></svg>';
+  }
+
+  function getStoreSvg(st, size) {
+    var sz = size || 26;
+    if (!st) return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+    var cat = st.category || '';
+    var name = (st.name || '').toLowerCase();
+    var icon = st.icon || '';
+
+    if (typeof icon === 'string' && icon.indexOf('<svg') !== -1) return icon;
+
+    if (st.id === 'uu-milktea' || cat === 'trasua' || name.indexOf('trà sữa') !== -1 || icon === '🧋') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="currentColor"><path d="M7 6l1.2 13.2c.1 1.5 1.4 2.8 3 2.8h1.6c1.6 0 2.9-1.3 3-2.8L17 6H7zm7.5 13a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm-4 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm2-3a1 1 0 1 1 0-2 1 1 0 0 1 0 2zM5 5h14v2H5V5zm8-4h-2l-1 4h4l-1-4z"/></svg>';
+    }
+    if (cat === 'bunpho' || name.indexOf('trộn') !== -1 || name.indexOf('bún') !== -1 || name.indexOf('phở') !== -1 || name.indexOf('mì') !== -1 || icon === '🍜') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M6 19h12"/><path d="M8 8V4"/><path d="M12 8V3"/><path d="M16 8V5"/></svg>';
+    }
+    if (cat === 'comtrua' || name.indexOf('cơm') !== -1 || icon === '🍱') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M7 20h10"/><path d="M9 11a3 3 0 0 1 6 0"/><line x1="19" y1="3" x2="15" y2="9"/><line x1="21" y1="5" x2="17" y2="10"/></svg>';
+    }
+    if (cat === 'cafe' || name.indexOf('cà phê') !== -1 || name.indexOf('cafe') !== -1 || icon === '☕') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>';
+    }
+    if (name.indexOf('bánh') !== -1 || icon === '🥖' || icon === '🫓') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="10" ry="6"/><path d="M7 10c1 1 3 1 4 0"/><path d="M13 10c1 1 3 1 4 0"/></svg>';
+    }
+    if (cat === 'anvat' || name.indexOf('ăn vặt') !== -1 || icon === '🍗' || icon === '🥢') {
+      return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3"/><circle cx="12" cy="14" r="3"/><line x1="12" y1="2" x2="12" y2="22"/></svg>';
+    }
+    return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+  }
+
   function updateStoreBranding() {
     if (!currentStore) return;
 
@@ -378,7 +449,7 @@
       if (sbLogo) sbLogo.style.display = 'none';
       if (sbEmoji) {
         sbEmoji.style.display = 'flex';
-        sbEmoji.textContent = currentStore.icon || '🍱';
+        sbEmoji.innerHTML = getStoreSvg(currentStore, 26);
       }
     }
     if (sbName) sbName.textContent = currentStore.name;
@@ -386,7 +457,7 @@
 
     var bpEmoji = $('bannerStoreEmoji');
     var bpName = $('bannerStoreName');
-    if (bpEmoji) bpEmoji.textContent = currentStore.icon || '🏪';
+    if (bpEmoji) bpEmoji.innerHTML = getStoreSvg(currentStore, 16);
     if (bpName) bpName.textContent = currentStore.name;
 
     document.title = currentStore.name + ' · Office Order';
@@ -405,9 +476,9 @@
       btn.className = 'v-tab' + (cat.id === currentCat ? ' is-active' : '');
       btn.dataset.cat = cat.id;
 
-      var iconHtml = '<span class="v-tab-emoji">' + (cat.icon || '✨') + '</span>';
+      var iconSvg = getCategorySvg(cat.id, cat.name, cat.icon, 18);
       btn.innerHTML =
-        '<span class="v-tab-icon">' + iconHtml + '</span>' +
+        '<span class="v-tab-icon">' + iconSvg + '</span>' +
         '<span class="v-tab-text">' + esc(cat.name) + '</span>';
 
       btn.onclick = function () {
@@ -1362,13 +1433,13 @@
       if (itemImg) {
         imgHtml =
           '<div class="pcard-img-wrap">' +
-            '<img src="' + itemImg + '" alt="' + esc(m.ten) + '" loading="lazy" onerror="this.onerror=null;this.parentElement.className=\'pcard-img-wrap pcard-emoji-wrap\';this.parentElement.innerHTML=\'<span class=\\\'pcard-emoji\\\'>' + (currentStore.icon || '🍱') + '</span>\';">' +
+            '<img src="' + itemImg + '" alt="' + esc(m.ten) + '" loading="lazy" onerror="this.onerror=null;this.parentElement.className=\'pcard-img-wrap pcard-emoji-wrap\';this.parentElement.innerHTML=\'<span class=\\\'pcard-emoji\\\' style=\\\'color:#0A7259;\\\'>' + getStoreSvg(currentStore, 32).replace(/"/g, '&quot;') + '</span>\';">' +
           '</div>';
       } else {
-        var itemEmoji = m.emoji || (catObj && catObj.icon) || currentStore.icon || '🍱';
+        var itemSvg = getCategorySvg(m.nhom, '', m.emoji || (catObj && catObj.icon), 32);
         imgHtml =
           '<div class="pcard-img-wrap pcard-emoji-wrap">' +
-            '<span class="pcard-emoji">' + itemEmoji + '</span>' +
+            '<span class="pcard-emoji" style="color:#0A7259;">' + itemSvg + '</span>' +
           '</div>';
       }
 
@@ -1616,8 +1687,8 @@
 
       var topImg = TOPPING_IMGS[tp.id] || tp.img || '';
       var thumbHtml = topImg ?
-        ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;font-size:18px;background:#F1F5F9;\\\'>✨</span>\');">') :
-        ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;background:#F1F5F9;">✨</span>');
+        ('<img class="top-chip-thumb" src="' + topImg + '" alt="' + esc(tp.ten) + '" loading="lazy" onerror="this.onerror=null;this.style.display=\'none\';this.parentElement.insertAdjacentHTML(\'afterbegin\', \'<span class=\\\'top-chip-thumb\\\' style=\\\'display:flex;align-items:center;justify-content:center;background:#F1F5F9;color:#0A7259;\\\'><svg width=\\\'15\\\' height=\\\'15\\\' viewBox=\\\'0 0 24 24\\\' fill=\\\'currentColor\\\'><path d=\\\'M12 2l2.4 5.6L20 10l-4.2 4 1.2 5.8-5-3-5 3 1.2-5.8L4 10l5.6-2.4L12 2z\\\'/></svg></span>\');">') :
+        ('<span class="top-chip-thumb" style="display:flex;align-items:center;justify-content:center;background:#F1F5F9;color:#0A7259;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 5.6L20 10l-4.2 4 1.2 5.8-5-3-5 3 1.2-5.8L4 10l5.6-2.4L12 2z"/></svg></span>');
 
       var div = document.createElement('div');
       div.className = 'top-chip' + (found ? ' is-selected' : '');
@@ -1826,8 +1897,8 @@
       } else {
         var locked = document.createElement('span');
         locked.className = 'c-qlocked';
-        locked.title = 'Chỉ ' + (c.uname || 'chủ ly') + ' mới có quyền sửa';
-        locked.textContent = '🔒 ' + c.qty + 'x';
+        locked.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
+        locked.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' + c.qty + 'x';
         qtyCol.appendChild(locked);
       }
       li.appendChild(qtyCol);
@@ -1844,8 +1915,8 @@
       if (isMine) {
         var btnEdit = document.createElement('button');
         btnEdit.className = 'c-abtn edit';
-        btnEdit.title = 'Tùy chọn ly này';
-        btnEdit.innerHTML = '✏️';
+        btnEdit.title = 'Tùy chọn món này';
+        btnEdit.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
         btnEdit.onclick = function (e) {
           e.stopPropagation();
           var m = menuById(c.id);
@@ -1854,8 +1925,8 @@
 
         var btnDel = document.createElement('button');
         btnDel.className = 'c-abtn del';
-        btnDel.title = 'Xóa ly này khỏi bill';
-        btnDel.innerHTML = '✕';
+        btnDel.title = 'Xóa món này khỏi bill';
+        btnDel.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
         btnDel.onclick = function (e) {
           e.stopPropagation();
           tomb(c);
@@ -1868,8 +1939,8 @@
       } else {
         var iconLock = document.createElement('span');
         iconLock.className = 'c-lock-icon';
-        iconLock.title = 'Chỉ ' + (c.uname || 'chủ ly') + ' mới có quyền sửa';
-        iconLock.textContent = '🔒';
+        iconLock.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
+        iconLock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
         actCol.appendChild(iconLock);
       }
       li.appendChild(actCol);
@@ -2659,7 +2730,9 @@
     if ($('tabStoreCreate')) $('tabStoreCreate').classList.remove('is-active');
     if ($('storeListFooterBtns')) $('storeListFooterBtns').hidden = false;
     if ($('storeEditFooterBtns')) $('storeEditFooterBtns').hidden = true;
-    if ($('storeModalTitle')) $('storeModalTitle').textContent = '🏪 Quán Yêu Thích & Menu Đặt Món';
+    if ($('storeModalTitle')) {
+      $('storeModalTitle').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Quán Yêu Thích & Menu Đặt Món';
+    }
     renderStoreListGrid();
   }
 
@@ -2678,23 +2751,34 @@
       var totalTops = (st.toppings ? st.toppings.length : 0);
       var countStr = totalItems + ' món' + (totalTops ? ' · ' + totalTops + ' topping' : '');
 
-      var activeBadgeHtml = isActive ? '<span class="store-active-badge">✓ ĐANG CHỌN</span>' : '';
+      var activeBadgeHtml = isActive ? '<span class="store-active-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-right:2px;"><polyline points="20 6 9 17 4 12"/></svg>ĐANG CHỌN</span>' : '';
+
+      var delBtnHtml = '';
+      if (!st.isBuiltin || st.id !== 'uu-milktea') {
+        delBtnHtml = '<button class="btn-store-del-corner btn-del-store" type="button" title="Xóa quán">' +
+          '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>' +
+          '</button>';
+      }
 
       var actionBtnsHtml = '';
       if (!isActive) {
-        actionBtnsHtml += '<button class="btn-select-store" type="button">👉 Mở đơn quán này</button>';
+        actionBtnsHtml += '<button class="btn-select-store" type="button">' +
+          '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:5px;vertical-align:-2px;"><polyline points="16 3 21 8 16 13"/><line x1="21" y1="8" x2="9" y2="8"/><polyline points="8 21 3 16 8 11"/><line x1="3" y1="16" x2="15" y2="16"/></svg>' +
+          'Đổi quán</button>';
       } else {
-        actionBtnsHtml += '<span style="font-size:12px; font-weight:700; color:#0A7259; padding: 7px 0;">Đang mở quán này</span>';
+        actionBtnsHtml += '<span style="font-size:12px; font-weight:700; color:#0A7259; padding: 7px 0; display:inline-flex; align-items:center; gap:4px;">' +
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+          'Đang mở quán này</span>';
       }
 
-      actionBtnsHtml += '<button class="btn-store-subaction btn-edit-store" type="button" title="Cài đặt quán & chip ghi chú">⚙️ Cài đặt</button>';
-      if (!st.isBuiltin || st.id !== 'uu-milktea') {
-        actionBtnsHtml += '<button class="btn-store-subaction danger btn-del-store" type="button" title="Xóa quán">🗑️</button>';
-      }
+      actionBtnsHtml += '<button class="btn-store-subaction btn-edit-store" type="button" title="Cài đặt quán & chip ghi chú">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;vertical-align:-2px;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>' +
+        'Cài đặt</button>';
 
       card.innerHTML =
+        delBtnHtml +
         '<div class="store-card-head">' +
-          '<div class="store-card-emoji">' + (st.icon || '🏪') + '</div>' +
+          '<div class="store-card-emoji">' + getStoreSvg(st, 26) + '</div>' +
           '<div class="store-card-info">' +
             '<h4>' + esc(st.name) + '</h4>' +
             '<p>' + esc(st.tagline || (st.category === 'comtrua' ? 'Cơm trưa văn phòng' : 'Đặt món cùng nhau')) + '</p>' +
@@ -2754,7 +2838,8 @@
 
       var btnDel = card.querySelector('.btn-del-store');
       if (btnDel) {
-        btnDel.onclick = function () {
+        btnDel.onclick = function (e) {
+          e.stopPropagation();
           if (!confirm('Bạn có chắc muốn xóa quán "' + st.name + '" khỏi danh sách yêu thích?')) return;
           var customs = getCustomStores().filter(function (x) { return x.id !== st.id; });
           saveCustomStores(customs);
@@ -2765,6 +2850,14 @@
           showToast('Đã xóa quán ' + st.name);
         };
       }
+
+      card.style.cursor = 'pointer';
+      card.onclick = function (e) {
+        if (e.target.closest('.btn-store-subaction') || e.target.closest('.btn-store-del-corner')) {
+          return;
+        }
+        if (btnSelect) btnSelect.click();
+      };
 
       grid.appendChild(card);
     });
@@ -2789,7 +2882,11 @@
     if ($('storeEditFooterBtns')) $('storeEditFooterBtns').hidden = false;
 
     if ($('storeModalTitle')) {
-      $('storeModalTitle').textContent = storeToEdit ? '✏️ Chỉnh Sửa Quán Yêu Thích' : '➕ Tạo Quán Yêu Thích Mới';
+      if (storeToEdit) {
+        $('storeModalTitle').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Chỉnh Sửa Quán Yêu Thích';
+      } else {
+        $('storeModalTitle').innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Tạo Quán Yêu Thích Mới';
+      }
     }
 
     parsedStoreItems = [];
@@ -2912,11 +3009,11 @@
     if (!cats.length) {
       container.innerHTML =
         '<div class="menu-builder-empty" style="text-align:center; padding:24px 16px; background:#FFFFFF; border:1px dashed #CBD5E1; border-radius:10px;">' +
-          '<div style="font-size:32px; margin-bottom:8px;">📂</div>' +
+          '<div style="margin-bottom:8px; color:#94A3B8;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>' +
           '<p style="font-weight:700; color:#334155; margin:0 0 4px; font-size:14px;">Chưa có phân loại món nào</p>' +
           '<p style="font-size:12.5px; color:#64748B; margin:0 0 12px; line-height:1.5;">' +
             'Bạn có thể nhập tên phân loại ở trên (Ví dụ: <b>Bánh tráng</b>, <b>Nước giải khát</b>) rồi bấm <b>+ Thêm phân loại</b>,<br>' +
-            'hoặc bấm nút <b>⚡ Nhập nhanh từ văn bản</b> ở góc trên để dán menu từ Zalo.' +
+            'hoặc bấm nút <b>Nhập nhanh từ văn bản</b> ở góc trên để dán menu từ Zalo.' +
           '</p>' +
         '</div>';
       renderToppingsBuilder();
@@ -2933,12 +3030,12 @@
       cardHeader.className = 'cat-card-header';
       cardHeader.innerHTML =
         '<div class="cat-card-title-wrap">' +
-          '<span class="cat-card-icon">📂</span>' +
+          '<span class="cat-card-icon" style="display:inline-flex;align-items:center;color:#0A7259;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>' +
           '<span class="cat-card-title">' + esc(catName) + '</span>' +
           '<span class="cat-card-badge">' + catItems.length + ' món</span>' +
         '</div>' +
         '<div class="cat-card-actions">' +
-          '<button type="button" class="btn-del-cat" title="Xóa phân loại và tất cả món trong nhóm này">✕ Xóa nhóm</button>' +
+          '<button type="button" class="btn-del-cat" title="Xóa phân loại và tất cả món trong nhóm này"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Xóa nhóm</button>' +
         '</div>';
 
       cardHeader.querySelector('.btn-del-cat').onclick = function () {
@@ -2968,7 +3065,7 @@
           row.innerHTML =
             '<span class="cat-item-name">' + esc(it.ten) + '</span>' +
             '<span class="cat-item-price">' + pStr + '</span>' +
-            '<button type="button" class="btn-del-item" title="Xóa món này">✕</button>';
+            '<button type="button" class="btn-del-item" title="Xóa món này"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
 
           row.querySelector('.btn-del-item').onclick = function () {
             var iIdx = parsedStoreItems.indexOf(it);
@@ -2989,7 +3086,7 @@
         '<input type="text" class="input-add-name cust-input" placeholder="Tên món mới (Vd: Bánh tráng cuốn...)">' +
         '<input type="text" class="input-add-price-m cust-input" placeholder="' + (hasSize ? 'Giá M (vd: 20k)' : 'Đơn giá (vd: 20k)') + '">' +
         (hasSize ? '<input type="text" class="input-add-price-l cust-input" placeholder="Giá L (vd: 25k)">' : '') +
-        '<button type="button" class="btn btn-sm btn-ghost-primary btn-add-item-to-cat">+ Thêm món</button>';
+        '<button type="button" class="btn btn-sm btn-ghost-primary btn-add-item-to-cat"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Thêm món</button>';
 
       var inpName = addForm.querySelector('.input-add-name');
       var inpPriceM = addForm.querySelector('.input-add-price-m');
@@ -3049,9 +3146,9 @@
       var row = document.createElement('div');
       row.className = 'cat-item-row';
       row.innerHTML =
-        '<span class="cat-item-name">✨ ' + esc(tp.ten) + '</span>' +
+        '<span class="cat-item-name"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:#0A7259;vertical-align:-1px;margin-right:4px;"><path d="M12 2l2.4 5.6L20 10l-4.2 4 1.2 5.8-5-3-5 3 1.2-5.8L4 10l5.6-2.4L12 2z"/></svg>' + esc(tp.ten) + '</span>' +
         '<span class="cat-item-price">+' + fmt(tp.gia) + '</span>' +
-        '<button type="button" class="btn-del-item" title="Xóa topping này">✕</button>';
+        '<button type="button" class="btn-del-item" title="Xóa topping này"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
       row.querySelector('.btn-del-item').onclick = function () {
         parsedStoreToppings.splice(idx, 1);
         renderToppingsBuilder();
@@ -3219,7 +3316,7 @@
       MENU = (currentStore.items || []).concat(currentStore.toppings || []);
       updateStoreBranding();
       renderCategoryTabs();
-      renderProducts();
+      renderMenu();
     } else if (cart.length > 0) {
       if (confirm('Đã lưu quán! Bạn có muốn chuyển sang đặt đơn tại quán "' + name + '" ngay không?\n(Hệ thống sẽ tạo Bill mới cho quán này để không làm mất giỏ hàng đang đặt của nhóm)')) {
         orderCode = newOrderCode();
