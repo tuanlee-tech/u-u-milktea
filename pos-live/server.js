@@ -12,7 +12,8 @@ try {
 }
 var wss = new WebSocketServer({ port: PORT });
 var URGE_COOLDOWN_MS = 30000;
-var rooms = {}; // bill -> { last: wrap, lastUrgeAt: number, presence: { cid -> { cid, uid, uname, ucolor, lastSeen } } }
+var PAY_URGE_COOLDOWN_MS = 30000;
+var rooms = {}; // bill -> { last: wrap, lastUrgeAt: number, lastPayUrgeAt: number, lastPayUrge: object, presence: { cid -> ... } }
 
 function prunePresence(room) {
   if (!room || !room.presence) return;
@@ -30,7 +31,7 @@ wss.on('connection', function (s) {
     try { d = JSON.parse(raw); } catch (e) { return; }
     if (!d || !d.bill) return;
 
-    if (!rooms[d.bill]) rooms[d.bill] = { last: null, lastUrgeAt: 0, presence: {} };
+    if (!rooms[d.bill]) rooms[d.bill] = { last: null, lastUrgeAt: 0, lastPayUrgeAt: 0, lastPayUrge: null, presence: {} };
     s.bill = d.bill;
 
     if (d.type === 'hello') {
@@ -67,6 +68,21 @@ wss.on('connection', function (s) {
             bill: d.bill,
             remainingMs: URGE_COOLDOWN_MS - helloElapsed
           }));
+        } catch (e) {}
+      }
+      var payElapsed = Date.now() - (rooms[d.bill].lastPayUrgeAt || 0);
+      if (rooms[d.bill].lastPayUrgeAt > 0 && payElapsed < PAY_URGE_COOLDOWN_MS) {
+        try {
+          s.send(JSON.stringify({
+            type: 'urge_pay_cooldown',
+            bill: d.bill,
+            remainingMs: PAY_URGE_COOLDOWN_MS - payElapsed
+          }));
+        } catch (e) {}
+      }
+      if (rooms[d.bill].lastPayUrge) {
+        try {
+          s.send(JSON.stringify(Object.assign({}, rooms[d.bill].lastPayUrge, { isSyncReplay: true })));
         } catch (e) {}
       }
       // Broadcast peer_joined to other peers
@@ -131,6 +147,24 @@ wss.on('connection', function (s) {
           outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
         }
       }
+      if (d.urgePay) {
+        var nowPay = Date.now();
+        var elapsedPay = nowPay - (rooms[d.bill].lastPayUrgeAt || 0);
+        if (elapsedPay < PAY_URGE_COOLDOWN_MS) {
+          try {
+            s.send(JSON.stringify({ type: 'urge_pay_rejected', bill: d.bill, remainingMs: PAY_URGE_COOLDOWN_MS - elapsedPay }));
+          } catch (e) {}
+          outObj = Object.assign({}, outObj);
+          delete outObj.urgePay;
+          delete outObj.urgePayId;
+          delete outObj.urgePayVoiceId;
+          delete outObj.urgePayText;
+        } else {
+          rooms[d.bill].lastPayUrgeAt = nowPay;
+          outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+          rooms[d.bill].lastPayUrge = outObj;
+        }
+      }
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
           try { c.send(JSON.stringify(outObj)); } catch (e) {}
@@ -154,9 +188,32 @@ wss.on('connection', function (s) {
 
     if (d.type === 'reset') {
       rooms[d.bill].last = null;
+      rooms[d.bill].lastPayUrge = null;
+      rooms[d.bill].lastPayUrgeAt = 0;
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
           try { c.send(JSON.stringify(d)); } catch (e) {}
+        }
+      });
+      return;
+    }
+
+    if (d.type === 'urge_pay') {
+      var nowP = Date.now();
+      var elapsedP = nowP - (rooms[d.bill].lastPayUrgeAt || 0);
+      if (elapsedP < PAY_URGE_COOLDOWN_MS) {
+        try {
+          s.send(JSON.stringify({ type: 'urge_pay_rejected', bill: d.bill, remainingMs: PAY_URGE_COOLDOWN_MS - elapsedP }));
+        } catch (e) {}
+        return;
+      }
+      rooms[d.bill].lastPayUrgeAt = nowP;
+      var urgePayOut = Object.assign({}, d, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+      rooms[d.bill].lastPayUrge = urgePayOut;
+      var urgePayPayload = JSON.stringify(urgePayOut);
+      wss.clients.forEach(function (c) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill) {
+          try { c.send(urgePayPayload); } catch (e) {}
         }
       });
       return;

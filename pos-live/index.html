@@ -249,13 +249,32 @@
             </button>
             <div class="host-dropdown-panel" id="hostDropdownPanel" hidden>
               <div class="host-dropdown-head">
-                <strong>Chọn người đại diện nhận đơn</strong>
-                <span>Phạm vi: Người tham gia đặt món trong bill</span>
+                <strong id="hostDropdownTitle">Chọn người đại diện nhận đơn</strong>
+                <span id="hostDropdownSub">Tồn tại duy nhất 1 người đại diện</span>
               </div>
               <div class="host-participants-list" id="hostParticipantsList"></div>
             </div>
           </div>
           <input id="orderNote" type="text" placeholder="Ghi chú đơn (vd: lầu 3, giao lúc 14h30)…" autocomplete="off">
+        </div>
+
+        <!-- Host Permission & Payment Action Strip -->
+        <div class="host-tools-bar" id="hostToolsBar" hidden>
+          <span class="order-status-pill" id="orderSubmittedBadge">⏳ Đang đặt món</span>
+          <div class="host-tools-actions" id="hostOnlyActions" hidden>
+            <button type="button" class="btn-host-tool" id="btnOpenHostQr" title="Thêm hoặc sửa mã QR thanh toán của đại diện">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+              <span id="btnHostQrLabel">Thêm QR</span>
+            </button>
+            <button type="button" class="btn-host-tool btn-host-pay" id="btnOpenUrgePay" title="Hối các thành viên chưa trả tiền (chỉ bật sau khi Chốt & Lưu Sheet)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <span id="btnUrgePayLabel">Hối trả tiền</span>
+            </button>
+            <button type="button" class="btn-host-tool" id="btnUnlockOrderEdit" hidden title="Mở khóa cho thành viên sửa/thêm món lại">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+              Mở sửa
+            </button>
+          </div>
         </div>
 
         <!-- Single-Line 10-Item Viewport Container -->
@@ -503,25 +522,35 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           <span id="btnToggleSplitText">Xem Bảng chia tiền từng bạn</span>
         </button>
-        <label class="chk-split-canvas-label" title="Vẽ bảng chia tiền trực tiếp vào ảnh PNG">
-          <input type="checkbox" id="chkIncludeSplitInCanvas">
-          <span>Kèm bảng chia tiền vào ảnh</span>
-        </label>
+        <div class="split-toolbar-right">
+          <button type="button" class="btn btn-sm btn-quick-qr" id="btnQuickHostQr" hidden title="Thêm hoặc sửa mã QR để hiện vào ảnh bill">
+            📷 Thêm QR vào ảnh
+          </button>
+          <label class="chk-split-canvas-label" title="Vẽ bảng chia tiền trực tiếp vào ảnh PNG">
+            <input type="checkbox" id="chkIncludeSplitInCanvas" checked>
+            <span>Kèm bảng chia tiền vào ảnh</span>
+          </label>
+        </div>
       </div>
 
-      <!-- Phần HTML Bảng chia tiền từng bạn (Mặc định ẩn, bấm nút để trigger show) -->
+      <!-- Phần HTML Bảng chia tiền từng bạn -->
       <div id="splitBillHtmlSection" class="split-bill-html-section" hidden>
         <div class="split-bill-card">
           <div class="split-bill-header">
             <div class="split-bill-title">
               <span class="split-bill-icon">💰</span>
-              <strong>BẢNG CHIA TIỀN TỪNG BẠN</strong>
+              <strong>BẢNG CHIA TIỀN & TRẠNG THÁI</strong>
               <span class="split-bill-badge" id="splitPersonCount">0 người</span>
             </div>
-            <button type="button" class="btn btn-sm btn-copy-split" id="btnCopySplitText" title="Sao chép bảng chia tiền dạng tin nhắn văn bản để gửi vào nhóm chat">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Sao chép tin nhắn
-            </button>
+            <div class="split-header-actions">
+              <button type="button" class="btn btn-sm btn-urge-pay-inline" id="btnModalUrgePay" hidden title="Hối các bạn chưa trả tiền">
+                💸 Hối trả tiền
+              </button>
+              <button type="button" class="btn btn-sm btn-copy-split" id="btnCopySplitText" title="Sao chép bảng chia tiền dạng tin nhắn văn bản để gửi vào nhóm chat">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Sao chép tin nhắn
+              </button>
+            </div>
           </div>
           <div class="split-bill-table-wrap">
             <div id="splitBillHtmlList" class="split-bill-rows"></div>
@@ -883,6 +912,114 @@ Tóp mỡ thêm 5k"></textarea>
   </div>
   <button type="button" class="urge-alert-replay" id="btnReplayUrgeAudio" title="Nghe lại tiếng thoại hối">🔊 Nghe</button>
   <button type="button" class="urge-alert-close" id="btnCloseUrgeAlert" aria-label="Đóng">✕</button>
+</div>
+
+<!-- MODAL 7: MÃ QR THANH TOÁN CỦA NGƯỜI ĐẠI DIỆN -->
+<div class="modal" id="hostQrModal" hidden>
+  <div class="modal-box modal-sm host-qr-modal-box">
+    <div class="modal-head">
+      <div>
+        <h3>📷 Mã QR Nhận Tiền (Đại diện)</h3>
+        <p class="modal-sub">Chỉ hiển thị trên ảnh bill khi bạn thêm QR</p>
+      </div>
+      <button class="btn-close" id="btnCloseHostQrModal" type="button" aria-label="Đóng">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="qr-upload-preview" id="hostQrPreviewWrap">
+        <img id="hostQrPreviewImg" src="" alt="Preview QR" hidden>
+        <div class="qr-empty-placeholder" id="hostQrEmptyHint">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+          <span>Chưa có mã QR thanh toán</span>
+        </div>
+      </div>
+
+      <div class="qr-upload-actions">
+        <input type="file" id="hostQrFileInput" accept="image/*" hidden>
+        <button type="button" class="btn btn-primary" id="btnPickQrFile" style="width:100%">
+          📁 Tải ảnh QR từ máy (Bank / Momo / ZaloPay)
+        </button>
+      </div>
+
+      <details class="qr-vietqr-details">
+        <summary>Hoặc tạo nhanh mã VietQR từ số tài khoản</summary>
+        <div class="qr-vietqr-form">
+          <input type="text" class="cust-input" id="qrBankCodeInput" placeholder="Mã ngân hàng (VD: MB, VCB, TCB, ACB, TPB...)">
+          <input type="text" class="cust-input" id="qrAccountNoInput" placeholder="Số tài khoản">
+          <input type="text" class="cust-input" id="qrAccountNameInput" placeholder="Tên chủ tài khoản (không bắt buộc)">
+          <button type="button" class="btn btn-sm btn-ghost-primary" id="btnGenerateVietQr">⚡ Tạo ảnh VietQR</button>
+        </div>
+      </details>
+
+      <div class="cust-section" style="margin-top:12px;margin-bottom:0;">
+        <label class="cust-label" for="hostQrNoteInput">Thông tin STK / Ghi chú kèm QR (tùy chọn)</label>
+        <input type="text" class="cust-input" id="hostQrNoteInput" placeholder="VD: MB Bank - 0987654321 - Nguyễn Thành" maxlength="80">
+      </div>
+    </div>
+    <div class="modal-footer urge-modal-footer">
+      <button class="btn ghost" id="btnRemoveHostQr" type="button" style="color:#DC2626;">Xóa QR</button>
+      <button class="btn btn-primary" id="btnSaveHostQr" type="button">Lưu mã QR</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 8: CHỌN MẪU THOẠI HỐI TRẢ TIỀN (DÀNH CHO ĐẠI DIỆN) -->
+<div class="modal" id="urgePayModal" hidden>
+  <div class="modal-box urge-modal-box">
+    <div class="modal-head">
+      <div>
+        <h3>💸 Phát Loa Hối Trả Tiền</h3>
+        <p class="modal-sub">Chỉ phát loa tới các thành viên chưa trả tiền (Chống spam: 30s / lần)</p>
+      </div>
+      <button class="btn-close" id="btnCloseUrgePayModal" type="button" aria-label="Đóng">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="urge-pay-targets-box" id="urgePayTargetsBox"></div>
+      <div class="urge-cooldown-box" id="urgePayCooldownBox" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="urgePayCooldownText">Vừa phát loa hối trả tiền. Vui lòng đợi 30s nữa!</span>
+      </div>
+      <div class="urge-voice-list" id="urgePayVoiceList"></div>
+    </div>
+    <div class="modal-footer urge-modal-footer">
+      <button class="btn ghost" id="btnCancelUrgePayModal" type="button">Đóng</button>
+      <button class="btn btn-urge-send" id="btnConfirmUrgePaySend" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span id="btnConfirmUrgePayText">Phát loa đòi tiền ngay</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- BẢNG HỐI THANH TOÁN (AUTO-OPEN KHÔNG NÚT ĐÓNG CHO NGƯỜI CHƯA TRẢ / COLLAPSED MUTE CHO NGƯỜI ĐÃ TRẢ) -->
+<div class="pay-reminder-panel" id="payReminderPanel" hidden>
+  <div class="pay-reminder-header" id="payReminderHeader">
+    <div class="pay-reminder-title-wrap">
+      <span class="pay-reminder-badge" id="payReminderBadge">💸 NHẮC THANH TOÁN</span>
+      <strong id="payReminderHeadline">Đại diện đang hối thanh toán!</strong>
+    </div>
+    <div class="pay-reminder-head-actions">
+      <button type="button" class="btn-pay-sound" id="btnPlayPayReminderAudio" title="Phát âm thanh hối trả tiền">🔊</button>
+      <button type="button" class="btn-pay-toggle" id="btnTogglePayReminder" title="Mở rộng / Thu gọn">▾</button>
+    </div>
+  </div>
+  <div class="pay-reminder-body" id="payReminderBody">
+    <div class="pay-reminder-personal" id="payReminderPersonal"></div>
+    <div class="pay-reminder-qr-box" id="payReminderQrBox" hidden>
+      <img id="payReminderQrImg" src="" alt="Mã QR thanh toán cho đại diện">
+      <div class="pay-reminder-qr-meta">
+        <strong id="payReminderQrHost">Quét QR chuyển khoản</strong>
+        <span id="payReminderQrNote"></span>
+      </div>
+    </div>
+    <div class="pay-reminder-unpaid-wrap">
+      <span class="pay-unpaid-label">Danh sách chưa thanh toán:</span>
+      <div class="pay-unpaid-chips" id="payReminderUnpaidList"></div>
+    </div>
+  </div>
 </div>
 
 <!-- TOAST NOTIFICATION -->

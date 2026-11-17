@@ -2,6 +2,7 @@
  * Moi bill (?bill=MÃ) la 1 phong, tu gop o client, server chi chuyen tiep. */
 
 const URGE_COOLDOWN_MS = 30000;
+const PAY_URGE_COOLDOWN_MS = 30000;
 
 export class LiveRoom {
   constructor(state) {
@@ -9,14 +10,20 @@ export class LiveRoom {
     this.bill = '';
     this.last = null;
     this.lastUrgeAt = 0;
+    this.lastPayUrgeAt = 0;
+    this.lastPayUrge = null;
     this.presence = {}; // cid -> { cid, uid, uname, ucolor, lastSeen }
     this.state.blockConcurrencyWhile(async () => {
       try {
         this.last = (await this.state.storage.get('last')) || null;
         this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0;
+        this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0;
+        this.lastPayUrge = (await this.state.storage.get('lastPayUrge')) || null;
       } catch (e) {
         this.last = null;
         this.lastUrgeAt = 0;
+        this.lastPayUrgeAt = 0;
+        this.lastPayUrge = null;
       }
     });
   }
@@ -89,6 +96,27 @@ export class LiveRoom {
           }));
         } catch (e) {}
       }
+      if (!this.lastPayUrgeAt) {
+        try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
+      }
+      if (!this.lastPayUrge) {
+        try { this.lastPayUrge = (await this.state.storage.get('lastPayUrge')) || null; } catch (e) {}
+      }
+      const payElapsed = Date.now() - (this.lastPayUrgeAt || 0);
+      if (this.lastPayUrgeAt > 0 && payElapsed < PAY_URGE_COOLDOWN_MS) {
+        try {
+          ws.send(JSON.stringify({
+            type: 'urge_pay_cooldown',
+            bill: this.bill,
+            remainingMs: PAY_URGE_COOLDOWN_MS - payElapsed
+          }));
+        } catch (e) {}
+      }
+      if (this.lastPayUrge) {
+        try {
+          ws.send(JSON.stringify(Object.assign({}, this.lastPayUrge, { isSyncReplay: true })));
+        } catch (e) {}
+      }
       // Broadcast peer_joined to all other clients in this bill room
       const peerMsg = JSON.stringify({
         type: 'peer_joined',
@@ -158,6 +186,32 @@ export class LiveRoom {
           outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
         }
       }
+      if (d.urgePay) {
+        const nowPay = Date.now();
+        if (!this.lastPayUrgeAt) {
+          try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
+        }
+        const elapsedPay = nowPay - (this.lastPayUrgeAt || 0);
+        if (elapsedPay < PAY_URGE_COOLDOWN_MS) {
+          const remPayMs = PAY_URGE_COOLDOWN_MS - elapsedPay;
+          try {
+            ws.send(JSON.stringify({ type: 'urge_pay_rejected', bill: this.bill || d.bill, remainingMs: remPayMs }));
+          } catch (e) {}
+          outObj = Object.assign({}, outObj);
+          delete outObj.urgePay;
+          delete outObj.urgePayId;
+          delete outObj.urgePayVoiceId;
+          delete outObj.urgePayText;
+        } else {
+          this.lastPayUrgeAt = nowPay;
+          outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+          this.lastPayUrge = outObj;
+          try {
+            await this.state.storage.put('lastPayUrgeAt', nowPay);
+            await this.state.storage.put('lastPayUrge', outObj);
+          } catch (e) {}
+        }
+      }
       const out = JSON.stringify(outObj);
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
@@ -183,8 +237,46 @@ export class LiveRoom {
 
     if (d.type === 'reset') {
       this.last = null;
-      try { await this.state.storage.delete('last'); } catch (e) {}
+      this.lastPayUrge = null;
+      this.lastPayUrgeAt = 0;
+      try {
+        await this.state.storage.delete('last');
+        await this.state.storage.delete('lastPayUrge');
+        await this.state.storage.delete('lastPayUrgeAt');
+      } catch (e) {}
       const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      return;
+    }
+
+    if (d.type === 'urge_pay') {
+      const now = Date.now();
+      if (!this.lastPayUrgeAt) {
+        try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
+      }
+      const elapsed = now - (this.lastPayUrgeAt || 0);
+      if (elapsed < PAY_URGE_COOLDOWN_MS) {
+        try {
+          ws.send(JSON.stringify({
+            type: 'urge_pay_rejected',
+            bill: this.bill || d.bill,
+            remainingMs: PAY_URGE_COOLDOWN_MS - elapsed
+          }));
+        } catch (e) {}
+        return;
+      }
+      this.lastPayUrgeAt = now;
+      const outObj = Object.assign({}, d, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+      this.lastPayUrge = outObj;
+      try {
+        await this.state.storage.put('lastPayUrgeAt', now);
+        await this.state.storage.put('lastPayUrge', outObj);
+      } catch (e) {}
+      const out = JSON.stringify(outObj);
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
           try { s.send(out); } catch (e) {}
