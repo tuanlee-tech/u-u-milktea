@@ -227,10 +227,6 @@
           <div class="cart-sub-row">
             <span class="live-indicator"><span class="dot-live"></span> <span id="syncSt">Realtime</span></span>
             <div class="cart-sub-actions">
-              <button class="btn-urge-inline" id="btnUrgeOrder" type="button" title="Chọn mẫu thoại & phát loa hối mọi người chốt đơn gửi chủ quán">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <span id="urgeInlineText">Hối đặt hàng</span>
-              </button>
               <button class="btn-text-sm" id="btnNewInline" type="button">+ Tạo bill mới</button>
             </div>
           </div>
@@ -260,13 +256,20 @@
 
         <!-- Host Permission & Payment Action Strip -->
         <div class="host-tools-bar" id="hostToolsBar" hidden>
-          <span class="order-status-pill" id="orderSubmittedBadge">⏳ Đang đặt món</span>
+          <span class="order-status-pill" id="orderSubmittedBadge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="orderSubmittedBadgeText">Đang đặt món</span>
+          </span>
           <div class="host-tools-actions" id="hostOnlyActions" hidden>
             <button type="button" class="btn-host-tool" id="btnOpenHostQr" title="Thêm hoặc sửa mã QR thanh toán của đại diện">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
               <span id="btnHostQrLabel">Thêm QR</span>
             </button>
-            <button type="button" class="btn-host-tool btn-host-pay" id="btnOpenUrgePay" title="Hối các thành viên chưa trả tiền (chỉ bật sau khi Chốt & Lưu Sheet)">
+            <button type="button" class="btn-host-tool btn-host-pay-list" id="btnTogglePayTracker" hidden title="Đánh dấu thành viên nào đã trả / chưa trả tiền">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span id="btnPayTrackerLabel">Thu tiền (0/0)</span>
+            </button>
+            <button type="button" class="btn-host-tool btn-host-pay" id="btnOpenUrgePay" hidden title="Hối các thành viên chưa trả tiền">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               <span id="btnUrgePayLabel">Hối trả tiền</span>
             </button>
@@ -275,6 +278,15 @@
               Mở sửa
             </button>
           </div>
+        </div>
+
+        <!-- Inline Quick Member Payment Status Tracker (Host marks Paid/Unpaid directly) -->
+        <div class="host-pay-tracker" id="hostPayTracker" hidden>
+          <div class="host-pay-tracker-head">
+            <span>Đánh dấu thành viên đã chuyển khoản</span>
+            <button type="button" class="btn-text-sm" id="btnClosePayTracker">Thu gọn</button>
+          </div>
+          <div class="host-pay-tracker-list" id="hostPayTrackerList"></div>
         </div>
 
         <!-- Single-Line 10-Item Viewport Container -->
@@ -524,7 +536,8 @@
         </button>
         <div class="split-toolbar-right">
           <button type="button" class="btn btn-sm btn-quick-qr" id="btnQuickHostQr" hidden title="Thêm hoặc sửa mã QR để hiện vào ảnh bill">
-            📷 Thêm QR vào ảnh
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+            <span id="btnQuickHostQrText">Thêm QR vào ảnh</span>
           </button>
           <label class="chk-split-canvas-label" title="Vẽ bảng chia tiền trực tiếp vào ảnh PNG">
             <input type="checkbox" id="chkIncludeSplitInCanvas" checked>
@@ -538,13 +551,16 @@
         <div class="split-bill-card">
           <div class="split-bill-header">
             <div class="split-bill-title">
-              <span class="split-bill-icon">💰</span>
-              <strong>BẢNG CHIA TIỀN & TRẠNG THÁI</strong>
+              <span class="split-bill-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0A7259" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 18V6"/></svg>
+              </span>
+              <strong>BẢNG CHIA TIỀN &amp; TRẠNG THÁI</strong>
               <span class="split-bill-badge" id="splitPersonCount">0 người</span>
             </div>
             <div class="split-header-actions">
               <button type="button" class="btn btn-sm btn-urge-pay-inline" id="btnModalUrgePay" hidden title="Hối các bạn chưa trả tiền">
-                💸 Hối trả tiền
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                Hối trả tiền
               </button>
               <button type="button" class="btn btn-sm btn-copy-split" id="btnCopySplitText" title="Sao chép bảng chia tiền dạng tin nhắn văn bản để gửi vào nhóm chat">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -910,7 +926,10 @@ Tóp mỡ thêm 5k"></textarea>
     <strong id="urgeAlertTitle">Hối chốt đơn!</strong>
     <span id="urgeAlertSub">Ai là người cuối cùng đặt xong nhớ báo chốt bill gửi chủ quán nhé!</span>
   </div>
-  <button type="button" class="urge-alert-replay" id="btnReplayUrgeAudio" title="Nghe lại tiếng thoại hối">🔊 Nghe</button>
+  <button type="button" class="urge-alert-replay" id="btnReplayUrgeAudio" title="Nghe lại tiếng thoại hối">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    Nghe
+  </button>
   <button type="button" class="urge-alert-close" id="btnCloseUrgeAlert" aria-label="Đóng">✕</button>
 </div>
 
@@ -919,26 +938,31 @@ Tóp mỡ thêm 5k"></textarea>
   <div class="modal-box modal-sm host-qr-modal-box">
     <div class="modal-head">
       <div>
-        <h3>📷 Mã QR Nhận Tiền (Đại diện)</h3>
-        <p class="modal-sub">Chỉ hiển thị trên ảnh bill khi bạn thêm QR</p>
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A7259" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+          Mã QR Nhận Tiền (Đại diện)
+        </h3>
+        <p class="modal-sub">Hiển thị kèm bảng chia tiền khi xuất ảnh hóa đơn</p>
       </div>
       <button class="btn-close" id="btnCloseHostQrModal" type="button" aria-label="Đóng">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="modal-body">
-      <div class="qr-upload-preview" id="hostQrPreviewWrap">
+      <div class="qr-upload-preview qr-dropzone" id="hostQrPreviewWrap" title="Kéo thả ảnh QR vào đây, dán (Ctrl+V) hoặc bấm để chọn từ máy">
         <img id="hostQrPreviewImg" src="" alt="Preview QR" hidden>
         <div class="qr-empty-placeholder" id="hostQrEmptyHint">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
-          <span>Chưa có mã QR thanh toán</span>
+          <strong>Kéo thả ảnh QR vào đây</strong>
+          <span>Hoặc dán (Ctrl+V) · bấm để chọn ảnh từ máy</span>
         </div>
       </div>
 
       <div class="qr-upload-actions">
         <input type="file" id="hostQrFileInput" accept="image/*" hidden>
         <button type="button" class="btn btn-primary" id="btnPickQrFile" style="width:100%">
-          📁 Tải ảnh QR từ máy (Bank / Momo / ZaloPay)
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Chọn ảnh QR từ máy (Bank / Momo / ZaloPay)
         </button>
       </div>
 
@@ -948,7 +972,7 @@ Tóp mỡ thêm 5k"></textarea>
           <input type="text" class="cust-input" id="qrBankCodeInput" placeholder="Mã ngân hàng (VD: MB, VCB, TCB, ACB, TPB...)">
           <input type="text" class="cust-input" id="qrAccountNoInput" placeholder="Số tài khoản">
           <input type="text" class="cust-input" id="qrAccountNameInput" placeholder="Tên chủ tài khoản (không bắt buộc)">
-          <button type="button" class="btn btn-sm btn-ghost-primary" id="btnGenerateVietQr">⚡ Tạo ảnh VietQR</button>
+          <button type="button" class="btn btn-sm btn-ghost-primary" id="btnGenerateVietQr">Tạo ảnh VietQR nhanh</button>
         </div>
       </details>
 
@@ -969,7 +993,10 @@ Tóp mỡ thêm 5k"></textarea>
   <div class="modal-box urge-modal-box">
     <div class="modal-head">
       <div>
-        <h3>💸 Phát Loa Hối Trả Tiền</h3>
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+          Phát Loa Hối Trả Tiền
+        </h3>
         <p class="modal-sub">Chỉ phát loa tới các thành viên chưa trả tiền (Chống spam: 30s / lần)</p>
       </div>
       <button class="btn-close" id="btnCloseUrgePayModal" type="button" aria-label="Đóng">
@@ -998,11 +1025,13 @@ Tóp mỡ thêm 5k"></textarea>
 <div class="pay-reminder-panel" id="payReminderPanel" hidden>
   <div class="pay-reminder-header" id="payReminderHeader">
     <div class="pay-reminder-title-wrap">
-      <span class="pay-reminder-badge" id="payReminderBadge">💸 NHẮC THANH TOÁN</span>
+      <span class="pay-reminder-badge" id="payReminderBadge">NHẮC THANH TOÁN</span>
       <strong id="payReminderHeadline">Đại diện đang hối thanh toán!</strong>
     </div>
     <div class="pay-reminder-head-actions">
-      <button type="button" class="btn-pay-sound" id="btnPlayPayReminderAudio" title="Phát âm thanh hối trả tiền">🔊</button>
+      <button type="button" class="btn-pay-sound" id="btnPlayPayReminderAudio" title="Phát âm thanh hối trả tiền">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </button>
       <button type="button" class="btn-pay-toggle" id="btnTogglePayReminder" title="Mở rộng / Thu gọn">▾</button>
     </div>
   </div>

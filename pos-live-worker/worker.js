@@ -136,9 +136,25 @@ export class LiveRoom {
     }
 
     if (d.type === 'state' && d.wrap) {
-      this.last = d.wrap;
-      try { await this.state.storage.put('last', d.wrap); } catch (e) {}
-      const out = JSON.stringify({ type: 'state', bill: this.bill || d.bill, wrap: d.wrap, from: d.from });
+      const prev = this.last;
+      const incoming = d.wrap;
+      const prevHasLines = prev && Array.isArray(prev.lines) && prev.lines.length > 0;
+      const incomingHasLines = Array.isArray(incoming.lines) && incoming.lines.length > 0;
+      const incomingHasTomb = incoming.tomb && Object.keys(incoming.tomb).length > 0;
+      const prevSubRev = (prev && prev.fields && prev.fields.orderSubmitted && prev.fields.orderSubmitted.rev) || 0;
+      const inSubRev = (incoming.fields && incoming.fields.orderSubmitted && incoming.fields.orderSubmitted.rev) || 0;
+      if (prevHasLines && !incomingHasLines && !incomingHasTomb && inSubRev === 0) {
+        try {
+          ws.send(JSON.stringify({ type: 'state', bill: this.bill || d.bill, wrap: prev, from: 'server' }));
+        } catch (e) {}
+        return;
+      }
+      if (prev && prev.fields && prevSubRev > inSubRev && incoming.fields) {
+        incoming.fields.orderSubmitted = prev.fields.orderSubmitted;
+      }
+      this.last = incoming;
+      try { await this.state.storage.put('last', incoming); } catch (e) {}
+      const out = JSON.stringify({ type: 'state', bill: this.bill || d.bill, wrap: incoming, from: d.from });
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
           try { s.send(out); } catch (e) {}

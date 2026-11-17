@@ -1360,6 +1360,118 @@
     return !!(F.orderSubmitted && F.orderSubmitted.v === true);
   }
 
+  function syncBillServerStateToSheet(submittedFlag) {
+    var apiUrl = api();
+    if (!apiUrl || !orderCode) return;
+    try {
+      var qrVal = (F.hostQr && F.hostQr.v) ? String(F.hostQr.v) : '';
+      var payload = {
+        bill: orderCode,
+        submitted: !!submittedFlag,
+        submittedRev: (F.orderSubmitted && F.orderSubmitted.rev) ? Number(F.orderSubmitted.rev) : (submittedFlag ? 1 : 0),
+        hostUid: getHostUid(),
+        hostName: getHostName(),
+        hostQrNote: (F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v) : '',
+        hostQr: (qrVal && qrVal.length <= 34000) ? qrVal : '',
+        paidMap: (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object') ? F.paidMap.v : {},
+        updatedAt: Date.now()
+      };
+      fetch(apiUrl, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'state',
+          key: 'BILL_' + orderCode,
+          value: JSON.stringify(payload)
+        })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function fetchBillServerStateFromSheet() {
+    var apiUrl = api();
+    if (!apiUrl || !orderCode) return;
+    var targetBill = orderCode;
+    var sep = apiUrl.indexOf('?') === -1 ? '?' : '&';
+    fetch(apiUrl + sep + 'action=state&key=' + encodeURIComponent('BILL_' + targetBill) + '&t=' + Date.now())
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (orderCode !== targetBill) return;
+        if (!res || !res.ok || !res.state || !res.state.value) return;
+        var s = null;
+        try { s = JSON.parse(res.state.value); } catch (e) { return; }
+        if (!s || typeof s !== 'object') return;
+        if (s.bill && s.bill !== targetBill) return;
+
+        var changed = false;
+        var sheetSubRev = Number(s.submittedRev) || (s.submitted ? 1 : 0);
+        var curSubRev = (F.orderSubmitted && F.orderSubmitted.rev) ? Number(F.orderSubmitted.rev) : 0;
+        var curSubVal = isOrderSubmitted();
+
+        if (sheetSubRev > curSubRev || (sheetSubRev === 0 && s.submitted && !curSubVal)) {
+          F.orderSubmitted = {
+            v: !!s.submitted,
+            rev: Math.max(1, sheetSubRev),
+            by: 'sheet'
+          };
+          changed = true;
+        }
+        if (s.hostUid && (!F.hostUid || !F.hostUid.v)) {
+          F.hostUid = { v: s.hostUid, rev: Math.max(1, (F.hostUid && F.hostUid.rev) || 0), by: 'sheet' };
+          changed = true;
+        }
+        if (s.hostName && (!F.customer || !F.customer.v)) {
+          F.customer = { v: s.hostName, rev: Math.max(1, (F.customer && F.customer.rev) || 0), by: 'sheet' };
+          if ($('customer')) $('customer').value = s.hostName;
+          changed = true;
+        }
+        if (s.hostQrNote && (!F.hostQrNote || !F.hostQrNote.v)) {
+          F.hostQrNote = { v: s.hostQrNote, rev: Math.max(1, (F.hostQrNote && F.hostQrNote.rev) || 0), by: 'sheet' };
+          changed = true;
+        }
+        if (s.hostQr && (!F.hostQr || !F.hostQr.v)) {
+          F.hostQr = { v: s.hostQr, rev: Math.max(1, (F.hostQr && F.hostQr.rev) || 0), by: 'sheet' };
+          changed = true;
+        }
+        if (s.paidMap && typeof s.paidMap === 'object') {
+          var curPm = (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object')
+            ? Object.assign({}, F.paidMap.v) : {};
+          var pmRev = (F.paidMap && F.paidMap.rev) ? Number(F.paidMap.rev) : 0;
+          var pmChanged = false;
+          Object.keys(s.paidMap).forEach(function (k) {
+            if (pmRev === 0 || curPm[k] === undefined) {
+              if (curPm[k] !== s.paidMap[k]) {
+                curPm[k] = s.paidMap[k];
+                pmChanged = true;
+              }
+            }
+          });
+          if (pmChanged) {
+            F.paidMap = { v: curPm, rev: Math.max(1, pmRev), by: 'sheet' };
+            changed = true;
+          }
+        }
+
+        tryRestoreMyHostQr(false);
+        if (changed) {
+          applying = true;
+          try {
+            writeInputs();
+            renderCart();
+            renderSplitBillIfOpen();
+            if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
+          } finally {
+            applying = false;
+          }
+          if (cart.length > 0 && ws && wsOk) {
+            try {
+              ws.send(JSON.stringify({ type: 'state', bill: orderCode, wrap: snapshot(), from: clientId }));
+            } catch (e) {}
+          }
+        }
+      })
+      .catch(function () {});
+  }
+
   function getMyQrStorageKey() {
     return 'uu_host_qr_' + (myUid || 'default');
   }
@@ -1493,10 +1605,14 @@
     var hostOnlyActions = $('hostOnlyActions');
     var btnQrLbl = $('btnHostQrLabel');
     var btnQr = $('btnOpenHostQr');
+    var btnPayTracker = $('btnTogglePayTracker');
+    var btnPayTrackerLbl = $('btnPayTrackerLabel');
+    var payTrackerBox = $('hostPayTracker');
     var btnUrgePay = $('btnOpenUrgePay');
     var btnUnlock = $('btnUnlockOrderEdit');
     var btnSave = $('btnSave');
     var btnQuickQr = $('btnQuickHostQr');
+    var btnQuickQrTxt = $('btnQuickHostQrText');
     var btnModalPay = $('btnModalUrgePay');
 
     var hostUid = getHostUid();
@@ -1539,11 +1655,10 @@
     }
     if (statusBadge) {
       statusBadge.classList.toggle('is-submitted', submitted);
-      if (submitted) {
-        statusBadge.textContent = amHost ? '🔒 Đã chốt & lưu Sheet (Bạn là Đại diện)' : '🔒 Đã chốt đơn · Sẵn sàng chuyển khoản';
-      } else {
-        statusBadge.textContent = '⏳ Đang đặt món' + (assigned && !amHost ? (' · Đại diện: ' + hostName) : '');
-      }
+      var iconLockSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+      var iconClockSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+      statusBadge.innerHTML = (submitted ? iconLockSvg : iconClockSvg) +
+        '<span id="orderSubmittedBadgeText">' + (submitted ? 'Đã chốt & lưu Sheet' : 'Đang đặt món') + '</span>';
     }
     if (hostOnlyActions) {
       hostOnlyActions.hidden = !(assigned && amHost);
@@ -1556,18 +1671,33 @@
     }
     if (btnQuickQr) {
       btnQuickQr.hidden = !(assigned && amHost);
-      btnQuickQr.textContent = hasQr ? '📷 Sửa mã QR' : '📷 Thêm QR';
+      if (btnQuickQrTxt) btnQuickQrTxt.textContent = hasQr ? 'Sửa mã QR' : 'Thêm QR vào ảnh';
     }
     if (btnUnlock) {
       btnUnlock.hidden = !(assigned && amHost && submitted);
     }
 
-    // Nút Hối trả tiền: chỉ bật cho Đại diện sau khi đã Chốt & Lưu Sheet
+    // Nút Hối trả tiền & Thu tiền: chỉ bật sau khi Đại diện đã Chốt & Lưu Sheet
     if (btnUrgePay) {
-      btnUrgePay.classList.toggle('is-disabled', !submitted);
-      btnUrgePay.title = submitted
-        ? 'Phát loa & thông báo đòi tiền những bạn chưa trả'
-        : 'Hãy bấm "Chốt & Lưu Sheet" trước để mở khóa Hối trả tiền';
+      btnUrgePay.hidden = !(assigned && amHost && submitted);
+      btnUrgePay.classList.remove('is-disabled');
+      btnUrgePay.title = 'Phát loa & thông báo đòi tiền những bạn chưa trả';
+    }
+    if (btnPayTracker) {
+      var showTrackerBtn = !!(assigned && amHost && submitted && cart.length > 0);
+      btnPayTracker.hidden = !showTrackerBtn;
+      if (!showTrackerBtn && payTrackerBox) payTrackerBox.hidden = true;
+      if (showTrackerBtn && btnPayTrackerLbl && typeof computeBillSplit === 'function') {
+        var sp = computeBillSplit();
+        var paidCnt = sp.people.filter(function (p) { return p.paid; }).length;
+        btnPayTrackerLbl.textContent = 'Thu tiền (' + paidCnt + '/' + sp.people.length + ')';
+      }
+      if (btnPayTracker && payTrackerBox) {
+        btnPayTracker.classList.toggle('is-open', !payTrackerBox.hidden);
+      }
+    }
+    if (payTrackerBox && !payTrackerBox.hidden && typeof renderHostPayTracker === 'function') {
+      renderHostPayTracker();
     }
     if (btnModalPay) {
       btnModalPay.hidden = !(assigned && amHost && submitted);
@@ -1578,6 +1708,7 @@
       var saveDisabled = assigned && !amHost;
       btnSave.disabled = saveDisabled;
       btnSave.classList.toggle('is-host-locked', saveDisabled);
+      btnSave.classList.toggle('is-locked-member', saveDisabled);
       btnSave.title = saveDisabled
         ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
         : 'Chốt đơn hiện tại & lưu vào Google Sheet';
@@ -1598,6 +1729,56 @@
     if (panel && !panel.hidden) {
       renderHostParticipantsList();
     }
+  }
+
+  function renderHostPayTracker() {
+    var box = $('hostPayTracker');
+    var list = $('hostPayTrackerList');
+    if (!box || !list) return;
+    if (!hasHostAssigned() || !isCurrentHost() || !isOrderSubmitted() || !cart.length) {
+      box.hidden = true;
+      return;
+    }
+    var split = computeBillSplit();
+    var paidCnt = split.people.filter(function (p) { return p.paid; }).length;
+    if ($('btnPayTrackerLabel')) {
+      $('btnPayTrackerLabel').textContent = 'Thu tiền (' + paidCnt + '/' + split.people.length + ')';
+    }
+    list.innerHTML = '';
+    split.people.forEach(function (p) {
+      var row = document.createElement('div');
+      row.className = 'host-pay-tracker-row';
+
+      var u = document.createElement('div');
+      u.className = 'host-pay-tracker-user';
+      var dot = document.createElement('span');
+      dot.className = 'host-p-avatar';
+      dot.style.backgroundColor = p.ucolor;
+      dot.textContent = userInitial(p.name);
+      var nm = document.createElement('span');
+      nm.className = 'hp-name';
+      nm.textContent = p.name;
+      u.appendChild(dot);
+      u.appendChild(nm);
+
+      var amt = document.createElement('span');
+      amt.className = 'host-pay-tracker-amt';
+      amt.textContent = fmt(p.finalPay);
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-paid-toggle' + (p.paid ? ' is-paid' : '');
+      btn.textContent = p.paid ? '✓ Đã trả' : 'Chưa trả';
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        toggleMemberPaid(p);
+      };
+
+      row.appendChild(u);
+      row.appendChild(amt);
+      row.appendChild(btn);
+      list.appendChild(row);
+    });
   }
 
   function renderHostParticipantsList() {
@@ -1670,7 +1851,7 @@
         renderHostParticipantsList();
         renderCart();
         schedulePush();
-        showToast(assigned ? ('🔑 Đã chuyển key Đại diện cho ' + p.name) : ('👑 Đã chọn ' + p.name + ' làm Đại diện nhóm!'));
+        showToast(assigned ? ('Đã chuyển key Đại diện cho ' + p.name) : ('Đã chọn ' + p.name + ' làm Đại diện nhóm!'));
 
         var panel = $('hostDropdownPanel');
         var trigger = $('hostDropdownBtn');
@@ -1794,11 +1975,6 @@
     var topTxt = $('urgeTopbarText');
     if (topBtn) topBtn.classList.toggle('is-cooldown', isCooling);
     if (topTxt) topTxt.textContent = isCooling ? ('Hối đặt hàng (' + sec + 's)') : 'Hối đặt hàng';
-
-    var inlineBtn = $('btnUrgeOrder');
-    var inlineTxt = $('urgeInlineText');
-    if (inlineBtn) inlineBtn.classList.toggle('is-cooldown', isCooling);
-    if (inlineTxt) inlineTxt.textContent = isCooling ? ('Hối (' + sec + 's)') : 'Hối đặt hàng';
 
     var mobBtn = $('mobileUrgeBtn');
     var mobTxt = $('mobileUrgeText');
@@ -2394,13 +2570,13 @@
       // Người chưa trả -> Auto-mở, không thể nhấn đóng cho tới khi đại diện mark Đã trả
       panel.classList.add('is-debtor-locked');
       panel.classList.remove('is-collapsed', 'is-manual-open');
-      if (badge) badge.textContent = '🚨 ĐẠI DIỆN ĐANG HỐI TRẢ TIỀN';
+      if (badge) badge.textContent = 'ĐẠI DIỆN ĐANG HỐI TRẢ TIỀN';
       if (headline) headline.textContent = myUnpaid[0].name + ', bạn còn ' + fmt(myUnpaidTotal) + ' chưa thanh toán!';
       if (personal) {
         personal.classList.remove('is-paid-info');
         personal.innerHTML =
           '<div style="font-style:italic;margin-bottom:5px;color:#9A3412;">"' + esc(activePayUrge.text) + '"</div>' +
-          '<div>👉 <strong>' + esc(myUnpaid[0].name) + '</strong> vui lòng chuyển khoản cho <strong>' + esc(split.hostName) + '</strong>:</div>' +
+          '<div><strong>' + esc(myUnpaid[0].name) + '</strong> vui lòng chuyển khoản cho <strong>' + esc(split.hostName) + '</strong>:</div>' +
           '<div class="pay-reminder-amount">' + fmt(myUnpaidTotal) + '</div>';
       }
       if (toggleBtn) toggleBtn.hidden = true;
@@ -2419,7 +2595,7 @@
         toggleBtn.hidden = false;
         toggleBtn.textContent = panel.classList.contains('is-manual-open') ? '▴' : '▾';
       }
-      if (badge) badge.textContent = '💸 ĐANG NHẮC THANH TOÁN (' + unpaidList.length + ' bạn · Muted)';
+      if (badge) badge.textContent = 'ĐANG NHẮC THANH TOÁN (' + unpaidList.length + ' bạn · Muted)';
       if (headline) {
         headline.textContent = isCurrentHost()
           ? ('Đang đòi tiền ' + unpaidList.length + ' bạn chưa trả')
@@ -2428,8 +2604,8 @@
       if (personal) {
         personal.classList.add('is-paid-info');
         personal.innerHTML = isCurrentHost()
-          ? ('👑 Bạn là <strong>Đại diện</strong>. Đang nhắc <strong>' + unpaidList.length + '</strong> thành viên chưa thanh toán.')
-          : ('✓ Bạn đã thanh toán (hoặc không phát sinh nợ). Âm thanh được tắt tự động — bấm 🔊 nếu muốn nghe.');
+          ? ('Bạn là <strong>Đại diện</strong>. Đang nhắc <strong>' + unpaidList.length + '</strong> thành viên chưa thanh toán.')
+          : ('✓ Bạn đã thanh toán (hoặc không phát sinh nợ). Âm thanh được tắt tự động — bấm icon loa nếu muốn nghe.');
       }
       if (soundBtn) soundBtn.title = 'Bấm để nghe thử âm thanh hối thanh toán';
     }
@@ -2553,6 +2729,25 @@
   }
 
   function snapshot() {
+    var stId = currentStore ? currentStore.id : '';
+    var isBuiltIn = (stId === 'uu-milktea' || stId === 'vua-tron');
+    var slimStore = null;
+    if (currentStore && !isBuiltIn) {
+      slimStore = {
+        id: currentStore.id,
+        name: currentStore.name,
+        tagline: currentStore.tagline,
+        icon: currentStore.icon,
+        category: currentStore.category,
+        itemUnit: currentStore.itemUnit,
+        options: currentStore.options,
+        bankInfo: currentStore.bankInfo,
+        categories: currentStore.categories,
+        items: currentStore.items,
+        toppings: currentStore.toppings,
+        noteChips: currentStore.noteChips
+      };
+    }
     return {
       lines: cart,
       tomb: cartDel,
@@ -2560,8 +2755,8 @@
       by: clientId,
       dev: deviceName(),
       ucolor: myUcolor,
-      storeId: currentStore ? currentStore.id : '',
-      storeData: currentStore
+      storeId: stId,
+      storeData: slimStore
     };
   }
 
@@ -3609,7 +3804,11 @@
 
     var t = totals();
     if ($('subTotal')) $('subTotal').textContent = fmt(t.sub);
-    if ($('discountVal')) $('discountVal').textContent = t.disc ? '−' + fmt(t.disc) : '0đ';
+    if ($('discountVal')) {
+      $('discountVal').textContent = t.disc ? '−' + fmt(t.disc) : '0đ';
+      var discRow = $('discountVal').closest('.discount-line');
+      if (discRow) discRow.classList.toggle('has-discount', t.disc > 0);
+    }
     if ($('shipFeeVal')) $('shipFeeVal').textContent = t.ship ? '+' + fmt(t.ship) : '0đ';
     if ($('adjTotal')) $('adjTotal').textContent = (t.disc ? '−' + fmtK(t.disc) : '0k') + ' + ' + fmtK(t.ship);
     if ($('grandTotal')) $('grandTotal').textContent = fmt(t.grand);
@@ -3673,7 +3872,7 @@
 
   function toggleMemberPaid(p) {
     if (!isCurrentHost() && hasHostAssigned()) {
-      showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được đánh dấu đã trả tiền!');
+      showToast('Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được đánh dấu đã trả tiền!');
       return;
     }
     var curMap = (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object')
@@ -3686,9 +3885,12 @@
     if (key) curMap[key] = nextVal;
     if (!nextVal && curMap[nameKey] !== undefined) curMap[nameKey] = false;
     setSyncedField('paidMap', curMap);
+    updateHostDropdownUI();
+    renderHostPayTracker();
     renderSplitBillIfOpen();
     if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
     schedulePush();
+    syncBillServerStateToSheet(isOrderSubmitted());
     showToast(nextVal ? ('✓ Đã đánh dấu ' + p.name + ' ĐÃ TRẢ tiền') : ('↩ Đã chuyển ' + p.name + ' về CHƯA TRẢ'));
   }
 
@@ -3825,7 +4027,7 @@
         cx.fillStyle = '#FFFFFF';
         cx.fillRect(0, 0, tw, th);
         cx.drawImage(img, 0, 0, tw, th);
-        var out = c.toDataURL('image/jpeg', 0.88);
+        var out = c.toDataURL('image/jpeg', 0.78);
         cb(null, out);
       };
       img.onerror = function () { cb(new Error('Invalid image')); };
@@ -3900,6 +4102,7 @@
     closeHostQrModal();
     updateHostDropdownUI();
     schedulePush();
+    if (isOrderSubmitted()) syncBillServerStateToSheet(true);
     if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
     var imgModal = $('imageExportModal');
     if (imgModal && !imgModal.hidden) exportCanvasBill();
@@ -3915,6 +4118,7 @@
     closeHostQrModal();
     updateHostDropdownUI();
     schedulePush();
+    if (isOrderSubmitted()) syncBillServerStateToSheet(true);
     if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
     var imgModal = $('imageExportModal');
     if (imgModal && !imgModal.hidden) exportCanvasBill();
@@ -3962,6 +4166,84 @@
     });
   }
 
+  function drawCanvasVectorIcon(ctx, type, x, y, size, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.4, size * 0.11);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    var s = size;
+    if (type === 'cup') {
+      // Modern drink cup silhouette
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.22, y + s * 0.28);
+      ctx.lineTo(x + s * 0.78, y + s * 0.28);
+      ctx.lineTo(x + s * 0.70, y + s * 0.88);
+      ctx.lineTo(x + s * 0.30, y + s * 0.88);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.15, y + s * 0.28);
+      ctx.lineTo(x + s * 0.85, y + s * 0.28);
+      ctx.moveTo(x + s * 0.54, y + s * 0.28);
+      ctx.lineTo(x + s * 0.62, y + s * 0.08);
+      ctx.stroke();
+    } else if (type === 'crown') {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.12, y + s * 0.76);
+      ctx.lineTo(x + s * 0.16, y + s * 0.30);
+      ctx.lineTo(x + s * 0.38, y + s * 0.54);
+      ctx.lineTo(x + s * 0.50, y + s * 0.22);
+      ctx.lineTo(x + s * 0.62, y + s * 0.54);
+      ctx.lineTo(x + s * 0.84, y + s * 0.30);
+      ctx.lineTo(x + s * 0.88, y + s * 0.76);
+      ctx.closePath();
+      ctx.stroke();
+    } else if (type === 'check') {
+      ctx.beginPath();
+      ctx.arc(x + s * 0.5, y + s * 0.5, s * 0.42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.30, y + s * 0.52);
+      ctx.lineTo(x + s * 0.45, y + s * 0.66);
+      ctx.lineTo(x + s * 0.72, y + s * 0.36);
+      ctx.stroke();
+    } else if (type === 'clock') {
+      ctx.beginPath();
+      ctx.arc(x + s * 0.5, y + s * 0.5, s * 0.42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.5, y + s * 0.28);
+      ctx.lineTo(x + s * 0.5, y + s * 0.52);
+      ctx.lineTo(x + s * 0.66, y + s * 0.62);
+      ctx.stroke();
+    } else if (type === 'wallet') {
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(x + s * 0.10, y + s * 0.22, s * 0.80, s * 0.58, s * 0.12) : ctx.rect(x + s * 0.10, y + s * 0.22, s * 0.80, s * 0.58);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x + s * 0.70, y + s * 0.51, s * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (type === 'qr') {
+      ctx.strokeRect(x + s * 0.12, y + s * 0.12, s * 0.30, s * 0.30);
+      ctx.strokeRect(x + s * 0.58, y + s * 0.12, s * 0.30, s * 0.30);
+      ctx.strokeRect(x + s * 0.12, y + s * 0.58, s * 0.30, s * 0.30);
+      ctx.fillRect(x + s * 0.58, y + s * 0.58, s * 0.14, s * 0.14);
+      ctx.fillRect(x + s * 0.76, y + s * 0.76, s * 0.12, s * 0.12);
+    } else if (type === 'note') {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.20, y + s * 0.30);
+      ctx.lineTo(x + s * 0.80, y + s * 0.30);
+      ctx.moveTo(x + s * 0.20, y + s * 0.52);
+      ctx.lineTo(x + s * 0.80, y + s * 0.52);
+      ctx.moveTo(x + s * 0.20, y + s * 0.74);
+      ctx.lineTo(x + s * 0.58, y + s * 0.74);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function renderCanvasBillWithQr(qrImg) {
     var canvas = $('billCanvas');
     if (!canvas) return;
@@ -3976,7 +4258,8 @@
     var fontFam = window.getComputedStyle(document.body).fontFamily;
     var cUnit = (currentStore && currentStore.itemUnit) || 'món';
     var includeSplit = ($('chkIncludeSplitInCanvas') ? $('chkIncludeSplitInCanvas').checked : true);
-    var hasQrBlock = !!qrImg;
+    // Chỉ hiển thị QR khi checkbox "Kèm bảng chia tiền vào ảnh" được check VÀ Đại diện có QR
+    var hasQrBlock = !!(includeSplit && qrImg);
     var submitted = isOrderSubmitted();
 
     // Layout Dimensions (Modern 700px wide card)
@@ -3985,23 +4268,23 @@
     var scale = 2;
 
     var headerH = 114;
-    var tableHeadH = 34;
     var itemH = 32;
-    var itemsTotalH = cart.length * itemH + 8;
-    var adjRows = 1 + (t.disc > 0 ? 1 : 0) + (t.ship > 0 ? 1 : 0);
-    var totalsBoxH = 26 + adjRows * 21 + 36 + (noteVal ? 22 : 0);
-    var totalsSectionH = totalsBoxH + 20;
+    var itemsBlockH = 34 + cart.length * itemH + 12;
 
-    var splitHeaderH = 44;
+    var totalsBoxH = 26 + (t.disc > 0 ? 28 : 0) + (t.ship > 0 ? 24 : 0) + 48 + (noteVal ? 22 : 0);
+    var summaryBlockH = totalsBoxH + 18;
+
     var splitCardH = 48;
     var splitGap = 8;
-    var splitCardsH = people.length ? (people.length * splitCardH + (people.length - 1) * splitGap) : 0;
-    var splitSectionH = includeSplit ? (splitHeaderH + splitCardsH + 22) : 0;
+    var splitBlockH = (includeSplit && people.length)
+      ? (28 + people.length * splitCardH + (people.length - 1) * splitGap + 18)
+      : 0;
 
-    var qrSectionH = hasQrBlock ? 242 : 0;
+    var qrBoxH = 194;
+    var qrBlockH = hasQrBlock ? (qrBoxH + 16) : 0;
     var footerH = 48;
 
-    var totalH = headerH + tableHeadH + itemsTotalH + totalsSectionH + splitSectionH + qrSectionH + footerH;
+    var totalH = headerH + itemsBlockH + summaryBlockH + splitBlockH + qrBlockH + footerH;
 
     canvas.width = W * scale;
     canvas.height = totalH * scale;
@@ -4019,27 +4302,27 @@
     ctx.fillStyle = '#132B22';
     ctx.fillRect(0, 0, W, headerH);
 
-    // Subtle accent bar at bottom of header
+    // Accent bottom strip on header
     ctx.fillStyle = '#10B981';
     ctx.fillRect(0, headerH - 4, W, 4);
 
-    // Header Row 1: Store Name + Status Pill
+    // Header Row 1: Vector store icon + Store Name + Order Code Pill
+    drawCanvasVectorIcon(ctx, 'cup', pad, 17, 22, '#6EE7B7');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '800 19px ' + fontFam;
-    var titleText = (currentStore.icon ? currentStore.icon + ' ' : '') + currentStore.name.toUpperCase();
-    ctx.fillText(fitText(ctx, titleText, W - pad * 2 - 170), pad, 36);
+    var titleText = currentStore.name.toUpperCase();
+    ctx.fillText(fitText(ctx, titleText, W - pad * 2 - 195), pad + 28, 35);
 
-    // Right Pill: Order Code
     var codeStr = '#' + orderCode;
     ctx.font = '800 12px ' + fontFam;
     var codeW = ctx.measureText(codeStr).width + 20;
     ctx.fillStyle = 'rgba(255,255,255,0.16)';
-    drawRoundedRect(ctx, W - pad - codeW, 18, codeW, 24, 12, true, false);
+    drawRoundedRect(ctx, W - pad - codeW, 17, codeW, 24, 12, true, false);
     ctx.fillStyle = '#A7F3D0';
     ctx.textAlign = 'center';
-    ctx.fillText(codeStr, W - pad - codeW / 2, 34);
+    ctx.fillText(codeStr, W - pad - codeW / 2, 33);
 
     // Header Row 2: Timestamp & Cups summary
     var nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) + ' · ' + new Date().toLocaleDateString('vi-VN');
@@ -4048,18 +4331,23 @@
     ctx.font = '600 12px ' + fontFam;
     ctx.fillText('ĐƠN ĐẶT CHUNG · ' + nowStr + ' · Tổng: ' + t.totalCups + ' ' + cUnit, pad, 59);
 
-    // Header Row 3: Host Info + Submitted Pill
+    // Header Row 3: Host Info + Vector Icon + Submitted Status
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     drawRoundedRect(ctx, pad, 70, W - pad * 2, 30, 8, true, false);
+    drawCanvasVectorIcon(ctx, 'crown', pad + 10, 77, 15, '#FCD34D');
     ctx.fillStyle = '#F8FAFC';
     ctx.font = '700 12.5px ' + fontFam;
     ctx.textAlign = 'left';
-    ctx.fillText('👑 Đại diện nhận đơn: ' + hostName, pad + 10, 89);
+    ctx.fillText('Đại diện nhận đơn: ' + hostName, pad + 30, 89);
 
-    ctx.textAlign = 'right';
-    ctx.fillStyle = submitted ? '#6EE7B7' : '#FDE68A';
+    var stLabel = submitted ? 'ĐÃ CHỐT ĐƠN' : 'ĐANG TỔNG HỢP';
+    var stColor = submitted ? '#6EE7B7' : '#FDE68A';
     ctx.font = '700 11.5px ' + fontFam;
-    ctx.fillText(submitted ? '✓ ĐÃ CHỐT ĐƠN' : '⏳ ĐANG TỔNG HỢP', W - pad - 10, 89);
+    var stW = ctx.measureText(stLabel).width;
+    drawCanvasVectorIcon(ctx, submitted ? 'check' : 'clock', W - pad - 14 - stW - 18, 78, 14, stColor);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = stColor;
+    ctx.fillText(stLabel, W - pad - 10, 89);
 
     // ITEMS TABLE HEADER
     var curY = headerH + 22;
@@ -4080,9 +4368,11 @@
     ctx.lineTo(W - pad, curY);
     ctx.stroke();
 
+    curY += 2; // Now at headerH + 34
+
     // ITEMS ROWS
     cart.forEach(function (c, idx) {
-      var rowTop = curY + 4;
+      var rowTop = curY + 2;
       if (idx % 2 === 1) {
         ctx.fillStyle = '#FAF9F6';
         drawRoundedRect(ctx, pad - 6, rowTop, W - pad * 2 + 12, itemH - 2, 6, true, false);
@@ -4149,13 +4439,14 @@
 
     // SUMMARY BOX
     curY += 12;
+    var sumBoxTop = curY;
     ctx.fillStyle = '#F8FAFC';
-    drawRoundedRect(ctx, pad, curY, W - pad * 2, totalsBoxH, 12, true, false);
+    drawRoundedRect(ctx, pad, sumBoxTop, W - pad * 2, totalsBoxH, 12, true, false);
     ctx.strokeStyle = '#E2E8F0';
     ctx.lineWidth = 1;
-    drawRoundedRect(ctx, pad, curY, W - pad * 2, totalsBoxH, 12, false, true);
+    drawRoundedRect(ctx, pad, sumBoxTop, W - pad * 2, totalsBoxH, 12, false, true);
 
-    var sumY = curY + 22;
+    var sumY = sumBoxTop + 22;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#475569';
     ctx.font = '600 12px ' + fontFam;
@@ -4166,26 +4457,37 @@
     ctx.fillText(fmt(t.sub), W - pad - 16, sumY);
 
     if (t.disc > 0) {
-      sumY += 21;
+      sumY += 26;
+      // Highlighted coral band for discount amount
+      ctx.fillStyle = '#FEF2F2';
+      drawRoundedRect(ctx, pad + 12, sumY - 16, W - pad * 2 - 24, 23, 6, true, false);
+      ctx.strokeStyle = '#FECACA';
+      ctx.lineWidth = 1;
+      drawRoundedRect(ctx, pad + 12, sumY - 16, W - pad * 2 - 24, 23, 6, false, true);
+
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#DC2626';
-      ctx.font = '600 12px ' + fontFam;
-      ctx.fillText('Giảm giá / Khuyến mãi', pad + 16, sumY);
+      ctx.fillStyle = '#B91C1C';
+      ctx.font = '700 12px ' + fontFam;
+      ctx.fillText('Giảm giá / Khuyến mãi', pad + 20, sumY);
+
+      var discText = '−' + fmt(t.disc);
       ctx.textAlign = 'right';
-      ctx.fillText('−' + fmt(t.disc), W - pad - 16, sumY);
+      ctx.fillStyle = '#DC2626';
+      ctx.font = '800 13px ' + fontFam;
+      ctx.fillText(discText, W - pad - 20, sumY);
     }
 
     if (t.ship > 0) {
-      sumY += 21;
+      sumY += 24;
       ctx.textAlign = 'left';
       ctx.fillStyle = '#D97706';
-      ctx.font = '600 12px ' + fontFam;
+      ctx.font = '700 12px ' + fontFam;
       ctx.fillText('Phí giao hàng (Ship)', pad + 16, sumY);
       ctx.textAlign = 'right';
       ctx.fillText('+' + fmt(t.ship), W - pad - 16, sumY);
     }
 
-    sumY += 12;
+    sumY += 15;
     ctx.strokeStyle = '#CBD5E1';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -4193,7 +4495,7 @@
     ctx.lineTo(W - pad - 16, sumY);
     ctx.stroke();
 
-    sumY += 22;
+    sumY += 25;
     ctx.textAlign = 'left';
     ctx.fillStyle = '#132B22';
     ctx.font = '800 15px ' + fontFam;
@@ -4205,32 +4507,33 @@
 
     if (noteVal) {
       sumY += 20;
+      drawCanvasVectorIcon(ctx, 'note', pad + 16, sumY - 11, 13, '#64748B');
       ctx.textAlign = 'left';
       ctx.fillStyle = '#64748B';
       ctx.font = 'italic 500 11.5px ' + fontFam;
-      ctx.fillText(fitText(ctx, '📝 Ghi chú: ' + noteVal, W - pad * 2 - 32), pad + 16, sumY);
+      ctx.fillText(fitText(ctx, 'Ghi chú: ' + noteVal, W - pad * 2 - 48), pad + 33, sumY);
     }
 
-    curY += totalsBoxH + 16;
+    curY = sumBoxTop + totalsBoxH + 18;
 
     // MODERN SPLIT BILL SECTION
     if (includeSplit && people.length) {
       var paidCount = people.filter(function (p) { return p.paid; }).length;
+      drawCanvasVectorIcon(ctx, 'wallet', pad, curY + 2, 16, '#0A7259');
       ctx.textAlign = 'left';
       ctx.fillStyle = '#132B22';
       ctx.font = '800 13.5px ' + fontFam;
-      ctx.fillText('💰 BẢNG CHIA TIỀN TỪNG THÀNH VIÊN', pad, curY + 14);
+      ctx.fillText('BẢNG CHIA TIỀN TỪNG THÀNH VIÊN', pad + 22, curY + 14);
 
       ctx.textAlign = 'right';
       ctx.fillStyle = '#64748B';
       ctx.font = '700 11.5px ' + fontFam;
       ctx.fillText('Đã trả: ' + paidCount + '/' + people.length + ' bạn', W - pad, curY + 14);
 
-      curY += 26;
+      curY += 28;
 
       people.forEach(function (p, idx) {
         var cy = curY;
-        // Card container
         ctx.fillStyle = p.paid ? '#F0FDF4' : '#FFFFFF';
         drawRoundedRect(ctx, pad, cy, W - pad * 2, splitCardH, 10, true, false);
         ctx.strokeStyle = p.paid ? '#86EFAC' : '#E2E8F0';
@@ -4255,20 +4558,41 @@
         ctx.fillText(userInitial(p.name), avX, avY + 0.5);
         ctx.textBaseline = 'alphabetic';
 
-        // Name & Host tag
+        // Name + Vector Crown if Host
         ctx.textAlign = 'left';
         ctx.fillStyle = '#0F172A';
         ctx.font = '800 13px ' + fontFam;
-        var labelName = p.name + (p.isHost ? ' 👑' : '');
-        ctx.fillText(fitText(ctx, labelName, 210), pad + 48, cy + 20);
+        var fitPName = fitText(ctx, p.name, 190);
+        ctx.fillText(fitPName, pad + 48, cy + 20);
+        if (p.isHost) {
+          var pNameW = ctx.measureText(fitPName).width;
+          drawCanvasVectorIcon(ctx, 'crown', pad + 48 + pNameW + 5, cy + 8, 13, '#D97706');
+        }
 
-        // Breakdown line
-        var adjStr = '';
-        if (p.share > 0) adjStr = ' + ship ' + fmtK(p.share);
-        else if (p.share < 0) adjStr = ' − giảm ' + fmtK(Math.abs(p.share));
+        // Breakdown + Highlighted discount/ship pill
+        var baseLine = p.cups + ' ' + cUnit + ' (' + fmt(p.drinkSub) + ')';
         ctx.fillStyle = '#64748B';
         ctx.font = '600 11px ' + fontFam;
-        ctx.fillText(p.cups + ' ' + cUnit + ' (' + fmt(p.drinkSub) + ')' + adjStr, pad + 48, cy + 37);
+        ctx.fillText(baseLine, pad + 48, cy + 37);
+
+        if (p.share < 0 || p.share > 0) {
+          var baseW = ctx.measureText(baseLine).width;
+          var adjLabel = p.share < 0 ? ('−' + fmtK(Math.abs(p.share)) + ' giảm') : ('+ship ' + fmtK(p.share));
+          var pillBg = p.share < 0 ? '#FEE2E2' : '#FEF3C7';
+          var pillFg = p.share < 0 ? '#B91C1C' : '#B45309';
+          var pillBd = p.share < 0 ? '#FECACA' : '#FDE68A';
+          ctx.font = '800 10px ' + fontFam;
+          var adjW = ctx.measureText(adjLabel).width + 12;
+          var px = pad + 48 + baseW + 6;
+          ctx.fillStyle = pillBg;
+          drawRoundedRect(ctx, px, cy + 26, adjW, 15, 7.5, true, false);
+          ctx.strokeStyle = pillBd;
+          ctx.lineWidth = 0.8;
+          drawRoundedRect(ctx, px, cy + 26, adjW, 15, 7.5, false, true);
+          ctx.fillStyle = pillFg;
+          ctx.textAlign = 'center';
+          ctx.fillText(adjLabel, px + adjW / 2, cy + 37);
+        }
 
         // Paid / Unpaid Status Pill
         var badgeX = W - pad - 208;
@@ -4290,18 +4614,17 @@
       curY += 18;
     }
 
-    // CONDITIONAL HOST QR BLOCK (Chỉ vẽ khi Đại diện ĐÃ ADD mã QR)
+    // CONDITIONAL HOST QR BLOCK (Chỉ vẽ khi check Kèm bảng chia tiền VÀ Đại diện đã add QR)
     if (hasQrBlock) {
-      var qrBoxH = 224;
       ctx.fillStyle = '#ECFDF5';
       drawRoundedRect(ctx, pad, curY, W - pad * 2, qrBoxH, 14, true, false);
       ctx.strokeStyle = '#10B981';
       ctx.lineWidth = 1.5;
       drawRoundedRect(ctx, pad, curY, W - pad * 2, qrBoxH, 14, false, true);
 
-      // Large white framed QR box for reliable camera scanning (194x194 logical px = 388x388 physical px)
-      var frameSize = 194;
-      var frameX = pad + 15;
+      // Large crisp white framed QR box (168x168 logical px = 336x336 physical px @ 2x DPI)
+      var frameSize = 168;
+      var frameX = pad + 14;
       var frameY = curY + (qrBoxH - frameSize) / 2;
       ctx.fillStyle = '#FFFFFF';
       drawRoundedRect(ctx, frameX, frameY, frameSize, frameSize, 12, true, false);
@@ -4309,7 +4632,6 @@
       ctx.lineWidth = 1.5;
       drawRoundedRect(ctx, frameX, frameY, frameSize, frameSize, 12, false, true);
 
-      // Fit QR image inside white quiet zone (8px margin)
       var innerSize = frameSize - 16;
       var iw = qrImg.naturalWidth || qrImg.width || innerSize;
       var ih = qrImg.naturalHeight || qrImg.height || innerSize;
@@ -4320,16 +4642,21 @@
       var dy = frameY + (frameSize - dh) / 2;
       ctx.drawImage(qrImg, dx, dy, dw, dh);
 
-      // Right Side QR Payment Details
-      var infoX = frameX + frameSize + 20;
-      var infoMaxW = (W - pad - 16) - infoX;
+      // Clean executive payment info (no Step 1/2/3 or meta helper text)
+      var infoX = frameX + frameSize + 22;
+      var infoMaxW = (W - pad - 18) - infoX;
 
-      drawPillBadge(ctx, infoX, curY + 24, '📷 QUÉT MÃ QR ĐỂ THANH TOÁN', '#0A7259', '#FFFFFF', null, '800 10.5px ' + fontFam);
-
+      ctx.fillStyle = '#0A7259';
+      drawRoundedRect(ctx, infoX, curY + 26, 178, 22, 11, true, false);
+      drawCanvasVectorIcon(ctx, 'qr', infoX + 9, curY + 30, 14, '#FFFFFF');
       ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '800 10.5px ' + fontFam;
+      ctx.fillText('QUÉT MÃ QR THANH TOÁN', infoX + 28, curY + 41);
+
       ctx.fillStyle = '#132B22';
-      ctx.font = '800 16px ' + fontFam;
-      ctx.fillText(fitText(ctx, 'Đại diện: ' + hostName, infoMaxW), infoX, curY + 72);
+      ctx.font = '800 16.5px ' + fontFam;
+      ctx.fillText(fitText(ctx, 'Đại diện: ' + hostName, infoMaxW), infoX, curY + 78);
 
       var bankDetail = qrNote;
       if (!bankDetail && currentStore && currentStore.bankInfo && currentStore.bankInfo.account) {
@@ -4338,21 +4665,23 @@
       }
       if (bankDetail) {
         ctx.fillStyle = '#065F46';
-        ctx.font = '700 13px ' + fontFam;
-        ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, curY + 98);
+        ctx.font = '700 13.5px ' + fontFam;
+        ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, curY + 106);
       }
 
-      ctx.fillStyle = '#334155';
-      ctx.font = '500 12px ' + fontFam;
-      ctx.fillText('1. Mở app Ngân hàng / Momo / ZaloPay', infoX, curY + 132);
-      ctx.fillText('2. Quét trực tiếp mã QR bên trái', infoX, curY + 152);
-      ctx.fillText(fitText(ctx, '3. Ghi chú CK: ' + orderCode + ' + Tên bạn', infoMaxW), infoX, curY + 172);
+      var memoLabel = 'Nội dung CK: #' + orderCode;
+      ctx.font = '700 12px ' + fontFam;
+      var memoW = Math.min(infoMaxW, ctx.measureText(memoLabel).width + 22);
+      var memoY = bankDetail ? (curY + 126) : (curY + 102);
+      ctx.fillStyle = '#FFFFFF';
+      drawRoundedRect(ctx, infoX, memoY, memoW, 28, 8, true, false);
+      ctx.strokeStyle = '#A7F3D0';
+      ctx.lineWidth = 1;
+      drawRoundedRect(ctx, infoX, memoY, memoW, 28, 8, false, true);
+      ctx.fillStyle = '#047857';
+      ctx.fillText(fitText(ctx, memoLabel, memoW - 16), infoX + 11, memoY + 18);
 
-      ctx.fillStyle = '#0A7259';
-      ctx.font = '700 11.5px ' + fontFam;
-      ctx.fillText('Mã QR đủ lớn để quét trực tiếp từ ảnh ✓', infoX, curY + 202);
-
-      curY += qrBoxH + 14;
+      curY += qrBoxH + 16;
     }
 
     // FOOTER BAR
@@ -4365,14 +4694,45 @@
     ctx.lineTo(W, curY);
     ctx.stroke();
 
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#64748B';
-    ctx.font = '600 11.5px ' + fontFam;
-    ctx.fillText(
-      'Chuyển khoản cho ' + hostName + ' · Office Order · Chúc cả nhóm ngon miệng! ' + (currentStore.icon || '✨'),
-      W / 2,
-      curY + 28
-    );
+    if (includeSplit) {
+      // Chỉ hiển thị "Chuyển khoản cho [đại diện]" khi check Kèm bảng chia tiền, kèm highlight tên đại diện
+      var pPre = 'Chuyển khoản cho ';
+      var pPost = ' · Office Order · Chúc cả nhóm ngon miệng!';
+      ctx.font = '600 11.5px ' + fontFam;
+      var wPre = ctx.measureText(pPre).width;
+      var wPost = ctx.measureText(pPost).width;
+      ctx.font = '800 12px ' + fontFam;
+      var wHostPill = ctx.measureText(hostName).width + 16;
+      var totFootW = wPre + wHostPill + 6 + wPost;
+      var fStartX = (W - totFootW) / 2;
+      var footY = curY + 29;
+
+      ctx.textAlign = 'left';
+      ctx.font = '600 11.5px ' + fontFam;
+      ctx.fillStyle = '#64748B';
+      ctx.fillText(pPre, fStartX, footY);
+
+      var hPillX = fStartX + wPre + 2;
+      ctx.fillStyle = '#DCFCE7';
+      drawRoundedRect(ctx, hPillX, footY - 15, wHostPill, 21, 10.5, true, false);
+      ctx.strokeStyle = '#86EFAC';
+      ctx.lineWidth = 1;
+      drawRoundedRect(ctx, hPillX, footY - 15, wHostPill, 21, 10.5, false, true);
+      ctx.fillStyle = '#047857';
+      ctx.font = '800 12px ' + fontFam;
+      ctx.textAlign = 'center';
+      ctx.fillText(hostName, hPillX + wHostPill / 2, footY);
+
+      ctx.textAlign = 'left';
+      ctx.font = '600 11.5px ' + fontFam;
+      ctx.fillStyle = '#64748B';
+      ctx.fillText(pPost, hPillX + wHostPill + 4, footY);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 11.5px ' + fontFam;
+      ctx.fillText('Office Order · Chúc cả nhóm ngon miệng!', W / 2, curY + 29);
+    }
 
     // Outer border
     ctx.strokeStyle = '#CBD5E1';
@@ -4398,14 +4758,15 @@
 
     var cUnit = (currentStore && currentStore.itemUnit) || 'món';
     var amHost = canActAsHostOrOpen();
+    var crownSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:3px;"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>';
 
     people.forEach(function (p) {
       var share = p.share !== undefined ? p.share : ((t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0);
       var finalPay = p.finalPay !== undefined ? p.finalPay : Math.max(0, p.drinkSub + share);
 
       var adjStr = '';
-      if (share > 0) adjStr = ' · <span class="split-adj plus">+ship ' + fmt(share) + '</span>';
-      else if (share < 0) adjStr = ' · <span class="split-adj minus">-giảm ' + fmt(Math.abs(share)) + '</span>';
+      if (share > 0) adjStr = ' <span class="split-adj plus">+ship ' + fmt(share) + '</span>';
+      else if (share < 0) adjStr = ' <span class="split-adj minus">−' + fmt(Math.abs(share)) + ' giảm</span>';
 
       var row = document.createElement('div');
       row.className = 'split-person-row';
@@ -4415,7 +4776,7 @@
       infoDiv.className = 'split-person-info';
       infoDiv.innerHTML =
         '<span class="split-person-badge" style="background-color:' + p.ucolor + '18;color:' + p.ucolor + ';border:1.5px solid ' + p.ucolor + ';">' +
-          esc(p.name) + (p.isHost ? ' 👑' : '') +
+          esc(p.name) + (p.isHost ? crownSvg : '') +
         '</span>' +
         '<span class="split-person-cups">' + p.cups + ' ' + esc(cUnit) + ' (' + fmt(p.drinkSub) + ')' + adjStr + '</span>';
 
@@ -4439,7 +4800,7 @@
       } else {
         var pill = document.createElement('span');
         pill.className = 'split-status-pill ' + (p.paid ? 'is-paid' : 'is-unpaid');
-        pill.textContent = p.paid ? '✓ Đã trả' : '⏳ Chưa trả';
+        pill.textContent = p.paid ? '✓ Đã trả' : 'Chưa trả';
         payDiv.appendChild(pill);
       }
 
@@ -4616,14 +4977,17 @@
           if (hUid && curPm['u:' + hUid] === undefined) curPm['u:' + hUid] = true;
           setSyncedField('paidMap', curPm);
 
+          updateUrlParams();
           updateHostDropdownUI();
+          renderHostPayTracker();
           renderCart();
           renderSplitBillIfOpen();
           renderPayReminderPanel(false);
           rtSend();
+          syncBillServerStateToSheet(true);
 
           if ($('saveMsg')) $('saveMsg').textContent = '✓ Đã chốt ' + order.ma_don + ' vào Sheet lúc ' + new Date().toLocaleTimeString('vi-VN');
-          showToast('✓ Đã chốt & lưu Sheet! Đã mở khóa Hối trả tiền.');
+          showToast('Đã chốt & lưu Sheet! Đã mở khóa Hối trả tiền & Mở sửa.');
         } else throw 0;
       })
       .catch(function () {
@@ -5664,9 +6028,6 @@
   if ($('btnUrgeTopbar')) {
     $('btnUrgeTopbar').onclick = openUrgeModal;
   }
-  if ($('btnUrgeOrder')) {
-    $('btnUrgeOrder').onclick = openUrgeModal;
-  }
   if ($('mobileUrgeBtn')) {
     $('mobileUrgeBtn').onclick = openUrgeModal;
   }
@@ -5933,9 +6294,10 @@
   // Xuất ảnh Bill Canvas
   if ($('btnExportImage')) {
     $('btnExportImage').onclick = function () {
-      if ($('splitBillHtmlSection')) $('splitBillHtmlSection').hidden = true;
-      if ($('btnToggleSplitHtml')) $('btnToggleSplitHtml').classList.remove('is-active');
-      if ($('btnToggleSplitText')) $('btnToggleSplitText').textContent = 'Xem Bảng chia tiền từng bạn';
+      var autoShowSplit = (hasHostAssigned() && isCurrentHost() && isOrderSubmitted());
+      if ($('splitBillHtmlSection')) $('splitBillHtmlSection').hidden = !autoShowSplit;
+      if ($('btnToggleSplitHtml')) $('btnToggleSplitHtml').classList.toggle('is-active', autoShowSplit);
+      if ($('btnToggleSplitText')) $('btnToggleSplitText').textContent = autoShowSplit ? 'Ẩn Bảng chia tiền từng bạn' : 'Xem Bảng chia tiền từng bạn';
       if ($('chkIncludeSplitInCanvas')) $('chkIncludeSplitInCanvas').checked = true;
       exportCanvasBill();
     };
@@ -6041,19 +6403,55 @@
   if ($('btnUnlockOrderEdit')) {
     $('btnUnlockOrderEdit').onclick = function () {
       if (hasHostAssigned() && !isCurrentHost()) {
-        showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được mở khóa sửa đơn!');
+        showToast('Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được mở khóa sửa đơn!');
         return;
       }
       setSyncedField('orderSubmitted', false);
       updateHostDropdownUI();
+      renderHostPayTracker();
       renderCart();
+      renderSplitBillIfOpen();
       renderPayReminderPanel(false);
-      schedulePush();
-      showToast('🔓 Đã mở khóa sửa đơn cho các thành viên.');
+      rtSend();
+      syncBillServerStateToSheet(false);
+      showToast('Đã mở khóa sửa đơn cho các thành viên.');
     };
   }
 
-  // Host QR Code Modal
+  // Bảng Thu tiền trực tiếp ngay trên khung bill (dành cho Đại diện)
+  if ($('btnTogglePayTracker')) {
+    $('btnTogglePayTracker').onclick = function () {
+      var box = $('hostPayTracker');
+      if (!box) return;
+      box.hidden = !box.hidden;
+      $('btnTogglePayTracker').classList.toggle('is-open', !box.hidden);
+      if (!box.hidden) renderHostPayTracker();
+    };
+  }
+  if ($('btnClosePayTracker')) {
+    $('btnClosePayTracker').onclick = function () {
+      if ($('hostPayTracker')) $('hostPayTracker').hidden = true;
+      if ($('btnTogglePayTracker')) $('btnTogglePayTracker').classList.remove('is-open');
+    };
+  }
+
+  // Host QR Code Modal (Select file + Drag & Drop + Paste ảnh từ clipboard)
+  function handleIncomingQrFile(file) {
+    if (!file || (file.type && file.type.indexOf('image/') !== 0)) {
+      showToast('Vui lòng chọn hoặc kéo thả đúng định dạng file ảnh QR!');
+      return;
+    }
+    resizeImageFileToDataUrl(file, 300, function (err, dataUrl) {
+      if (err || !dataUrl) {
+        showToast('Không đọc được file ảnh QR, hãy thử ảnh khác!');
+        return;
+      }
+      updateHostQrPreview(dataUrl);
+      if ($('btnRemoveHostQr')) $('btnRemoveHostQr').hidden = false;
+      showToast('Đã nạp ảnh QR! Bấm "Lưu mã QR" để gắn vào bill.');
+    });
+  }
+
   if ($('btnOpenHostQr')) $('btnOpenHostQr').onclick = openHostQrModal;
   if ($('btnQuickHostQr')) $('btnQuickHostQr').onclick = openHostQrModal;
   if ($('btnCloseHostQrModal')) $('btnCloseHostQrModal').onclick = closeHostQrModal;
@@ -6066,19 +6464,52 @@
     $('btnPickQrFile').onclick = function () { $('hostQrFileInput').click(); };
     $('hostQrFileInput').onchange = function (e) {
       var file = e.target.files && e.target.files[0];
-      if (!file) return;
-      resizeImageFileToDataUrl(file, 360, function (err, dataUrl) {
-        if (err || !dataUrl) {
-          showToast('Không đọc được file ảnh QR, hãy thử ảnh khác!');
-          return;
-        }
-        updateHostQrPreview(dataUrl);
-        if ($('btnRemoveHostQr')) $('btnRemoveHostQr').hidden = false;
-        showToast('Đã nạp ảnh QR! Bấm "Lưu mã QR" để gắn vào bill.');
-      });
+      if (file) handleIncomingQrFile(file);
       e.target.value = '';
     };
   }
+  if ($('hostQrPreviewWrap')) {
+    var dz = $('hostQrPreviewWrap');
+    dz.onclick = function () {
+      if ($('hostQrFileInput')) $('hostQrFileInput').click();
+    };
+    ['dragenter', 'dragover'].forEach(function (evName) {
+      dz.addEventListener(evName, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.add('is-dragover');
+      });
+    });
+    ['dragleave', 'dragend'].forEach(function (evName) {
+      dz.addEventListener(evName, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dz.classList.remove('is-dragover');
+      });
+    });
+    dz.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dz.classList.remove('is-dragover');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (files && files[0]) handleIncomingQrFile(files[0]);
+    });
+  }
+  document.addEventListener('paste', function (e) {
+    var qrModal = $('hostQrModal');
+    if (!qrModal || qrModal.hidden) return;
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type && items[i].type.indexOf('image/') === 0) {
+        var f = items[i].getAsFile();
+        if (f) {
+          handleIncomingQrFile(f);
+          break;
+        }
+      }
+    }
+  });
   if ($('btnGenerateVietQr')) $('btnGenerateVietQr').onclick = generateVietQrToDataUrl;
   if ($('btnSaveHostQr')) $('btnSaveHostQr').onclick = saveHostQr;
   if ($('btnRemoveHostQr')) $('btnRemoveHostQr').onclick = removeHostQr;
@@ -6161,6 +6592,7 @@
   renderCart();
   fetchMenuFromSheet();
   syncStoresFromSheet(true);
+  fetchBillServerStateFromSheet();
   syncUrgeCooldownFromStorage();
   syncPayUrgeCooldownFromStorage();
   setupLive();

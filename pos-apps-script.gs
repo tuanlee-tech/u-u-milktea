@@ -290,6 +290,18 @@ function saveStoresBatch_(stores) {
   return {ok:true, count: stores.length, results: res};
 }
 
+function hasOrderInDonHang_(maDon) {
+  if (!maDon) return false;
+  var sh = sheet_('DONHANG', ['ma_don','thoi_gian','ten_khach','kenh','thanh_toan','tam_tinh','giam_gia','ship','tong_cong','ghi_chu']);
+  var n = sh.getLastRow();
+  if (n <= 1) return false;
+  var ids = sh.getRange(2, 1, n - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === String(maDon).trim()) return true;
+  }
+  return false;
+}
+
 function doGet(e) {
   ensure_();
   var action = (e && e.parameter && e.parameter.action) || '';
@@ -300,7 +312,14 @@ function doGet(e) {
     return json_({ok:true, stores: getStoresList_()});
   }
   if (action === 'state') {
-    var st = getState_((e.parameter && e.parameter.key) || '');
+    var key = (e.parameter && e.parameter.key) || '';
+    var st = getState_(key);
+    if (!st && key.indexOf('BILL_') === 0) {
+      var code = key.slice(5);
+      if (hasOrderInDonHang_(code)) {
+        st = { value: JSON.stringify({ bill: code, submitted: true, fromDonHang: true }), updatedMs: new Date().getTime() };
+      }
+    }
     return json_({ok:true, state: st, serverNow: new Date().getTime()});
   }
   return json_({ok:true, msg:'Office Order POS online. Dung ?action=stores hoac ?action=menu'});
@@ -405,6 +424,20 @@ function saveOrder_(o) {
   (o.items||[]).forEach(function(it){
     s.ct.appendRow(ctRow_(o.ma_don, it));
   });
+  try {
+    if (o.ma_don) {
+      var billKey = 'BILL_' + String(o.ma_don);
+      var prev = getState_(billKey);
+      var merged = { bill: String(o.ma_don), submitted: true, updatedAt: new Date().getTime() };
+      if (prev && prev.value) {
+        try {
+          var pObj = JSON.parse(prev.value);
+          merged = Object.assign({}, pObj, { submitted: true, updatedAt: merged.updatedAt });
+        } catch (err) {}
+      }
+      setState_(billKey, JSON.stringify(merged));
+    }
+  } catch (err) {}
   return json_({ok:true, ma_don:o.ma_don});
 }
 
