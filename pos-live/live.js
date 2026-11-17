@@ -1037,14 +1037,24 @@
   }
 
   var myUid = '';
+  var myUids = [];
   try {
+    var savedListRaw = localStorage.getItem('uu_pos_uids');
+    if (savedListRaw) {
+      var parsedUids = JSON.parse(savedListRaw);
+      if (Array.isArray(parsedUids)) myUids = parsedUids.filter(Boolean);
+    }
     myUid = localStorage.getItem('uu_pos_uid') || sessionStorage.getItem(tabSessionId + '_uid') || '';
   } catch (e) {}
   if (!myUid) {
     myUid = 'u_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
   }
+  if (myUids.indexOf(myUid) === -1) myUids.push(myUid);
   try {
+    var tabUid = sessionStorage.getItem(tabSessionId + '_uid');
+    if (tabUid && myUids.indexOf(tabUid) === -1) myUids.push(tabUid);
     localStorage.setItem('uu_pos_uid', myUid);
+    localStorage.setItem('uu_pos_uids', JSON.stringify(myUids.slice(-20)));
     sessionStorage.setItem(tabSessionId + '_uid', myUid);
   } catch (e) {}
 
@@ -1208,13 +1218,10 @@
     return p.join(' · ');
   }
 
-  /* Kiểm tra quyền chỉnh sửa dòng (khớp uid hoặc trùng tên hiển thị khi mở lại tab) */
+  /* Kiểm tra quyền chỉnh sửa dòng: chỉ chính chủ (uid thuộc trình duyệt/máy này) mới được sửa hoặc xóa */
   function canEditRow(c) {
     if (!c.uid || c.uid === myUid) return true;
-    var myNameNorm = (myUname || '').trim().toLowerCase();
-    var rowNameNorm = (c.uname || c.owner || '').trim().toLowerCase();
-    if (myNameNorm && rowNameNorm && myNameNorm === rowNameNorm) return true;
-    return false;
+    return myUids.indexOf(c.uid) !== -1;
   }
 
   var lidSeq = 0;
@@ -1575,6 +1582,11 @@
     var inlineTxt = $('urgeInlineText');
     if (inlineBtn) inlineBtn.classList.toggle('is-cooldown', isCooling);
     if (inlineTxt) inlineTxt.textContent = isCooling ? ('Hối (' + sec + 's)') : 'Hối đặt hàng';
+
+    var mobBtn = $('mobileUrgeBtn');
+    var mobTxt = $('mobileUrgeText');
+    if (mobBtn) mobBtn.classList.toggle('is-cooldown', isCooling);
+    if (mobTxt) mobTxt.textContent = isCooling ? (sec + 's') : 'Hối';
 
     var box = $('urgeCooldownBox');
     var boxTxt = $('urgeCooldownText');
@@ -2723,7 +2735,7 @@
 
       var isMine = canEditRow(c);
       var shortOpt = shortOptText(c);
-      var ucol = (c.uid === myUid ? myUcolor : (c.ucolor || '#0A7259'));
+      var ucol = (isMine ? myUcolor : (c.ucolor || '#0A7259'));
 
       // 0. Border highlight & clean row style
       li.style.borderLeft = '3.5px solid ' + ucol;
@@ -2758,14 +2770,6 @@
         itemCol.onclick = function () {
           var m = menuById(c.id);
           openItemCustomizer(m, c, c.size === 'TP');
-        };
-      } else {
-        itemCol.onclick = function () {
-          var ownerLabel = c.uname || c.owner || 'người đặt';
-          if (confirm('Món này của "' + ownerLabel + '". Bạn có muốn mở chỉnh sửa món này không?')) {
-            var m = menuById(c.id);
-            openItemCustomizer(m, c, c.size === 'TP');
-          }
         };
       }
       li.appendChild(itemCol);
@@ -2811,8 +2815,8 @@
       } else {
         var locked = document.createElement('span');
         locked.className = 'c-qlocked';
-        locked.title = 'Món của ' + (c.uname || 'bạn khác') + ' (Bấm biểu tượng bút bên phải nếu cần sửa)';
-        locked.innerHTML = c.qty + 'x';
+        locked.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
+        locked.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' + c.qty + 'x';
         qtyCol.appendChild(locked);
       }
       li.appendChild(qtyCol);
@@ -2823,7 +2827,7 @@
       priceCol.textContent = fmtK(lineTotal(c));
       li.appendChild(priceCol);
 
-      // 5. Thao tác (Sửa / Xóa)
+      // 5. Thao tác (Sửa / Xóa hoặc Khóa)
       var actCol = document.createElement('div');
       actCol.className = 'c-acts';
       if (isMine) {
@@ -2851,35 +2855,11 @@
         actCol.appendChild(btnEdit);
         actCol.appendChild(btnDel);
       } else {
-        var btnUnlockEdit = document.createElement('button');
-        btnUnlockEdit.className = 'c-abtn unlock-edit';
-        btnUnlockEdit.title = 'Mở chỉnh sửa món của ' + (c.uname || 'bạn khác');
-        btnUnlockEdit.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-        btnUnlockEdit.onclick = function (e) {
-          e.stopPropagation();
-          var ownerLabel = c.uname || c.owner || 'người đặt';
-          if (confirm('Món này của "' + ownerLabel + '". Bạn có muốn chỉnh sửa món này không?')) {
-            var m = menuById(c.id);
-            openItemCustomizer(m, c, c.size === 'TP');
-          }
-        };
-
-        var btnUnlockDel = document.createElement('button');
-        btnUnlockDel.className = 'c-abtn del unlock-edit';
-        btnUnlockDel.title = 'Xóa món của ' + (c.uname || 'bạn khác');
-        btnUnlockDel.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-        btnUnlockDel.onclick = function (e) {
-          e.stopPropagation();
-          var ownerLabel = c.uname || c.owner || 'người đặt';
-          if (confirm('Bạn có chắc muốn xóa món "' + c.name + '" của "' + ownerLabel + '" khỏi bill?')) {
-            tomb(c);
-            cart.splice(idx, 1);
-            renderCart();
-          }
-        };
-
-        actCol.appendChild(btnUnlockEdit);
-        actCol.appendChild(btnUnlockDel);
+        var iconLock = document.createElement('span');
+        iconLock.className = 'c-lock-icon';
+        iconLock.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
+        iconLock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+        actCol.appendChild(iconLock);
       }
       li.appendChild(actCol);
 
@@ -4463,6 +4443,9 @@
   if ($('btnUrgeOrder')) {
     $('btnUrgeOrder').onclick = openUrgeModal;
   }
+  if ($('mobileUrgeBtn')) {
+    $('mobileUrgeBtn').onclick = openUrgeModal;
+  }
   if ($('btnCloseUrgeModal')) $('btnCloseUrgeModal').onclick = closeUrgeModal;
   if ($('btnCancelUrgeModal')) $('btnCancelUrgeModal').onclick = closeUrgeModal;
   if ($('btnConfirmUrgeSend')) $('btnConfirmUrgeSend').onclick = sendUrgeOrder;
@@ -4538,7 +4521,7 @@
       }
 
       cart.forEach(function (c) {
-        if (c.uid === myUid || c.uname === oldName || c.owner === oldName) {
+        if (canEditRow(c)) {
           c.uname = newName;
           c.owner = newName;
           c.ucolor = myUcolor;
