@@ -870,6 +870,56 @@ body {
 .c-row:hover {
   background: #F8F7F2;
 }
+.c-row.is-row-paid {
+  background: #ECFDF5 !important;
+  border-color: #86EFAC !important;
+}
+.c-row.is-row-paid .c-name {
+  color: #065F46;
+}
+.c-row.is-row-paid .c-price {
+  color: #15803D;
+}
+.c-row.is-row-unpaid {
+  background: #FFFDF5;
+  border-color: #FDE68A;
+}
+.c-paid-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.c-paid-check:hover {
+  background: rgba(10, 114, 89, 0.1);
+}
+.c-paid-checkbox {
+  width: 17px;
+  height: 17px;
+  accent-color: #0A7259;
+  cursor: pointer;
+  margin: 0;
+}
+.c-row-paid-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+}
+.c-row-paid-pill.is-paid {
+  background: #DCFCE7;
+  color: #15803D;
+}
+.c-row-paid-pill.is-unpaid {
+  background: #FEF3C7;
+  color: #B45309;
+}
 
 /* Collaborative Focus Glow */
 .c-row.is-peer-focused {
@@ -3858,6 +3908,36 @@ body {
   background: #DBEAFE;
   color: #1E40AF;
 }
+.btn-host-tool.btn-host-pay-list.is-all-paid {
+  border-color: #86EFAC;
+  color: #15803D;
+  background: #DCFCE7;
+}
+.host-pay-tracker-row.is-row-paid {
+  background: #F0FDF4;
+  border-color: #86EFAC;
+}
+.split-person-row.is-row-paid {
+  background: #F0FDF4;
+  border-color: #86EFAC;
+}
+.btn-save-sheet.is-submitted-done,
+.btn-save-sheet:disabled {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #64748B;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
+.btn-urge-top:disabled,
+.mob-urge-btn:disabled {
+  background: #E2E8F0 !important;
+  color: #94A3B8 !important;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: not-allowed;
+  opacity: 0.85;
+}
 .host-pay-tracker {
   margin: -2px 0 8px;
   padding: 8px 10px;
@@ -3947,10 +4027,12 @@ body {
   background: linear-gradient(135deg, #D97706 0%, #C2410C 100%);
   color: #FFFFFF;
 }
-.btn-host-tool:disabled {
-  background: #F1F5F9;
-  border-color: #E2E8F0;
-  color: #94A3B8;
+.btn-host-tool:disabled,
+.btn-host-tool.btn-host-pay:disabled {
+  background: #E2E8F0 !important;
+  border-color: #CBD5E1 !important;
+  color: #475569 !important;
+  opacity: 1 !important;
   cursor: not-allowed;
 }
 .btn-save-sheet.is-locked-member {

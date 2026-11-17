@@ -273,10 +273,6 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
               <span id="btnUrgePayLabel">Hối trả tiền</span>
             </button>
-            <button type="button" class="btn-host-tool" id="btnUnlockOrderEdit" hidden title="Mở khóa cho thành viên sửa/thêm món lại">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-              Mở sửa
-            </button>
           </div>
         </div>
 
@@ -292,10 +288,10 @@
         <!-- Single-Line 10-Item Viewport Container -->
         <div class="cart-viewport">
           <div class="cart-table-head">
-            <span class="th-item">MÓN & TÙY CHỌN</span>
+            <span class="th-item">MÓN &amp; TÙY CHỌN</span>
             <span class="th-qty">SL</span>
             <span class="th-price">TIỀN</span>
-            <span class="th-act">SỬA</span>
+            <span class="th-act" id="cartTableActHead">SỬA</span>
           </div>
           <ul class="cart-items" id="cartItems"></ul>
         </div>
@@ -348,7 +344,7 @@
               <polyline points="17 21 17 13 7 13 7 21"/>
               <polyline points="7 3 7 8 15 8"/>
             </svg>
-            Chốt & Lưu Sheet
+            <span id="btnSaveText">Chốt &amp; Lưu Sheet</span>
           </button>
         </div>
         <p class="status-hint" id="saveMsg">

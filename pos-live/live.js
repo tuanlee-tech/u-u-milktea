@@ -1609,8 +1609,8 @@
     var btnPayTrackerLbl = $('btnPayTrackerLabel');
     var payTrackerBox = $('hostPayTracker');
     var btnUrgePay = $('btnOpenUrgePay');
-    var btnUnlock = $('btnUnlockOrderEdit');
     var btnSave = $('btnSave');
+    var btnSaveTxt = $('btnSaveText');
     var btnQuickQr = $('btnQuickHostQr');
     var btnQuickQrTxt = $('btnQuickHostQrText');
     var btnModalPay = $('btnModalUrgePay');
@@ -1621,6 +1621,17 @@
     var amHost = isCurrentHost();
     var submitted = isOrderSubmitted();
     var hasQr = !!(F.hostQr && F.hostQr.v);
+
+    var paidCnt = 0;
+    var totalPeopleCnt = 0;
+    var unpaidCnt = 0;
+    if (cart.length > 0 && typeof computeBillSplit === 'function') {
+      var sp = computeBillSplit();
+      totalPeopleCnt = sp.people.length;
+      paidCnt = sp.people.filter(function (p) { return p.paid; }).length;
+      unpaidCnt = sp.people.filter(function (p) { return !p.paid && p.finalPay > 0; }).length;
+    }
+    var allPaid = !!(submitted && totalPeopleCnt > 0 && unpaidCnt === 0);
 
     if (lbl) {
       if (hostName) {
@@ -1673,26 +1684,34 @@
       btnQuickQr.hidden = !(assigned && amHost);
       if (btnQuickQrTxt) btnQuickQrTxt.textContent = hasQr ? 'Sửa mã QR' : 'Thêm QR vào ảnh';
     }
-    if (btnUnlock) {
-      btnUnlock.hidden = !(assigned && amHost && submitted);
-    }
 
-    // Nút Hối trả tiền & Thu tiền: chỉ bật sau khi Đại diện đã Chốt & Lưu Sheet
+    // Nút Hối trả tiền & Thu tiền: chỉ hiện khi đã Chốt & Lưu Sheet; tự disable khi cả nhóm đã trả đủ
     if (btnUrgePay) {
       btnUrgePay.hidden = !(assigned && amHost && submitted);
+      btnUrgePay.disabled = allPaid;
       btnUrgePay.classList.remove('is-disabled');
-      btnUrgePay.title = 'Phát loa & thông báo đòi tiền những bạn chưa trả';
+      btnUrgePay.title = allPaid
+        ? 'Cả nhóm đã thanh toán đủ'
+        : 'Phát loa & thông báo đòi tiền những bạn chưa trả';
+      var urgePayLbl = $('btnUrgePayLabel');
+      if (urgePayLbl) {
+        if (allPaid) {
+          urgePayLbl.textContent = 'Đã thu đủ ✓';
+        } else {
+          var pSec = typeof getPayUrgeRemainingSec === 'function' ? getPayUrgeRemainingSec() : 0;
+          urgePayLbl.textContent = pSec > 0 ? ('Hối trả (' + pSec + 's)') : 'Hối trả tiền';
+        }
+      }
     }
     if (btnPayTracker) {
       var showTrackerBtn = !!(assigned && amHost && submitted && cart.length > 0);
       btnPayTracker.hidden = !showTrackerBtn;
+      btnPayTracker.classList.toggle('is-all-paid', allPaid);
       if (!showTrackerBtn && payTrackerBox) payTrackerBox.hidden = true;
-      if (showTrackerBtn && btnPayTrackerLbl && typeof computeBillSplit === 'function') {
-        var sp = computeBillSplit();
-        var paidCnt = sp.people.filter(function (p) { return p.paid; }).length;
-        btnPayTrackerLbl.textContent = 'Thu tiền (' + paidCnt + '/' + sp.people.length + ')';
+      if (showTrackerBtn && btnPayTrackerLbl) {
+        btnPayTrackerLbl.textContent = 'Thu tiền (' + paidCnt + '/' + totalPeopleCnt + (allPaid ? ' ✓' : '') + ')';
       }
-      if (btnPayTracker && payTrackerBox) {
+      if (payTrackerBox) {
         btnPayTracker.classList.toggle('is-open', !payTrackerBox.hidden);
       }
     }
@@ -1701,28 +1720,44 @@
     }
     if (btnModalPay) {
       btnModalPay.hidden = !(assigned && amHost && submitted);
+      btnModalPay.disabled = allPaid;
+      btnModalPay.title = allPaid ? 'Cả nhóm đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
     }
 
-    // Khóa nút Chốt & Lưu Sheet cho non-host nếu nhóm đã có đại diện
+    // Khóa nút Chốt & Lưu Sheet khi non-host HOẶC đơn đã chốt xong
     if (btnSave) {
-      var saveDisabled = assigned && !amHost;
-      btnSave.disabled = saveDisabled;
-      btnSave.classList.toggle('is-host-locked', saveDisabled);
-      btnSave.classList.toggle('is-locked-member', saveDisabled);
-      btnSave.title = saveDisabled
-        ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
-        : 'Chốt đơn hiện tại & lưu vào Google Sheet';
+      var lockNonHost = assigned && !amHost;
+      btnSave.disabled = lockNonHost || submitted;
+      btnSave.classList.toggle('is-host-locked', lockNonHost);
+      btnSave.classList.toggle('is-locked-member', lockNonHost);
+      btnSave.classList.toggle('is-submitted-done', submitted);
+      if (btnSaveTxt) {
+        btnSaveTxt.textContent = submitted ? 'Đã chốt & lưu Sheet' : 'Chốt & Lưu Sheet';
+      }
+      btnSave.title = submitted
+        ? 'Đơn đã chốt & lưu lên Google Sheet'
+        : (lockNonHost
+          ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
+          : 'Chốt đơn hiện tại & lưu vào Google Sheet');
     }
 
-    // Khóa UI chỉnh sửa giỏ hàng cho thành viên khi đơn đã chốt
+    // Vô hiệu hóa nút Hối đặt hàng sau khi đơn đã Chốt & Lưu Sheet
+    if ($('btnUrgeTopbar')) {
+      $('btnUrgeTopbar').disabled = submitted;
+      if (submitted) $('btnUrgeTopbar').title = 'Đơn đã chốt & lưu Sheet';
+    }
+    if ($('mobileUrgeBtn')) {
+      $('mobileUrgeBtn').disabled = submitted;
+    }
+
+    // Khóa UI chỉnh sửa giỏ hàng và ô điều chỉnh khi đơn đã chốt
     var cartSec = $('cartSection');
     if (cartSec) {
-      cartSec.classList.toggle('is-order-submitted', submitted && !canActAsHostOrOpen());
+      cartSec.classList.toggle('is-order-submitted', submitted);
     }
-    var lockNonHostFields = assigned && !amHost;
     ['discount', 'shipFee', 'channel', 'payMethod', 'orderNote'].forEach(function (fid) {
       var el = $(fid);
-      if (el) el.disabled = submitted && lockNonHostFields;
+      if (el) el.disabled = submitted;
     });
 
     var panel = $('hostDropdownPanel');
@@ -1741,13 +1776,14 @@
     }
     var split = computeBillSplit();
     var paidCnt = split.people.filter(function (p) { return p.paid; }).length;
+    var allPaidNow = (split.people.length > 0 && paidCnt === split.people.length);
     if ($('btnPayTrackerLabel')) {
-      $('btnPayTrackerLabel').textContent = 'Thu tiền (' + paidCnt + '/' + split.people.length + ')';
+      $('btnPayTrackerLabel').textContent = 'Thu tiền (' + paidCnt + '/' + split.people.length + (allPaidNow ? ' ✓' : '') + ')';
     }
     list.innerHTML = '';
     split.people.forEach(function (p) {
       var row = document.createElement('div');
-      row.className = 'host-pay-tracker-row';
+      row.className = 'host-pay-tracker-row' + (p.paid ? ' is-row-paid' : '');
 
       var u = document.createElement('div');
       u.className = 'host-pay-tracker-user';
@@ -1970,15 +2006,22 @@
   function updateUrgeCooldownUI() {
     var sec = getUrgeRemainingSec();
     var isCooling = sec > 0;
+    var submitted = isOrderSubmitted();
 
     var topBtn = $('btnUrgeTopbar');
     var topTxt = $('urgeTopbarText');
-    if (topBtn) topBtn.classList.toggle('is-cooldown', isCooling);
+    if (topBtn) {
+      topBtn.classList.toggle('is-cooldown', isCooling);
+      topBtn.disabled = submitted;
+    }
     if (topTxt) topTxt.textContent = isCooling ? ('Hối đặt hàng (' + sec + 's)') : 'Hối đặt hàng';
 
     var mobBtn = $('mobileUrgeBtn');
     var mobTxt = $('mobileUrgeText');
-    if (mobBtn) mobBtn.classList.toggle('is-cooldown', isCooling);
+    if (mobBtn) {
+      mobBtn.classList.toggle('is-cooldown', isCooling);
+      mobBtn.disabled = submitted;
+    }
     if (mobTxt) mobTxt.textContent = isCooling ? (sec + 's') : 'Hối';
 
     var box = $('urgeCooldownBox');
@@ -1990,7 +2033,7 @@
 
     var sendBtn = $('btnConfirmUrgeSend');
     var sendTxt = $('btnConfirmUrgeText');
-    if (sendBtn) sendBtn.disabled = isCooling;
+    if (sendBtn) sendBtn.disabled = isCooling || submitted;
     if (sendTxt) sendTxt.textContent = isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa hối ngay';
   }
 
@@ -2340,8 +2383,13 @@
   function updatePayUrgeCooldownUI() {
     var sec = getPayUrgeRemainingSec();
     var isCooling = sec > 0;
+    var allPaidNow = (isOrderSubmitted() && cart.length > 0 && typeof getUnpaidMembers === 'function' && getUnpaidMembers().length === 0);
+    var btnUrgePay = $('btnOpenUrgePay');
+    if (btnUrgePay) btnUrgePay.disabled = allPaidNow;
     var btnLbl = $('btnUrgePayLabel');
-    if (btnLbl) btnLbl.textContent = isCooling ? ('Hối trả (' + sec + 's)') : 'Hối trả tiền';
+    if (btnLbl) {
+      btnLbl.textContent = allPaidNow ? 'Đã thu đủ ✓' : (isCooling ? ('Hối trả (' + sec + 's)') : 'Hối trả tiền');
+    }
     var box = $('urgePayCooldownBox');
     var boxTxt = $('urgePayCooldownText');
     if (box) box.hidden = !isCooling;
@@ -2350,8 +2398,8 @@
     }
     var sendBtn = $('btnConfirmUrgePaySend');
     var sendTxt = $('btnConfirmUrgePayText');
-    if (sendBtn) sendBtn.disabled = isCooling;
-    if (sendTxt) sendTxt.textContent = isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa đòi tiền ngay';
+    if (sendBtn) sendBtn.disabled = isCooling || allPaidNow;
+    if (sendTxt) sendTxt.textContent = allPaidNow ? 'Cả nhóm đã trả đủ' : (isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa đòi tiền ngay');
   }
 
   function stopPayPreviewAudio() {
@@ -3287,8 +3335,8 @@
         '</div>';
 
       card.onclick = function () {
-        if (isOrderSubmitted() && !canActAsHostOrOpen()) {
-          showToast('🔒 Đại diện đã chốt đơn! Liên hệ Đại diện nếu cần mở sửa.');
+        if (isOrderSubmitted()) {
+          showToast('Đơn đã chốt & lưu Sheet! Không thể thêm món mới.');
           return;
         }
         openItemCustomizer(m, null, isTopping);
@@ -3310,8 +3358,8 @@
   var curSelectedToppings = []; // [{id, name, price, qty}]
 
   function openItemCustomizer(menuItem, cartLine, isToppingOnly) {
-    if (isOrderSubmitted() && !canActAsHostOrOpen()) {
-      showToast('🔒 Đại diện đã chốt đơn! Không thể thêm hoặc sửa món.');
+    if (isOrderSubmitted()) {
+      showToast('Đơn đã chốt & lưu Sheet! Không thể thêm hoặc sửa món.');
       return;
     }
     curCustomItem = menuItem;
@@ -3653,6 +3701,11 @@
     if (!ul) return;
     ul.innerHTML = '';
 
+    var submitted = isOrderSubmitted();
+    if ($('cartTableActHead')) {
+      $('cartTableActHead').textContent = submitted ? 'TRẢ' : 'SỬA';
+    }
+
     cart.forEach(function (c, idx) {
       normLine(c);
       var li = document.createElement('li');
@@ -3660,14 +3713,16 @@
       li.dataset.lid = c.lid;
 
       var isMine = canEditRow(c);
-      var isLockedAfterSubmit = (isOrderSubmitted() && !canActAsHostOrOpen());
-      var canMutateRow = isMine && !isLockedAfterSubmit;
+      var canMutateRow = isMine && !submitted;
       var shortOpt = shortOptText(c);
       var ucol = (isMine ? myUcolor : (c.ucolor || '#0A7259'));
+      var rowPayTarget = { uid: c.uid || '', name: c.uname || c.owner || 'Khách' };
+      var rowPaid = submitted ? isMemberPaid(rowPayTarget) : false;
 
-      // 0. Border highlight & clean row style
-      li.style.borderLeft = '3.5px solid ' + ucol;
-      li.style.background = '#FFFFFF';
+      // 0. Border highlight & paid/unpaid state
+      li.style.borderLeft = '3.5px solid ' + (submitted && rowPaid ? '#10B981' : ucol);
+      li.classList.toggle('is-row-paid', submitted && rowPaid);
+      li.classList.toggle('is-row-unpaid', submitted && !rowPaid);
 
       // 1. Cột Món & Tùy chọn (Gộp chung Badge người đặt + Tên món + Tùy chọn trên 1 dòng full width)
       var itemCol = document.createElement('div');
@@ -3743,8 +3798,8 @@
       } else {
         var locked = document.createElement('span');
         locked.className = 'c-qlocked';
-        locked.title = isLockedAfterSubmit
-          ? ('Đại diện đã chốt đơn — bấm "Mở sửa" để chỉnh sửa')
+        locked.title = submitted
+          ? 'Đơn đã chốt & lưu Sheet'
           : ('Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa');
         locked.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' + c.qty + 'x';
         qtyCol.appendChild(locked);
@@ -3757,10 +3812,37 @@
       priceCol.textContent = fmtK(lineTotal(c));
       li.appendChild(priceCol);
 
-      // 5. Thao tác (Sửa / Xóa hoặc Khóa)
+      // 5. Thao tác: trước khi chốt = Sửa/Xóa; sau khi chốt = Checkbox Đã thanh toán (Host) hoặc Icon Trạng thái
       var actCol = document.createElement('div');
       actCol.className = 'c-acts';
-      if (canMutateRow) {
+      if (submitted) {
+        if (canActAsHostOrOpen()) {
+          var lblChk = document.createElement('label');
+          lblChk.className = 'c-paid-check';
+          lblChk.title = rowPaid
+            ? ('Đã đánh dấu ' + rowPayTarget.name + ' ĐÃ TRẢ — bỏ tick nếu nhầm')
+            : ('Tick đánh dấu ' + rowPayTarget.name + ' ĐÃ THANH TOÁN');
+          var chk = document.createElement('input');
+          chk.type = 'checkbox';
+          chk.className = 'c-paid-checkbox';
+          chk.checked = rowPaid;
+          chk.onchange = function (e) {
+            e.stopPropagation();
+            toggleMemberPaid(rowPayTarget);
+          };
+          lblChk.onclick = function (e) { e.stopPropagation(); };
+          lblChk.appendChild(chk);
+          actCol.appendChild(lblChk);
+        } else {
+          var statusPill = document.createElement('span');
+          statusPill.className = 'c-row-paid-pill ' + (rowPaid ? 'is-paid' : 'is-unpaid');
+          statusPill.title = rowPaid ? 'Đã thanh toán' : 'Chưa thanh toán';
+          statusPill.innerHTML = rowPaid
+            ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+            : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+          actCol.appendChild(statusPill);
+        }
+      } else if (canMutateRow) {
         var btnEdit = document.createElement('button');
         btnEdit.className = 'c-abtn edit';
         btnEdit.title = 'Tùy chọn món này';
@@ -3787,9 +3869,7 @@
       } else {
         var iconLock = document.createElement('span');
         iconLock.className = 'c-lock-icon';
-        iconLock.title = isLockedAfterSubmit
-          ? ('Đại diện đã chốt đơn')
-          : ('Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa');
+        iconLock.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
         iconLock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
         actCol.appendChild(iconLock);
       }
@@ -3885,11 +3965,11 @@
     if (key) curMap[key] = nextVal;
     if (!nextVal && curMap[nameKey] !== undefined) curMap[nameKey] = false;
     setSyncedField('paidMap', curMap);
-    updateHostDropdownUI();
+    renderCart();
     renderHostPayTracker();
     renderSplitBillIfOpen();
     if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
-    schedulePush();
+    rtSend();
     syncBillServerStateToSheet(isOrderSubmitted());
     showToast(nextVal ? ('✓ Đã đánh dấu ' + p.name + ' ĐÃ TRẢ tiền') : ('↩ Đã chuyển ' + p.name + ' về CHƯA TRẢ'));
   }
@@ -4769,8 +4849,8 @@
       else if (share < 0) adjStr = ' <span class="split-adj minus">−' + fmt(Math.abs(share)) + ' giảm</span>';
 
       var row = document.createElement('div');
-      row.className = 'split-person-row';
-      row.style.borderLeft = '3.5px solid ' + p.ucolor;
+      row.className = 'split-person-row' + (p.paid ? ' is-row-paid' : '');
+      row.style.borderLeft = '3.5px solid ' + (p.paid ? '#10B981' : p.ucolor);
 
       var infoDiv = document.createElement('div');
       infoDiv.className = 'split-person-info';
@@ -4987,7 +5067,7 @@
           syncBillServerStateToSheet(true);
 
           if ($('saveMsg')) $('saveMsg').textContent = '✓ Đã chốt ' + order.ma_don + ' vào Sheet lúc ' + new Date().toLocaleTimeString('vi-VN');
-          showToast('Đã chốt & lưu Sheet! Đã mở khóa Hối trả tiền & Mở sửa.');
+          showToast('Đã chốt & lưu Sheet! Đã mở khóa đánh dấu Đã trả & Hối trả tiền.');
         } else throw 0;
       })
       .catch(function () {
@@ -6398,25 +6478,6 @@
 
   // Lưu Google Sheet
   if ($('btnSave')) $('btnSave').onclick = saveOrder;
-
-  // Mở khóa sửa đơn (chỉ dành cho Đại diện sau khi đã chốt)
-  if ($('btnUnlockOrderEdit')) {
-    $('btnUnlockOrderEdit').onclick = function () {
-      if (hasHostAssigned() && !isCurrentHost()) {
-        showToast('Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được mở khóa sửa đơn!');
-        return;
-      }
-      setSyncedField('orderSubmitted', false);
-      updateHostDropdownUI();
-      renderHostPayTracker();
-      renderCart();
-      renderSplitBillIfOpen();
-      renderPayReminderPanel(false);
-      rtSend();
-      syncBillServerStateToSheet(false);
-      showToast('Đã mở khóa sửa đơn cho các thành viên.');
-    };
-  }
 
   // Bảng Thu tiền trực tiếp ngay trên khung bill (dành cho Đại diện)
   if ($('btnTogglePayTracker')) {
