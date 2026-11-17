@@ -11,7 +11,8 @@ try {
   process.exit(1);
 }
 var wss = new WebSocketServer({ port: PORT });
-var rooms = {}; // bill -> { last: wrap, presence: { cid -> { cid, uid, uname, ucolor, lastSeen } } }
+var URGE_COOLDOWN_MS = 30000;
+var rooms = {}; // bill -> { last: wrap, lastUrgeAt: number, presence: { cid -> { cid, uid, uname, ucolor, lastSeen } } }
 
 function prunePresence(room) {
   if (!room || !room.presence) return;
@@ -29,7 +30,7 @@ wss.on('connection', function (s) {
     try { d = JSON.parse(raw); } catch (e) { return; }
     if (!d || !d.bill) return;
 
-    if (!rooms[d.bill]) rooms[d.bill] = { last: null, presence: {} };
+    if (!rooms[d.bill]) rooms[d.bill] = { last: null, lastUrgeAt: 0, presence: {} };
     s.bill = d.bill;
 
     if (d.type === 'hello') {
@@ -56,6 +57,17 @@ wss.on('connection', function (s) {
       var pres = rooms[d.bill].presence;
       if (pres && Object.keys(pres).length > 0) {
         try { s.send(JSON.stringify({ type: 'presence_list', bill: d.bill, users: pres })); } catch (e) {}
+      }
+      // Inform newly joined peer if room urge cooldown is active
+      var helloElapsed = Date.now() - (rooms[d.bill].lastUrgeAt || 0);
+      if (rooms[d.bill].lastUrgeAt > 0 && helloElapsed < URGE_COOLDOWN_MS) {
+        try {
+          s.send(JSON.stringify({
+            type: 'urge_cooldown',
+            bill: d.bill,
+            remainingMs: URGE_COOLDOWN_MS - helloElapsed
+          }));
+        } catch (e) {}
       }
       // Broadcast peer_joined to other peers
       var peerMsg = JSON.stringify({
@@ -100,9 +112,28 @@ wss.on('connection', function (s) {
           lastSeen: Date.now()
         };
       }
+      var outObj = d;
+      if (d.urge) {
+        var now = Date.now();
+        var elapsed = now - (rooms[d.bill].lastUrgeAt || 0);
+        if (elapsed < URGE_COOLDOWN_MS) {
+          try {
+            s.send(JSON.stringify({ type: 'urge_rejected', bill: d.bill, remainingMs: URGE_COOLDOWN_MS - elapsed }));
+          } catch (e) {}
+          outObj = Object.assign({}, d);
+          delete outObj.urge;
+          delete outObj.urgeId;
+          delete outObj.urgeVoiceId;
+          delete outObj.urgeText;
+          delete outObj.urgeAudio;
+        } else {
+          rooms[d.bill].lastUrgeAt = now;
+          outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
+        }
+      }
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
-          try { c.send(JSON.stringify(d)); } catch (e) {}
+          try { c.send(JSON.stringify(outObj)); } catch (e) {}
         }
       });
       return;
@@ -126,6 +157,25 @@ wss.on('connection', function (s) {
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
           try { c.send(JSON.stringify(d)); } catch (e) {}
+        }
+      });
+      return;
+    }
+
+    if (d.type === 'urge') {
+      var nowU = Date.now();
+      var elapsedU = nowU - (rooms[d.bill].lastUrgeAt || 0);
+      if (elapsedU < URGE_COOLDOWN_MS) {
+        try {
+          s.send(JSON.stringify({ type: 'urge_rejected', bill: d.bill, remainingMs: URGE_COOLDOWN_MS - elapsedU }));
+        } catch (e) {}
+        return;
+      }
+      rooms[d.bill].lastUrgeAt = nowU;
+      var urgePayload = JSON.stringify(Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS }));
+      wss.clients.forEach(function (c) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill) {
+          try { c.send(urgePayload); } catch (e) {}
         }
       });
       return;

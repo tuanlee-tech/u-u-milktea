@@ -307,7 +307,101 @@
     } catch (e) {}
   }
 
-  /* Đồng bộ danh sách quán từ Google Sheet */
+  var PENDING_STORE_TTL_MS = 25000;
+
+  function getPendingMap(storageKey) {
+    try {
+      var raw = localStorage.getItem(storageKey);
+      if (!raw) return {};
+      var map = JSON.parse(raw) || {};
+      var now = Date.now();
+      var changed = false;
+      Object.keys(map).forEach(function (k) {
+        if (now - (Number(map[k]) || 0) > PENDING_STORE_TTL_MS) {
+          delete map[k];
+          changed = true;
+        }
+      });
+      if (changed) localStorage.setItem(storageKey, JSON.stringify(map));
+      return map;
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function markStorePendingDelete(storeId) {
+    if (!storeId) return;
+    try {
+      var m = getPendingMap('office_order_pending_deletes');
+      m[storeId] = Date.now();
+      localStorage.setItem('office_order_pending_deletes', JSON.stringify(m));
+      var s = getPendingMap('office_order_pending_saves');
+      if (s[storeId]) {
+        delete s[storeId];
+        localStorage.setItem('office_order_pending_saves', JSON.stringify(s));
+      }
+    } catch (e) {}
+  }
+
+  function clearStorePendingDelete(storeId) {
+    if (!storeId) return;
+    try {
+      var m = getPendingMap('office_order_pending_deletes');
+      if (m[storeId]) {
+        delete m[storeId];
+        localStorage.setItem('office_order_pending_deletes', JSON.stringify(m));
+      }
+    } catch (e) {}
+  }
+
+  function isStorePendingDelete(storeId) {
+    var m = getPendingMap('office_order_pending_deletes');
+    return !!m[storeId];
+  }
+
+  function markStorePendingSave(storeId) {
+    if (!storeId) return;
+    try {
+      var m = getPendingMap('office_order_pending_saves');
+      m[storeId] = Date.now();
+      localStorage.setItem('office_order_pending_saves', JSON.stringify(m));
+      clearStorePendingDelete(storeId);
+    } catch (e) {}
+  }
+
+  function clearStorePendingSave(storeId) {
+    if (!storeId) return;
+    try {
+      var m = getPendingMap('office_order_pending_saves');
+      if (m[storeId]) {
+        delete m[storeId];
+        localStorage.setItem('office_order_pending_saves', JSON.stringify(m));
+      }
+    } catch (e) {}
+  }
+
+  function isStorePendingSave(storeId) {
+    var m = getPendingMap('office_order_pending_saves');
+    return !!m[storeId];
+  }
+
+  function getDeletedBuiltins() {
+    try {
+      var raw = localStorage.getItem('office_order_deleted_builtins');
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveDeletedBuiltins(arr) {
+    try {
+      localStorage.setItem('office_order_deleted_builtins', JSON.stringify(arr || []));
+    } catch (e) {}
+  }
+
+  /* Đồng bộ danh sách quán từ Google Sheet (2 chiều: bao gồm cả xóa từ Sheet và xóa từ Client) */
   function syncStoresFromSheet(isSilent) {
     var apiUrl = (typeof api === 'function' ? api() : (typeof DEFAULT_API !== 'undefined' ? DEFAULT_API : ''));
     if (!apiUrl) return;
@@ -315,14 +409,33 @@
     fetch(fetchUrl)
       .then(function (res) { return res.json(); })
       .then(function (data) {
-        if (data && data.ok && Array.isArray(data.stores) && data.stores.length) {
-          var customs = getCustomStores();
-          data.stores.forEach(function (sheetStore) {
+        if (data && data.ok && Array.isArray(data.stores)) {
+          var localCustoms = getCustomStores();
+          var localCustomMap = {};
+          localCustoms.forEach(function (st) {
+            if (st && st.id) localCustomMap[st.id] = st;
+          });
+
+          // Lọc các quán hợp lệ trên Sheet (bỏ qua quán đã đánh dấu xóa hoặc đang chờ xóa từ client)
+          var validSheetStores = data.stores.filter(function (st) {
+            if (!st || !st.id) return false;
+            if (st.deleted || st.active === 0 || st.name === '__DELETED__' || st.category === '__DELETED__') return false;
+            if (isStorePendingDelete(st.id)) return false;
+            return true;
+          });
+
+          var sheetStoreMap = {};
+          var nextCustoms = [];
+          var deletedBuiltins = getDeletedBuiltins();
+
+          validSheetStores.forEach(function (sheetStore) {
             var hadMonChinh = JSON.stringify(sheetStore).indexOf('monchinh') !== -1;
             sanitizeStore(sheetStore);
             if (hadMonChinh && sheetStore.id === 'vua-tron') {
               pushStoreToSheet(sheetStore);
             }
+            sheetStoreMap[sheetStore.id] = sheetStore;
+
             var bIdx = -1;
             for (var i = 0; i < BUILTIN_STORES.length; i++) {
               if (BUILTIN_STORES[i].id === sheetStore.id) { bIdx = i; break; }
@@ -341,27 +454,30 @@
               if ((!sheetStore.noteChips || !sheetStore.noteChips.length) && oldNoteChips.length) {
                 BUILTIN_STORES[bIdx].noteChips = oldNoteChips;
               }
+              // Nếu quán builtin có mặt trên Sheet (và không nằm trong pending delete), gỡ khỏi danh sách đã xóa
+              var dIdx = deletedBuiltins.indexOf(sheetStore.id);
+              if (dIdx !== -1) deletedBuiltins.splice(dIdx, 1);
             } else {
-              var cIdx = -1;
-              for (var j = 0; j < customs.length; j++) {
-                if (customs[j].id === sheetStore.id) { cIdx = j; break; }
-              }
-              if (cIdx !== -1) {
-                var oldCItems = customs[cIdx].items || [];
-                var oldCToppings = customs[cIdx].toppings || [];
-                var oldCNoteChips = customs[cIdx].noteChips || [];
-                Object.assign(customs[cIdx], sheetStore);
+              var prevCustom = localCustomMap[sheetStore.id];
+              if (prevCustom && !isStorePendingSave(sheetStore.id)) {
+                var oldCItems = prevCustom.items || [];
+                var oldCToppings = prevCustom.toppings || [];
+                var oldCNoteChips = prevCustom.noteChips || [];
+                var merged = Object.assign({}, prevCustom, sheetStore);
                 if ((!sheetStore.items || !sheetStore.items.length) && oldCItems.length) {
-                  customs[cIdx].items = oldCItems;
+                  merged.items = oldCItems;
                 }
                 if ((!sheetStore.toppings || !sheetStore.toppings.length) && oldCToppings.length) {
-                  customs[cIdx].toppings = oldCToppings;
+                  merged.toppings = oldCToppings;
                 }
                 if ((!sheetStore.noteChips || !sheetStore.noteChips.length) && oldCNoteChips.length) {
-                  customs[cIdx].noteChips = oldCNoteChips;
+                  merged.noteChips = oldCNoteChips;
                 }
+                nextCustoms.push(merged);
+              } else if (prevCustom && isStorePendingSave(sheetStore.id)) {
+                nextCustoms.push(prevCustom);
               } else {
-                customs.push(sheetStore);
+                nextCustoms.push(sheetStore);
               }
             }
 
@@ -390,11 +506,34 @@
               updateStoreBranding();
             }
           });
-          saveCustomStores(customs);
+
+          // Giữ lại các quán vừa mới lưu trên máy nhưng request POST lên Sheet chưa kịp hoàn tất
+          localCustoms.forEach(function (st) {
+            if (!st || !st.id) return;
+            if (!sheetStoreMap[st.id] && isStorePendingSave(st.id) && !isStorePendingDelete(st.id)) {
+              nextCustoms.push(st);
+            }
+          });
+
+          // Kiểm tra quán builtin phụ (như vua-tron): nếu bị xóa khỏi Sheet thì đánh dấu ẩn
+          BUILTIN_STORES.forEach(function (bst) {
+            if (bst.id !== 'uu-milktea' && !sheetStoreMap[bst.id] && !isStorePendingSave(bst.id)) {
+              if (deletedBuiltins.indexOf(bst.id) === -1) {
+                deletedBuiltins.push(bst.id);
+              }
+            }
+          });
+          saveDeletedBuiltins(deletedBuiltins);
+
+          saveCustomStores(nextCustoms);
           renderStoreListGrid();
 
-          // Nếu URL có chỉ định store và hiện tại chưa chuyển đúng
-          if (urlStoreId && (!currentStore || currentStore.id !== urlStoreId)) {
+          // Nếu quán đang mở đã bị xóa từ Sheet -> quay về quán mặc định uu-milktea
+          var allNow = getAllStores();
+          var activeStillExists = currentStore && allNow.some(function (s) { return s.id === currentStore.id; });
+          if (!activeStillExists) {
+            switchStore('uu-milktea', false);
+          } else if (urlStoreId && (!currentStore || currentStore.id !== urlStoreId)) {
             var target = getStoreById(urlStoreId);
             if (target && target.id === urlStoreId) {
               switchStore(target, false);
@@ -403,7 +542,7 @@
             switchStore(currentStore.id, false);
           }
 
-          if (!isSilent) showToast('✓ Đã đồng bộ ' + data.stores.length + ' quán từ Google Sheet!');
+          if (!isSilent) showToast('✓ Đã đồng bộ ' + allNow.length + ' quán từ Google Sheet!');
         }
       })
       .catch(function (err) {
@@ -414,24 +553,75 @@
   /* Đẩy quán mới / cập nhật lên Google Sheet */
   function pushStoreToSheet(storeObj) {
     var apiUrl = (typeof api === 'function' ? api() : (typeof DEFAULT_API !== 'undefined' ? DEFAULT_API : ''));
-    if (!apiUrl || !storeObj) return;
+    if (!apiUrl || !storeObj || !storeObj.id) return;
+    markStorePendingSave(storeObj.id);
+    var delBuiltins = getDeletedBuiltins();
+    var dbIdx = delBuiltins.indexOf(storeObj.id);
+    if (dbIdx !== -1) {
+      delBuiltins.splice(dbIdx, 1);
+      saveDeletedBuiltins(delBuiltins);
+    }
     try {
       fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'save_store', store: storeObj })
-      }).catch(function () {});
+      })
+        .then(function () { clearStorePendingSave(storeObj.id); })
+        .catch(function () {});
+    } catch (e) {}
+  }
+
+  /* Xóa quán trên Google Sheet (hỗ trợ cả bản Apps Script mới và fallback bản cũ) */
+  function deleteStoreFromSheet(storeId) {
+    if (!storeId || storeId === 'uu-milktea') return;
+    markStorePendingDelete(storeId);
+    var delBuiltins = getDeletedBuiltins();
+    if (delBuiltins.indexOf(storeId) === -1) {
+      delBuiltins.push(storeId);
+      saveDeletedBuiltins(delBuiltins);
+    }
+    var apiUrl = (typeof api === 'function' ? api() : (typeof DEFAULT_API !== 'undefined' ? DEFAULT_API : ''));
+    if (!apiUrl) return;
+    try {
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'delete_store', id: storeId })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok) {
+            clearStorePendingDelete(storeId);
+          } else {
+            // Fallback cho trường hợp Google Apps Script chưa redeploy action delete_store
+            return fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({
+                action: 'save_store',
+                store: { id: storeId, name: '__DELETED__', category: '__DELETED__', deleted: true, active: 0, categories: [], items: [], toppings: [] }
+              })
+            }).then(function () { clearStorePendingDelete(storeId); });
+          }
+        })
+        .catch(function () {});
     } catch (e) {}
   }
 
   function getAllStores() {
     var customs = getCustomStores();
+    var delBuiltins = getDeletedBuiltins();
     var map = {};
     BUILTIN_STORES.forEach(function (st) {
+      if (st.id !== 'uu-milktea' && (delBuiltins.indexOf(st.id) !== -1 || isStorePendingDelete(st.id))) return;
       sanitizeStore(st);
       map[st.id] = Object.assign({}, st);
     });
     customs.forEach(function (st) {
+      if (!st || !st.id) return;
+      if (st.deleted || st.name === '__DELETED__' || st.category === '__DELETED__' || isStorePendingDelete(st.id)) return;
+      if (st.id !== 'uu-milktea' && delBuiltins.indexOf(st.id) !== -1) return;
       sanitizeStore(st);
       map[st.id] = Object.assign(map[st.id] || {}, st);
       if (st.id === 'uu-milktea') {
@@ -834,7 +1024,7 @@
     'vt04': 'assets/img/vua-tron/banh-uot.webp'
   };
 
-  // Quản lý Identity người dùng: Mỗi tab/cửa sổ có danh tính độc lập (kể cả khi duplicate tab)
+  // Quản lý Identity người dùng: Bền vững qua localStorage để tắt tab mở lại vẫn sửa được món của mình
   var tabSessionId = '';
   try {
     tabSessionId = window.name;
@@ -847,11 +1037,16 @@
   }
 
   var myUid = '';
-  try { myUid = sessionStorage.getItem(tabSessionId + '_uid') || ''; } catch (e) {}
+  try {
+    myUid = localStorage.getItem('uu_pos_uid') || sessionStorage.getItem(tabSessionId + '_uid') || '';
+  } catch (e) {}
   if (!myUid) {
     myUid = 'u_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
-    try { sessionStorage.setItem(tabSessionId + '_uid', myUid); } catch (e) {}
   }
+  try {
+    localStorage.setItem('uu_pos_uid', myUid);
+    sessionStorage.setItem(tabSessionId + '_uid', myUid);
+  } catch (e) {}
 
   var myUname = '';
   try {
@@ -1013,9 +1208,13 @@
     return p.join(' · ');
   }
 
-  /* Kiểm tra quyền chỉnh sửa dòng */
+  /* Kiểm tra quyền chỉnh sửa dòng (khớp uid hoặc trùng tên hiển thị khi mở lại tab) */
   function canEditRow(c) {
-    return (!c.uid || c.uid === myUid);
+    if (!c.uid || c.uid === myUid) return true;
+    var myNameNorm = (myUname || '').trim().toLowerCase();
+    var rowNameNorm = (c.uname || c.owner || '').trim().toLowerCase();
+    if (myNameNorm && rowNameNorm && myNameNorm === rowNameNorm) return true;
+    return false;
   }
 
   var lidSeq = 0;
@@ -1108,12 +1307,530 @@
   }
 
   function writeInputs() {
-    if ($('customer')) $('customer').value = F.customer.v || '';
-    if ($('channel')) $('channel').value = F.channel.v || 'Ship';
-    if ($('payMethod')) $('payMethod').value = F.pay.v || 'Chuyển khoản';
+    if ($('customer')) $('customer').value = (F.customer && F.customer.v) || '';
+    if ($('channel')) $('channel').value = (F.channel && F.channel.v) || 'Ship';
+    if ($('payMethod')) $('payMethod').value = (F.pay && F.pay.v) || 'Chuyển khoản';
     if ($('discount')) $('discount').value = formatMoneyStr(F.disc ? F.disc.v : 0);
     if ($('shipFee')) $('shipFee').value = formatMoneyStr(F.ship ? F.ship.v : 0);
-    if ($('orderNote')) $('orderNote').value = F.note.v || '';
+    if ($('orderNote')) $('orderNote').value = (F.note && F.note.v) || '';
+    updateHostDropdownUI();
+  }
+
+  /* Cập nhật giao diện Checkbox Dropdown Người đại diện nhận đơn */
+  function getOrderParticipants() {
+    var map = {};
+    var unitStr = (currentStore && currentStore.itemUnit) || 'món';
+
+    // 1. Những người đã đặt món trong giỏ hàng
+    cart.forEach(function (c) {
+      var nm = (c.uname || c.owner || '').trim();
+      if (!nm) return;
+      var key = nm.toLowerCase();
+      if (!map[key]) {
+        map[key] = {
+          name: nm,
+          ucolor: (c.uid === myUid ? myUcolor : (c.ucolor || '#0A7259')),
+          count: 0,
+          isMe: (c.uid === myUid || nm.toLowerCase() === (myUname || '').trim().toLowerCase())
+        };
+      }
+      if (c.size !== 'TP') {
+        map[key].count += (c.qty || 1);
+      } else {
+        map[key].count += 1;
+      }
+    });
+
+    // 2. Bản thân người dùng hiện tại
+    if (myUname && myUname.trim()) {
+      var myKey = myUname.trim().toLowerCase();
+      if (!map[myKey]) {
+        map[myKey] = {
+          name: myUname.trim(),
+          ucolor: myUcolor || '#0A7259',
+          count: 0,
+          isMe: true
+        };
+      } else {
+        map[myKey].isMe = true;
+        map[myKey].ucolor = myUcolor || map[myKey].ucolor;
+      }
+    }
+
+    // 3. Những người đang online trong phòng bill
+    var now = Date.now();
+    Object.keys(onlineUsers).forEach(function (cid) {
+      var u = onlineUsers[cid];
+      if (!u || !u.uname || (now - (u.lastSeen || 0) > 12000)) return;
+      var uNameTrim = u.uname.trim();
+      if (!uNameTrim) return;
+      var k = uNameTrim.toLowerCase();
+      if (!map[k]) {
+        map[k] = {
+          name: uNameTrim,
+          ucolor: u.ucolor || '#0A7259',
+          count: 0,
+          isOnline: true
+        };
+      }
+    });
+
+    // 4. Nếu đang có tên đại diện đã chọn từ trước mà chưa nằm trong map thì vẫn hiển thị để có thể bỏ chọn
+    var curHost = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
+    if (curHost) {
+      var hk = curHost.toLowerCase();
+      if (!map[hk]) {
+        map[hk] = {
+          name: curHost,
+          ucolor: '#0A7259',
+          count: 0
+        };
+      }
+    }
+
+    return Object.keys(map).map(function (k) {
+      var item = map[k];
+      var metaParts = [];
+      if (item.isMe) metaParts.push('Bạn');
+      if (item.count > 0) metaParts.push(item.count + ' ' + unitStr);
+      else if (!item.isMe) metaParts.push('Đang xem');
+      item.metaText = metaParts.join(' · ');
+      return item;
+    });
+  }
+
+  function updateHostDropdownUI() {
+    var lbl = $('hostDropdownLabel');
+    var custInp = $('customer');
+    if (!lbl) return;
+    var val = (custInp ? custInp.value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
+    if (val) {
+      lbl.textContent = 'Đại diện: ' + val;
+      lbl.classList.remove('is-placeholder');
+    } else {
+      lbl.textContent = 'Chọn đại diện nhóm…';
+      lbl.classList.add('is-placeholder');
+    }
+    var panel = $('hostDropdownPanel');
+    if (panel && !panel.hidden) {
+      renderHostParticipantsList();
+    }
+  }
+
+  function renderHostParticipantsList() {
+    var listEl = $('hostParticipantsList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    var curHost = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
+    var participants = getOrderParticipants();
+
+    if (!participants.length) {
+      listEl.innerHTML = '<div class="host-empty-hint">Chưa có người tham gia nào trong đơn.</div>';
+      return;
+    }
+
+    participants.forEach(function (p) {
+      var isSelected = curHost && (curHost.toLowerCase() === p.name.toLowerCase());
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'host-participant-item' + (isSelected ? ' is-selected' : '');
+      btn.innerHTML =
+        '<span class="host-chk">' + (isSelected ? '✓' : '') + '</span>' +
+        '<span class="host-p-avatar" style="background-color:' + esc(p.ucolor) + ';">' + esc(userInitial(p.name)) + '</span>' +
+        '<span class="host-p-name">' + esc(p.name) + '</span>' +
+        (p.metaText ? '<span class="host-p-meta">' + esc(p.metaText) + '</span>' : '');
+
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        var nextVal = isSelected ? '' : p.name;
+        if ($('customer')) $('customer').value = nextVal;
+        fieldChanged('customer');
+        updateHostDropdownUI();
+        renderHostParticipantsList();
+        var panel = $('hostDropdownPanel');
+        var trigger = $('hostDropdownBtn');
+        if (panel) panel.hidden = true;
+        if (trigger) trigger.classList.remove('is-open');
+      };
+
+      listEl.appendChild(btn);
+    });
+  }
+
+  /* ================= ÂM THANH & BROADCAST HỐI ĐẶT HÀNG ================= */
+  var URGE_COOLDOWN_MS = 30000;
+  var URGE_VOICES = [
+    {
+      id: '1',
+      tag: '🔊 Gắt cực đại',
+      text: 'CHỐT ĐƠN! CHỐT ĐƠN ĐI CÁC CON VỢ ƠIIII!!!',
+      audio: 'assets/audio/1.mp3'
+    },
+    {
+      id: '2',
+      tag: '🔥 Chờ dài cổ',
+      text: 'Chốt đơn giùm cái! Các con vợ chờ dài cổ rồi!!!',
+      audio: 'assets/audio/2.mp3'
+    },
+    {
+      id: '3',
+      tag: '😩 Thở dài bất lực',
+      text: 'Haizzz... Đại diện ơi... Order đồ ăn thôi mà sao lâu dữ vậy...',
+      audio: 'assets/audio/3.mp3'
+    },
+    {
+      id: '4',
+      tag: '🥺 Ngắn gọn nhẹ nhàng',
+      text: 'Đại diện... Chốt đơn đi...',
+      audio: 'assets/audio/4.mp3'
+    },
+    {
+      id: '5',
+      tag: '🍽️ Nhắc khéo thực tế',
+      text: 'Đại diện chốt lẹ lên! Đồ ăn không tự mọc ra trên bàn đâu!!!',
+      audio: 'assets/audio/5.mp3'
+    }
+  ];
+
+  var seenUrgeIds = {};
+  var urgeCooldownUntil = 0;
+  var urgeCooldownTimer = null;
+  var selectedUrgeVoiceId = '1';
+  var lastReceivedUrgeVoiceId = '1';
+  var urgeAudioEl = null;
+  var urgePreviewAudioEl = null;
+  var previewingVoiceId = null;
+
+  try {
+    var savedVoice = localStorage.getItem('uu_urge_voice_id');
+    if (savedVoice && URGE_VOICES.some(function (v) { return v.id === savedVoice; })) {
+      selectedUrgeVoiceId = savedVoice;
+    }
+  } catch (e) {}
+
+  function getUrgeVoiceById(id) {
+    for (var i = 0; i < URGE_VOICES.length; i++) {
+      if (URGE_VOICES[i].id === String(id)) return URGE_VOICES[i];
+    }
+    return URGE_VOICES[0];
+  }
+
+  function urgeStorageKey() {
+    return 'uu_urge_until_' + (orderCode || 'default');
+  }
+
+  function syncUrgeCooldownFromStorage() {
+    urgeCooldownUntil = 0;
+    try {
+      var stored = Number(localStorage.getItem(urgeStorageKey()) || 0);
+      if (stored > Date.now()) {
+        urgeCooldownUntil = stored;
+      } else {
+        localStorage.removeItem(urgeStorageKey());
+      }
+    } catch (e) {}
+    updateUrgeCooldownUI();
+  }
+
+  function getUrgeRemainingSec() {
+    var rem = urgeCooldownUntil - Date.now();
+    return rem > 0 ? Math.ceil(rem / 1000) : 0;
+  }
+
+  function startUrgeCooldown(durationMs) {
+    var ms = Math.max(0, Number(durationMs) || 0);
+    if (ms <= 0) return;
+    var nextUntil = Date.now() + ms;
+    if (nextUntil > urgeCooldownUntil) {
+      urgeCooldownUntil = nextUntil;
+      try {
+        localStorage.setItem(urgeStorageKey(), String(urgeCooldownUntil));
+      } catch (e) {}
+    }
+    updateUrgeCooldownUI();
+    if (!urgeCooldownTimer) {
+      urgeCooldownTimer = setInterval(function () {
+        if (getUrgeRemainingSec() <= 0) {
+          urgeCooldownUntil = 0;
+          clearInterval(urgeCooldownTimer);
+          urgeCooldownTimer = null;
+          try { localStorage.removeItem(urgeStorageKey()); } catch (e) {}
+        }
+        updateUrgeCooldownUI();
+      }, 500);
+    }
+  }
+
+  function updateUrgeCooldownUI() {
+    var sec = getUrgeRemainingSec();
+    var isCooling = sec > 0;
+
+    var topBtn = $('btnUrgeTopbar');
+    var topTxt = $('urgeTopbarText');
+    if (topBtn) topBtn.classList.toggle('is-cooldown', isCooling);
+    if (topTxt) topTxt.textContent = isCooling ? ('Hối đặt hàng (' + sec + 's)') : 'Hối đặt hàng';
+
+    var inlineBtn = $('btnUrgeOrder');
+    var inlineTxt = $('urgeInlineText');
+    if (inlineBtn) inlineBtn.classList.toggle('is-cooldown', isCooling);
+    if (inlineTxt) inlineTxt.textContent = isCooling ? ('Hối (' + sec + 's)') : 'Hối đặt hàng';
+
+    var box = $('urgeCooldownBox');
+    var boxTxt = $('urgeCooldownText');
+    if (box) box.hidden = !isCooling;
+    if (boxTxt && isCooling) {
+      boxTxt.textContent = 'Cả nhóm vừa phát loa hối xong. Vui lòng đợi ' + sec + 's nữa để tránh spam voice!';
+    }
+
+    var sendBtn = $('btnConfirmUrgeSend');
+    var sendTxt = $('btnConfirmUrgeText');
+    if (sendBtn) sendBtn.disabled = isCooling;
+    if (sendTxt) sendTxt.textContent = isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa hối ngay';
+  }
+
+  function stopPreviewAudio() {
+    if (urgePreviewAudioEl) {
+      try {
+        urgePreviewAudioEl.pause();
+        urgePreviewAudioEl.currentTime = 0;
+      } catch (e) {}
+    }
+    previewingVoiceId = null;
+    updatePreviewButtonsUI();
+  }
+
+  function updatePreviewButtonsUI() {
+    document.querySelectorAll('.btn-preview-voice').forEach(function (btn) {
+      var playing = (previewingVoiceId && btn.dataset.voiceId === previewingVoiceId);
+      btn.classList.toggle('is-playing', !!playing);
+      btn.textContent = playing ? '⏹ Dừng' : '▶ Nghe thử';
+    });
+  }
+
+  function togglePreviewVoice(voiceId) {
+    if (previewingVoiceId === voiceId) {
+      stopPreviewAudio();
+      return;
+    }
+    stopPreviewAudio();
+    var voice = getUrgeVoiceById(voiceId);
+    previewingVoiceId = voice.id;
+    updatePreviewButtonsUI();
+    try {
+      urgePreviewAudioEl = new Audio(voice.audio);
+      urgePreviewAudioEl.onended = function () {
+        previewingVoiceId = null;
+        updatePreviewButtonsUI();
+      };
+      urgePreviewAudioEl.onerror = function () {
+        previewingVoiceId = null;
+        updatePreviewButtonsUI();
+        showToast('Không phát được file ' + voice.audio);
+      };
+      var p = urgePreviewAudioEl.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function () {
+          previewingVoiceId = null;
+          updatePreviewButtonsUI();
+          playSynthesizedUrgeBell();
+        });
+      }
+    } catch (e) {
+      previewingVoiceId = null;
+      updatePreviewButtonsUI();
+    }
+  }
+
+  function renderUrgeVoiceList() {
+    var list = $('urgeVoiceList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    URGE_VOICES.forEach(function (v) {
+      var isSel = (v.id === selectedUrgeVoiceId);
+      var card = document.createElement('div');
+      card.className = 'urge-voice-card' + (isSel ? ' is-selected' : '');
+      card.innerHTML =
+        '<div class="urge-voice-radio"></div>' +
+        '<div class="urge-voice-info">' +
+          '<div class="urge-voice-top">' +
+            '<span class="urge-voice-num">Mẫu #' + esc(v.id) + '</span>' +
+            '<span class="urge-voice-tag">' + esc(v.tag) + '</span>' +
+          '</div>' +
+          '<div class="urge-voice-text">"' + esc(v.text) + '"</div>' +
+        '</div>' +
+        '<button type="button" class="btn-preview-voice" data-voice-id="' + esc(v.id) + '">▶ Nghe thử</button>';
+
+      card.onclick = function (e) {
+        if (e.target.closest('.btn-preview-voice')) return;
+        selectedUrgeVoiceId = v.id;
+        try { localStorage.setItem('uu_urge_voice_id', selectedUrgeVoiceId); } catch (err) {}
+        renderUrgeVoiceList();
+      };
+
+      var btnPrev = card.querySelector('.btn-preview-voice');
+      if (btnPrev) {
+        btnPrev.onclick = function (e) {
+          e.stopPropagation();
+          selectedUrgeVoiceId = v.id;
+          try { localStorage.setItem('uu_urge_voice_id', selectedUrgeVoiceId); } catch (err) {}
+          document.querySelectorAll('.urge-voice-card').forEach(function (c, idx) {
+            c.classList.toggle('is-selected', URGE_VOICES[idx].id === selectedUrgeVoiceId);
+          });
+          togglePreviewVoice(v.id);
+        };
+      }
+
+      list.appendChild(card);
+    });
+
+    updatePreviewButtonsUI();
+  }
+
+  function openUrgeModal() {
+    var modal = $('urgeModal');
+    if (!modal) return;
+    renderUrgeVoiceList();
+    updateUrgeCooldownUI();
+    modal.hidden = false;
+  }
+
+  function closeUrgeModal() {
+    stopPreviewAudio();
+    var modal = $('urgeModal');
+    if (modal) modal.hidden = true;
+  }
+
+  function playSynthesizedUrgeBell() {
+    try {
+      var AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      var ctx = new AudioCtx();
+      var notes = [
+        { freq: 880, start: 0, dur: 0.12 },
+        { freq: 1174.66, start: 0.14, dur: 0.12 },
+        { freq: 1318.51, start: 0.28, dur: 0.16 },
+        { freq: 1760, start: 0.46, dur: 0.32 }
+      ];
+      notes.forEach(function (n) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(n.freq, ctx.currentTime + n.start);
+        gain.gain.setValueAtTime(0.001, ctx.currentTime + n.start);
+        gain.gain.exponentialRampToValueAtTime(0.28, ctx.currentTime + n.start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + n.start + n.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + n.start);
+        osc.stop(ctx.currentTime + n.start + n.dur + 0.02);
+      });
+    } catch (e) {}
+  }
+
+  function playUrgeSound(voiceId, onBlocked) {
+    stopPreviewAudio();
+    var voice = getUrgeVoiceById(voiceId);
+    var replayBtn = $('btnReplayUrgeAudio');
+    if (replayBtn) {
+      replayBtn.classList.remove('is-urgent');
+      replayBtn.textContent = '🔊 Nghe';
+    }
+    try {
+      if (urgeAudioEl) {
+        try { urgeAudioEl.pause(); } catch (e) {}
+      }
+      urgeAudioEl = new Audio(voice.audio);
+      urgeAudioEl.currentTime = 0;
+      var playPromise = urgeAudioEl.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(function () {
+          if (replayBtn) {
+            replayBtn.classList.add('is-urgent');
+            replayBtn.textContent = '🔊 Bấm nghe!';
+          }
+          if (typeof onBlocked === 'function') onBlocked();
+          playSynthesizedUrgeBell();
+        });
+      }
+    } catch (e) {
+      playSynthesizedUrgeBell();
+    }
+  }
+
+  function triggerUrgeAlert(senderName, customText, urgeId, voiceId, cooldownMs) {
+    if (urgeId) {
+      if (seenUrgeIds[urgeId]) return;
+      seenUrgeIds[urgeId] = Date.now();
+    }
+    var voice = getUrgeVoiceById(voiceId);
+    lastReceivedUrgeVoiceId = voice.id;
+
+    // Áp dụng khóa 30s toàn phòng ngay khi bất kỳ subscriber nào phát thoại
+    startUrgeCooldown(cooldownMs || URGE_COOLDOWN_MS);
+
+    playUrgeSound(voice.id);
+
+    var banner = $('urgeAlertBanner');
+    var titleEl = $('urgeAlertTitle');
+    var subEl = $('urgeAlertSub');
+    var who = senderName || 'Đồng nghiệp';
+    if (titleEl) titleEl.textContent = '📣 ' + who + ' hối chốt đơn!';
+    if (subEl) {
+      subEl.textContent = customText || voice.text;
+    }
+    if (banner) {
+      banner.hidden = false;
+      clearTimeout(banner._hideTimer);
+      banner._hideTimer = setTimeout(function () {
+        banner.hidden = true;
+      }, 9000);
+    }
+
+    var cartSec = $('cartSection');
+    if (cartSec) {
+      cartSec.classList.remove('is-urged');
+      void cartSec.offsetWidth;
+      cartSec.classList.add('is-urged');
+      setTimeout(function () { cartSec.classList.remove('is-urged'); }, 1200);
+    }
+  }
+
+  function sendUrgeOrder() {
+    var remSec = getUrgeRemainingSec();
+    if (remSec > 0) {
+      updateUrgeCooldownUI();
+      showToast('⏳ Chống spam: Vui lòng đợi ' + remSec + 's nữa mới gửi thoại tiếp được!');
+      return;
+    }
+
+    var voice = getUrgeVoiceById(selectedUrgeVoiceId);
+    var now = Date.now();
+    var urgeId = 'urge_' + clientId + '_' + now;
+
+    closeUrgeModal();
+    triggerUrgeAlert(myUname + ' (Bạn)', voice.text, urgeId, voice.id, URGE_COOLDOWN_MS);
+
+    // Broadcast qua cả presence (tương thích worker cũ/mới) và event urge
+    var payload = {
+      type: 'presence',
+      kind: 'presence',
+      bill: orderCode,
+      uid: myUid,
+      uname: myUname,
+      ucolor: myUcolor,
+      from: clientId,
+      urge: true,
+      urgeId: urgeId,
+      urgeVoiceId: voice.id,
+      urgeText: voice.text,
+      ts: now
+    };
+    try { if (bc) bc.postMessage(payload); } catch (e) {}
+    if (ws && wsOk) {
+      try { ws.send(JSON.stringify(payload)); } catch (e) {}
+    }
   }
 
   function fieldChanged(inputId) {
@@ -1193,6 +1910,10 @@
       lastSeen: Date.now()
     };
 
+    if (d.urge) {
+      triggerUrgeAlert(d.uname || 'Đồng nghiệp', d.urgeText, d.urgeId, d.urgeVoiceId, d.urgeCooldownMs);
+    }
+
     if (d.lid !== undefined) {
       var fKey = d.uid || cid;
       if (d.lid) {
@@ -1209,6 +1930,7 @@
       renderCartFocusIndicators();
     }
     renderPresenceBar();
+    updateHostDropdownUI();
   }
 
   function renderPresenceBar() {
@@ -1252,17 +1974,13 @@
   function onRemote(wrap, from, dev) {
     if (!wrap || from === clientId) return;
     var authorName = (wrap && wrap.dev) || dev || 'Bạn bè';
-    var hostVal = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
-    if (hostVal && (authorName === 'Đại Gia Trà Sữa' || FUN_NAMES.indexOf(authorName) !== -1 || (wrap && wrap.by && F.customer && F.customer.by === wrap.by))) {
-      authorName = hostVal;
-    }
     if (from) {
       if (!onlineUsers[from]) {
         onlineUsers[from] = {
           cid: from,
           uid: (wrap && wrap.by) || from,
           uname: authorName,
-          ucolor: '#0A7259',
+          ucolor: (wrap && wrap.ucolor) || '#0A7259',
           lastSeen: Date.now()
         };
       } else {
@@ -1280,11 +1998,7 @@
       } finally {
         applying = false;
       }
-      var latestHost = ($('customer') ? $('customer').value.trim() : '') || (F.customer && F.customer.v ? F.customer.v.trim() : '');
       var sender = m.dev || dev || authorName || 'bạn bè';
-      if (latestHost && (sender === 'Đại Gia Trà Sữa' || FUN_NAMES.indexOf(sender) !== -1 || (wrap && wrap.by && F.customer && F.customer.by === wrap.by))) {
-        sender = latestHost;
-      }
       setSyncSt('Cập nhật từ ' + sender);
       if (m.needsPush) schedulePush();
     }
@@ -1441,9 +2155,24 @@
         renderPresenceBar();
       } else if (d.type === 'presence') {
         onRemotePresence(d);
+      } else if (d.type === 'urge') {
+        triggerUrgeAlert(d.uname || 'Đồng nghiệp', d.urgeText, d.urgeId, d.urgeVoiceId, d.urgeCooldownMs);
+      } else if (d.type === 'urge_rejected') {
+        startUrgeCooldown(d.remainingMs || URGE_COOLDOWN_MS);
+        var rejSec = Math.ceil((Number(d.remainingMs) || 0) / 1000);
+        showToast('⏳ Chống spam: Cả nhóm cần đợi ' + rejSec + 's nữa mới gửi thoại tiếp được!');
+      } else if (d.type === 'urge_cooldown') {
+        startUrgeCooldown(d.remainingMs);
       } else if (d.type === 'reset') {
         cart = [];
         cartDel = {};
+        F = {};
+        if ($('customer')) $('customer').value = '';
+        if ($('orderNote')) $('orderNote').value = '';
+        if ($('discount')) $('discount').value = '0';
+        if ($('shipFee')) $('shipFee').value = '0';
+        initFields();
+        writeInputs();
         renderCart();
         showToast('Bill đã được làm mới');
       }
@@ -1487,6 +2216,8 @@
             onRemote(d.wrap, d.from);
           } else if (d.kind === 'presence') {
             onRemotePresence(d);
+          } else if (d.kind === 'urge') {
+            triggerUrgeAlert(d.uname || 'Đồng nghiệp', d.urgeText, d.urgeId, d.urgeVoiceId, d.urgeCooldownMs);
           } else if (d.kind === 'peer_left') {
             var lcid = d.from || d.uid;
             if (lcid && onlineUsers[lcid]) delete onlineUsers[lcid];
@@ -2028,6 +2759,14 @@
           var m = menuById(c.id);
           openItemCustomizer(m, c, c.size === 'TP');
         };
+      } else {
+        itemCol.onclick = function () {
+          var ownerLabel = c.uname || c.owner || 'người đặt';
+          if (confirm('Món này của "' + ownerLabel + '". Bạn có muốn mở chỉnh sửa món này không?')) {
+            var m = menuById(c.id);
+            openItemCustomizer(m, c, c.size === 'TP');
+          }
+        };
       }
       li.appendChild(itemCol);
 
@@ -2072,8 +2811,8 @@
       } else {
         var locked = document.createElement('span');
         locked.className = 'c-qlocked';
-        locked.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
-        locked.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' + c.qty + 'x';
+        locked.title = 'Món của ' + (c.uname || 'bạn khác') + ' (Bấm biểu tượng bút bên phải nếu cần sửa)';
+        locked.innerHTML = c.qty + 'x';
         qtyCol.appendChild(locked);
       }
       li.appendChild(qtyCol);
@@ -2084,7 +2823,7 @@
       priceCol.textContent = fmtK(lineTotal(c));
       li.appendChild(priceCol);
 
-      // 5. Thao tác (Sửa / Xóa hoặc Khóa)
+      // 5. Thao tác (Sửa / Xóa)
       var actCol = document.createElement('div');
       actCol.className = 'c-acts';
       if (isMine) {
@@ -2112,11 +2851,35 @@
         actCol.appendChild(btnEdit);
         actCol.appendChild(btnDel);
       } else {
-        var iconLock = document.createElement('span');
-        iconLock.className = 'c-lock-icon';
-        iconLock.title = 'Chỉ ' + (c.uname || 'chủ món') + ' mới có quyền sửa';
-        iconLock.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
-        actCol.appendChild(iconLock);
+        var btnUnlockEdit = document.createElement('button');
+        btnUnlockEdit.className = 'c-abtn unlock-edit';
+        btnUnlockEdit.title = 'Mở chỉnh sửa món của ' + (c.uname || 'bạn khác');
+        btnUnlockEdit.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+        btnUnlockEdit.onclick = function (e) {
+          e.stopPropagation();
+          var ownerLabel = c.uname || c.owner || 'người đặt';
+          if (confirm('Món này của "' + ownerLabel + '". Bạn có muốn chỉnh sửa món này không?')) {
+            var m = menuById(c.id);
+            openItemCustomizer(m, c, c.size === 'TP');
+          }
+        };
+
+        var btnUnlockDel = document.createElement('button');
+        btnUnlockDel.className = 'c-abtn del unlock-edit';
+        btnUnlockDel.title = 'Xóa món của ' + (c.uname || 'bạn khác');
+        btnUnlockDel.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        btnUnlockDel.onclick = function (e) {
+          e.stopPropagation();
+          var ownerLabel = c.uname || c.owner || 'người đặt';
+          if (confirm('Bạn có chắc muốn xóa món "' + c.name + '" của "' + ownerLabel + '" khỏi bill?')) {
+            tomb(c);
+            cart.splice(idx, 1);
+            renderCart();
+          }
+        };
+
+        actCol.appendChild(btnUnlockEdit);
+        actCol.appendChild(btnUnlockDel);
       }
       li.appendChild(actCol);
 
@@ -2142,6 +2905,7 @@
 
     if ($('orderCode')) $('orderCode').textContent = orderCode;
 
+    updateHostDropdownUI();
     renderCartFocusIndicators();
     schedulePush();
   }
@@ -3069,7 +3833,15 @@
             cart = [];
             cartDel = {};
             F = {};
+            onlineUsers = {};
+            remoteFocus = {};
+            if ($('customer')) $('customer').value = '';
+            if ($('orderNote')) $('orderNote').value = '';
+            if ($('discount')) $('discount').value = '0';
+            if ($('shipFee')) $('shipFee').value = '0';
             initFields();
+            writeInputs();
+            syncUrgeCooldownFromStorage();
             switchStore(st.id, false);
             setupLive();
             renderCart();
@@ -3096,14 +3868,15 @@
       if (btnDel) {
         btnDel.onclick = function (e) {
           e.stopPropagation();
-          if (!confirm('Bạn có chắc muốn xóa quán "' + st.name + '" khỏi danh sách yêu thích?')) return;
+          if (!confirm('Bạn có chắc muốn xóa quán "' + st.name + '" khỏi danh sách yêu thích và Google Sheet?')) return;
           var customs = getCustomStores().filter(function (x) { return x.id !== st.id; });
           saveCustomStores(customs);
-          if (currentStore.id === st.id) {
+          deleteStoreFromSheet(st.id);
+          if (currentStore && currentStore.id === st.id) {
             switchStore('uu-milktea', true);
           }
           renderStoreListGrid();
-          showToast('Đã xóa quán ' + st.name);
+          showToast('✓ Đã xóa quán "' + st.name + '" và đồng bộ Google Sheet!');
         };
       }
 
@@ -3601,7 +4374,15 @@
         cart = [];
         cartDel = {};
         F = {};
+        onlineUsers = {};
+        remoteFocus = {};
+        if ($('customer')) $('customer').value = '';
+        if ($('orderNote')) $('orderNote').value = '';
+        if ($('discount')) $('discount').value = '0';
+        if ($('shipFee')) $('shipFee').value = '0';
         initFields();
+        writeInputs();
+        syncUrgeCooldownFromStorage();
         switchStore(storeObj, false);
         setupLive();
         renderCart();
@@ -3641,33 +4422,65 @@
       el.value = num > 0 ? num.toLocaleString('vi-VN') : '0';
     });
   });
-  ['customer', 'orderNote'].forEach(function (id) {
-    if ($(id)) {
-      $(id).addEventListener('input', function () {
-        if (id === 'customer') {
-          var val = $('customer').value.trim();
-          if (val) {
-            myUname = val;
-            try {
-              sessionStorage.setItem('uu_pos_tab_uname', myUname);
-              sessionStorage.setItem(tabSessionId + '_uname', myUname);
-              localStorage.setItem('uu_pos_uname', myUname);
-            } catch (e) {}
-            updateMyProfileUI();
-            cart.forEach(function (c) {
-              if (c.uid === myUid) {
-                c.uname = val;
-                c.owner = val;
-                touch(c);
-              }
-            });
-          }
-        }
-        fieldChanged(id);
-      });
-      $(id).addEventListener('change', function () { fieldChanged(id); });
-    }
+  if ($('orderNote')) {
+    $('orderNote').addEventListener('input', function () { fieldChanged('orderNote'); });
+    $('orderNote').addEventListener('change', function () { fieldChanged('orderNote'); });
+  }
+
+  // Host Participant Checkbox Dropdown
+  if ($('hostDropdownBtn')) {
+    $('hostDropdownBtn').onclick = function (e) {
+      e.stopPropagation();
+      var panel = $('hostDropdownPanel');
+      if (!panel) return;
+      var willOpen = panel.hidden;
+      if (willOpen) {
+        renderHostParticipantsList();
+        panel.hidden = false;
+        $('hostDropdownBtn').classList.add('is-open');
+      } else {
+        panel.hidden = true;
+        $('hostDropdownBtn').classList.remove('is-open');
+      }
+    };
+  }
+  if ($('hostDropdownPanel')) {
+    $('hostDropdownPanel').onclick = function (e) {
+      e.stopPropagation();
+    };
+  }
+  document.addEventListener('click', function () {
+    var hp = $('hostDropdownPanel');
+    var hb = $('hostDropdownBtn');
+    if (hp) hp.hidden = true;
+    if (hb) hb.classList.remove('is-open');
   });
+
+  // Nút Hối Đặt Hàng (Mở modal chọn mẫu thoại & broadcast chống spam 30s)
+  if ($('btnUrgeTopbar')) {
+    $('btnUrgeTopbar').onclick = openUrgeModal;
+  }
+  if ($('btnUrgeOrder')) {
+    $('btnUrgeOrder').onclick = openUrgeModal;
+  }
+  if ($('btnCloseUrgeModal')) $('btnCloseUrgeModal').onclick = closeUrgeModal;
+  if ($('btnCancelUrgeModal')) $('btnCancelUrgeModal').onclick = closeUrgeModal;
+  if ($('btnConfirmUrgeSend')) $('btnConfirmUrgeSend').onclick = sendUrgeOrder;
+  if ($('urgeModal')) {
+    $('urgeModal').onclick = function (e) {
+      if (e.target === $('urgeModal')) closeUrgeModal();
+    };
+  }
+  if ($('btnReplayUrgeAudio')) {
+    $('btnReplayUrgeAudio').onclick = function () {
+      playUrgeSound(lastReceivedUrgeVoiceId);
+    };
+  }
+  if ($('btnCloseUrgeAlert')) {
+    $('btnCloseUrgeAlert').onclick = function () {
+      if ($('urgeAlertBanner')) $('urgeAlertBanner').hidden = true;
+    };
+  }
 
   // Share bill link
   if ($('btnShare')) {
@@ -3714,11 +4527,13 @@
       } catch (e) {}
       updateMyProfileUI();
 
+      // Nếu bản thân đang được chọn làm người đại diện dưới tên cũ thì cập nhật theo tên mới
       if ($('customer')) {
         var curCust = $('customer').value.trim();
-        if (!curCust || curCust === oldName || FUN_NAMES.indexOf(curCust) !== -1) {
+        if (curCust && curCust === oldName) {
           $('customer').value = newName;
           fieldChanged('customer');
+          updateHostDropdownUI();
         }
       }
 
@@ -3757,6 +4572,9 @@
     if (cart.length && !confirm('Tạo bill mới? Bill hiện tại sẽ không bị ảnh hưởng.')) return;
     cart = [];
     cartDel = {};
+    F = {};
+    onlineUsers = {};
+    remoteFocus = {};
     orderCode = newOrderCode();
     updateUrlParams();
     if ($('customer')) $('customer').value = '';
@@ -3764,6 +4582,8 @@
     if ($('discount')) $('discount').value = '0';
     if ($('shipFee')) $('shipFee').value = '0';
     initFields();
+    writeInputs();
+    syncUrgeCooldownFromStorage();
     renderCart();
     wsConnect();
     showToast('Đã tạo bill mới: ' + orderCode);
@@ -4042,6 +4862,7 @@
   renderCart();
   fetchMenuFromSheet();
   syncStoresFromSheet(true);
+  syncUrgeCooldownFromStorage();
   setupLive();
 
 })();

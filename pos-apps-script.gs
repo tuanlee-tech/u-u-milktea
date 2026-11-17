@@ -186,6 +186,7 @@ function getStoresList_() {
   for (var i = 1; i < rows.length; i++) {
     var r = rows[i];
     if (Number(r[9]) === 0) continue; // active = 0 thì ẩn
+    if (String(r[1] || '') === '__DELETED__' || String(r[4] || '') === '__DELETED__') continue;
     var st = {
       id: String(r[0] || ''),
       name: String(r[1] || ''),
@@ -224,8 +225,28 @@ function getStoresList_() {
   return out;
 }
 
+function deleteStore_(storeId) {
+  if (!storeId || storeId === 'uu-milktea') return {ok:false, error:'Không thể xóa quán mặc định'};
+  var sh = quanSheet_();
+  var n = sh.getLastRow();
+  var deleted = false;
+  if (n > 1) {
+    var ids = sh.getRange(2, 1, n - 1, 1).getValues();
+    for (var i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0]) === String(storeId)) {
+        sh.deleteRow(i + 2);
+        deleted = true;
+      }
+    }
+  }
+  return {ok:true, id:storeId, deleted:deleted};
+}
+
 function saveStore_(st) {
   if (!st || !st.id) return {ok:false, error:'Mã quán không hợp lệ'};
+  if (st.deleted || st.active === 0 || st.name === '__DELETED__' || st.category === '__DELETED__') {
+    return deleteStore_(st.id);
+  }
   var sh = quanSheet_();
   var n = sh.getLastRow();
   var now = new Date().toISOString();
@@ -291,6 +312,7 @@ function doPost(e) {
     var body = JSON.parse(e.postData.contents);
     if (body.action === 'save') return saveOrder_(body.order);
     if (body.action === 'save_store') return json_(saveStore_(body.store));
+    if (body.action === 'delete_store') return json_(deleteStore_(body.id || (body.store && body.store.id)));
     if (body.action === 'save_stores_batch') return json_(saveStoresBatch_(body.stores));
     if (body.action === 'state') {
       var t = setState_(body.key || '', body.value || '');

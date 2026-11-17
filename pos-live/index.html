@@ -144,6 +144,17 @@
           </svg>
         </button>
 
+        <!-- Urge Order Broadcast Button -->
+        <button class="btn btn-urge-top" id="btnUrgeTopbar" type="button" title="Chọn mẫu thoại & bắn loa hối mọi người chốt đơn gửi chủ quán">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            <path d="M2 8c0-2.2.7-4.3 2-6"/>
+            <path d="M22 8a10 10 0 0 0-2-6"/>
+          </svg>
+          <span class="text" id="urgeTopbarText">Hối đặt hàng</span>
+        </button>
+
         <!-- Share Bill Link with SVG -->
         <button class="btn btn-share" id="btnShare" type="button" title="Copy link để mời bạn bè cùng chọn món">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -215,13 +226,35 @@
           </div>
           <div class="cart-sub-row">
             <span class="live-indicator"><span class="dot-live"></span> <span id="syncSt">Realtime</span></span>
-            <button class="btn-text-sm" id="btnNewInline" type="button">+ Tạo bill mới</button>
+            <div class="cart-sub-actions">
+              <button class="btn-urge-inline" id="btnUrgeOrder" type="button" title="Chọn mẫu thoại & phát loa hối mọi người chốt đơn gửi chủ quán">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span id="urgeInlineText">Hối đặt hàng</span>
+              </button>
+              <button class="btn-text-sm" id="btnNewInline" type="button">+ Tạo bill mới</button>
+            </div>
           </div>
         </div>
 
-        <!-- Inputs: Host Name & Order Note -->
+        <!-- Inputs: Host Name (Checkbox Dropdown of Participants) & Order Note -->
         <div class="cart-meta-bar">
-          <input id="customer" type="text" placeholder="Tên đại diện nhóm / Host…" autocomplete="off" title="Tên người đại diện nhận hàng">
+          <div class="host-dropdown-wrap" id="hostDropdownWrap">
+            <input id="customer" type="hidden" value="">
+            <button type="button" class="host-dropdown-btn" id="hostDropdownBtn" title="Chọn người đại diện nhận hàng từ danh sách người tham gia">
+              <span class="host-dropdown-icon">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+              </span>
+              <span class="host-dropdown-label is-placeholder" id="hostDropdownLabel">Chọn đại diện nhóm…</span>
+              <svg class="host-dropdown-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="host-dropdown-panel" id="hostDropdownPanel" hidden>
+              <div class="host-dropdown-head">
+                <strong>Chọn người đại diện nhận đơn</strong>
+                <span>Phạm vi: Người tham gia đặt món trong bill</span>
+              </div>
+              <div class="host-participants-list" id="hostParticipantsList"></div>
+            </div>
+          </div>
           <input id="orderNote" type="text" placeholder="Ghi chú đơn (vd: lầu 3, giao lúc 14h30)…" autocomplete="off">
         </div>
 
@@ -789,6 +822,61 @@ Tóp mỡ thêm 5k"></textarea>
       </div>
     </div>
   </div>
+</div>
+
+<!-- MODAL 6: CHỌN MẪU THOẠI HỐI ĐẶT HÀNG -->
+<div class="modal" id="urgeModal" hidden>
+  <div class="modal-box urge-modal-box">
+    <div class="modal-head">
+      <div>
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-4px;margin-right:6px;">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            <path d="M2 8c0-2.2.7-4.3 2-6"/>
+            <path d="M22 8a10 10 0 0 0-2-6"/>
+          </svg>
+          Phát Loa Hối Chốt Đơn
+        </h3>
+        <p class="modal-sub">Chọn mẫu thoại gửi tới toàn bộ mọi người đang trong bill (Chống spam: 30s / lần cho cả nhóm)</p>
+      </div>
+      <button class="btn-close" id="btnCloseUrgeModal" type="button" aria-label="Đóng">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="urge-cooldown-box" id="urgeCooldownBox" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="urgeCooldownText">Cả nhóm vừa phát loa hối xong. Đợi 30s nữa để tránh spam nhé!</span>
+      </div>
+      <div class="urge-voice-list" id="urgeVoiceList"></div>
+    </div>
+    <div class="modal-footer urge-modal-footer">
+      <button class="btn ghost" id="btnCancelUrgeModal" type="button">Đóng</button>
+      <button class="btn btn-urge-send" id="btnConfirmUrgeSend" type="button">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        <span id="btnConfirmUrgeText">Phát loa hối ngay</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- URGE BROADCAST ALERT BANNER -->
+<div class="urge-alert-banner" id="urgeAlertBanner" hidden>
+  <div class="urge-alert-icon">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+      <path d="M2 8c0-2.2.7-4.3 2-6"/>
+      <path d="M22 8a10 10 0 0 0-2-6"/>
+    </svg>
+  </div>
+  <div class="urge-alert-content">
+    <strong id="urgeAlertTitle">Hối chốt đơn!</strong>
+    <span id="urgeAlertSub">Ai là người cuối cùng đặt xong nhớ báo chốt bill gửi chủ quán nhé!</span>
+  </div>
+  <button type="button" class="urge-alert-replay" id="btnReplayUrgeAudio" title="Nghe lại tiếng thoại hối">🔊 Nghe</button>
+  <button type="button" class="urge-alert-close" id="btnCloseUrgeAlert" aria-label="Đóng">✕</button>
 </div>
 
 <!-- TOAST NOTIFICATION -->

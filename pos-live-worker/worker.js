@@ -1,17 +1,22 @@
 /* POS Live relay — chay tren Cloudflare Workers + Durable Objects.
  * Moi bill (?bill=MÃ) la 1 phong, tu gop o client, server chi chuyen tiep. */
 
+const URGE_COOLDOWN_MS = 30000;
+
 export class LiveRoom {
   constructor(state) {
     this.state = state;
     this.bill = '';
     this.last = null;
+    this.lastUrgeAt = 0;
     this.presence = {}; // cid -> { cid, uid, uname, ucolor, lastSeen }
     this.state.blockConcurrencyWhile(async () => {
       try {
         this.last = (await this.state.storage.get('last')) || null;
+        this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0;
       } catch (e) {
         this.last = null;
+        this.lastUrgeAt = 0;
       }
     });
   }
@@ -70,6 +75,20 @@ export class LiveRoom {
           ws.send(JSON.stringify({ type: 'presence_list', bill: this.bill, users: this.presence }));
         } catch (e) {}
       }
+      // Inform newly joined peer if room urge cooldown is active
+      if (!this.lastUrgeAt) {
+        try { this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0; } catch (e) {}
+      }
+      const helloElapsed = Date.now() - (this.lastUrgeAt || 0);
+      if (this.lastUrgeAt > 0 && helloElapsed < URGE_COOLDOWN_MS) {
+        try {
+          ws.send(JSON.stringify({
+            type: 'urge_cooldown',
+            bill: this.bill,
+            remainingMs: URGE_COOLDOWN_MS - helloElapsed
+          }));
+        } catch (e) {}
+      }
       // Broadcast peer_joined to all other clients in this bill room
       const peerMsg = JSON.stringify({
         type: 'peer_joined',
@@ -115,7 +134,31 @@ export class LiveRoom {
           lastSeen: Date.now()
         };
       }
-      const out = JSON.stringify(d);
+      let outObj = d;
+      if (d.urge) {
+        const now = Date.now();
+        if (!this.lastUrgeAt) {
+          try { this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0; } catch (e) {}
+        }
+        const elapsed = now - (this.lastUrgeAt || 0);
+        if (elapsed < URGE_COOLDOWN_MS) {
+          const remainingMs = URGE_COOLDOWN_MS - elapsed;
+          try {
+            ws.send(JSON.stringify({ type: 'urge_rejected', bill: this.bill || d.bill, remainingMs: remainingMs }));
+          } catch (e) {}
+          outObj = Object.assign({}, d);
+          delete outObj.urge;
+          delete outObj.urgeId;
+          delete outObj.urgeVoiceId;
+          delete outObj.urgeText;
+          delete outObj.urgeAudio;
+        } else {
+          this.lastUrgeAt = now;
+          try { await this.state.storage.put('lastUrgeAt', now); } catch (e) {}
+          outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
+        }
+      }
+      const out = JSON.stringify(outObj);
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
           try { s.send(out); } catch (e) {}
@@ -142,6 +185,33 @@ export class LiveRoom {
       this.last = null;
       try { await this.state.storage.delete('last'); } catch (e) {}
       const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      return;
+    }
+
+    if (d.type === 'urge') {
+      const now = Date.now();
+      if (!this.lastUrgeAt) {
+        try { this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0; } catch (e) {}
+      }
+      const elapsed = now - (this.lastUrgeAt || 0);
+      if (elapsed < URGE_COOLDOWN_MS) {
+        try {
+          ws.send(JSON.stringify({
+            type: 'urge_rejected',
+            bill: this.bill || d.bill,
+            remainingMs: URGE_COOLDOWN_MS - elapsed
+          }));
+        } catch (e) {}
+        return;
+      }
+      this.lastUrgeAt = now;
+      try { await this.state.storage.put('lastUrgeAt', now); } catch (e) {}
+      const out = JSON.stringify(Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS }));
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
           try { s.send(out); } catch (e) {}
