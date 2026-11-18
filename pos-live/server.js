@@ -15,6 +15,41 @@ var URGE_COOLDOWN_MS = 30000;
 var PAY_URGE_COOLDOWN_MS = 30000;
 var rooms = {}; // bill -> { last: wrap, lastUrgeAt: number, lastPayUrgeAt: number, lastPayUrge: object, presence: { cid -> ... } }
 
+function isPaidInLastState(lastWrap, uid, uname) {
+  var pm = lastWrap && lastWrap.fields && lastWrap.fields.paidMap && lastWrap.fields.paidMap.v;
+  if (!pm || typeof pm !== 'object') return false;
+  if (uid && pm['u:' + String(uid)] === true) return true;
+  var normName = String(uname || '').trim().toLowerCase();
+  return !!(normName && pm['n:' + normName] === true);
+}
+
+function shouldDeliverPayUrge(peer, msg, lastWrap) {
+  if (!peer || !msg) return false;
+  var uid = peer.uid ? String(peer.uid) : '';
+  var uname = String(peer.uname || '').trim().toLowerCase();
+  if (isPaidInLastState(lastWrap, uid, uname)) return false;
+  var hasUidFilter = Array.isArray(msg.targetUids);
+  var hasNameFilter = Array.isArray(msg.targetNames);
+  if (!hasUidFilter && !hasNameFilter) return true;
+  if (uid && hasUidFilter && msg.targetUids.indexOf(uid) !== -1) return true;
+  if (uname && hasNameFilter && msg.targetNames.indexOf(uname) !== -1) return true;
+  return false;
+}
+
+function stripPayUrgeMeta(obj, removeAlertFields) {
+  var copy = Object.assign({}, obj);
+  delete copy.targetUids;
+  delete copy.targetNames;
+  if (removeAlertFields) {
+    delete copy.urgePay;
+    delete copy.urgePayId;
+    delete copy.urgePayVoiceId;
+    delete copy.urgePayText;
+    delete copy.urgePayCooldownMs;
+  }
+  return copy;
+}
+
 function prunePresence(room) {
   if (!room || !room.presence) return;
   var now = Date.now();
@@ -80,9 +115,9 @@ wss.on('connection', function (s) {
           }));
         } catch (e) {}
       }
-      if (rooms[d.bill].lastPayUrge) {
+      if (rooms[d.bill].lastPayUrge && shouldDeliverPayUrge(s, rooms[d.bill].lastPayUrge, rooms[d.bill].last)) {
         try {
-          s.send(JSON.stringify(Object.assign({}, rooms[d.bill].lastPayUrge, { isSyncReplay: true })));
+          s.send(JSON.stringify(Object.assign(stripPayUrgeMeta(rooms[d.bill].lastPayUrge, false), { isSyncReplay: true })));
         } catch (e) {}
       }
       // Broadcast peer_joined to other peers
@@ -147,6 +182,7 @@ wss.on('connection', function (s) {
           outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
         }
       }
+      var payUrgeAllowed = false;
       if (d.urgePay) {
         var nowPay = Date.now();
         var elapsedPay = nowPay - (rooms[d.bill].lastPayUrgeAt || 0);
@@ -154,20 +190,23 @@ wss.on('connection', function (s) {
           try {
             s.send(JSON.stringify({ type: 'urge_pay_rejected', bill: d.bill, remainingMs: PAY_URGE_COOLDOWN_MS - elapsedPay }));
           } catch (e) {}
-          outObj = Object.assign({}, outObj);
-          delete outObj.urgePay;
-          delete outObj.urgePayId;
-          delete outObj.urgePayVoiceId;
-          delete outObj.urgePayText;
+          outObj = stripPayUrgeMeta(outObj, true);
         } else {
           rooms[d.bill].lastPayUrgeAt = nowPay;
+          payUrgeAllowed = true;
           outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
           rooms[d.bill].lastPayUrge = outObj;
         }
       }
+      var basePresenceStr = payUrgeAllowed ? null : JSON.stringify(stripPayUrgeMeta(outObj, false));
+      var targetedPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, false)) : null;
+      var nonTargetPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, true)) : null;
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
-          try { c.send(JSON.stringify(outObj)); } catch (e) {}
+          var payload = payUrgeAllowed
+            ? (shouldDeliverPayUrge(c, outObj, rooms[d.bill].last) ? targetedPresenceStr : nonTargetPresenceStr)
+            : basePresenceStr;
+          try { c.send(payload); } catch (e) {}
         }
       });
       return;
@@ -210,9 +249,9 @@ wss.on('connection', function (s) {
       rooms[d.bill].lastPayUrgeAt = nowP;
       var urgePayOut = Object.assign({}, d, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
       rooms[d.bill].lastPayUrge = urgePayOut;
-      var urgePayPayload = JSON.stringify(urgePayOut);
+      var urgePayPayload = JSON.stringify(stripPayUrgeMeta(urgePayOut, false));
       wss.clients.forEach(function (c) {
-        if (c !== s && c.readyState === 1 && c.bill === d.bill) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill && shouldDeliverPayUrge(c, urgePayOut, rooms[d.bill].last)) {
           try { c.send(urgePayPayload); } catch (e) {}
         }
       });

@@ -4,7 +4,7 @@ set -e
 echo "Building dist-live for Cloudflare Pages..."
 rm -rf dist-live
 mkdir -p dist-live
-cp pos-live/index.html pos-live/live.js pos-live/style.css dist-live/
+cp pos-live/index.html pos-live/live.js pos-live/style.css pos-live/manifest.webmanifest pos-live/sw.js dist-live/
 if [ -d "pos-live/assets" ]; then
   cp -r pos-live/assets dist-live/
   find dist-live/assets/img/toppings -maxdepth 1 \( -name '*.jpg' -o -name '*.png' \) -delete 2>/dev/null || true

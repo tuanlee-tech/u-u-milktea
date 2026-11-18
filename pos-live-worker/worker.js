@@ -4,6 +4,41 @@
 const URGE_COOLDOWN_MS = 30000;
 const PAY_URGE_COOLDOWN_MS = 30000;
 
+function isPaidInLastState(lastWrap, uid, uname) {
+  const pm = lastWrap && lastWrap.fields && lastWrap.fields.paidMap && lastWrap.fields.paidMap.v;
+  if (!pm || typeof pm !== 'object') return false;
+  if (uid && pm['u:' + String(uid)] === true) return true;
+  const normName = String(uname || '').trim().toLowerCase();
+  return !!(normName && pm['n:' + normName] === true);
+}
+
+function shouldDeliverPayUrge(peer, msg, lastWrap) {
+  if (!peer || !msg) return false;
+  const uid = peer.uid ? String(peer.uid) : '';
+  const uname = String(peer.uname || '').trim().toLowerCase();
+  if (isPaidInLastState(lastWrap, uid, uname)) return false;
+  const hasUidFilter = Array.isArray(msg.targetUids);
+  const hasNameFilter = Array.isArray(msg.targetNames);
+  if (!hasUidFilter && !hasNameFilter) return true;
+  if (uid && hasUidFilter && msg.targetUids.includes(uid)) return true;
+  if (uname && hasNameFilter && msg.targetNames.includes(uname)) return true;
+  return false;
+}
+
+function stripPayUrgeMeta(obj, removeAlertFields) {
+  const copy = Object.assign({}, obj);
+  delete copy.targetUids;
+  delete copy.targetNames;
+  if (removeAlertFields) {
+    delete copy.urgePay;
+    delete copy.urgePayId;
+    delete copy.urgePayVoiceId;
+    delete copy.urgePayText;
+    delete copy.urgePayCooldownMs;
+  }
+  return copy;
+}
+
 export class LiveRoom {
   constructor(state) {
     this.state = state;
@@ -112,9 +147,9 @@ export class LiveRoom {
           }));
         } catch (e) {}
       }
-      if (this.lastPayUrge) {
+      if (this.lastPayUrge && shouldDeliverPayUrge(ws, this.lastPayUrge, this.last)) {
         try {
-          ws.send(JSON.stringify(Object.assign({}, this.lastPayUrge, { isSyncReplay: true })));
+          ws.send(JSON.stringify(Object.assign(stripPayUrgeMeta(this.lastPayUrge, false), { isSyncReplay: true })));
         } catch (e) {}
       }
       // Broadcast peer_joined to all other clients in this bill room
@@ -202,6 +237,7 @@ export class LiveRoom {
           outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
         }
       }
+      let payUrgeAllowed = false;
       if (d.urgePay) {
         const nowPay = Date.now();
         if (!this.lastPayUrgeAt) {
@@ -213,13 +249,10 @@ export class LiveRoom {
           try {
             ws.send(JSON.stringify({ type: 'urge_pay_rejected', bill: this.bill || d.bill, remainingMs: remPayMs }));
           } catch (e) {}
-          outObj = Object.assign({}, outObj);
-          delete outObj.urgePay;
-          delete outObj.urgePayId;
-          delete outObj.urgePayVoiceId;
-          delete outObj.urgePayText;
+          outObj = stripPayUrgeMeta(outObj, true);
         } else {
           this.lastPayUrgeAt = nowPay;
+          payUrgeAllowed = true;
           outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
           this.lastPayUrge = outObj;
           try {
@@ -228,10 +261,15 @@ export class LiveRoom {
           } catch (e) {}
         }
       }
-      const out = JSON.stringify(outObj);
+      const basePresenceStr = payUrgeAllowed ? null : JSON.stringify(stripPayUrgeMeta(outObj, false));
+      const targetedPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, false)) : null;
+      const nonTargetPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, true)) : null;
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
-          try { s.send(out); } catch (e) {}
+          const payload = payUrgeAllowed
+            ? (shouldDeliverPayUrge(s, outObj, this.last) ? targetedPresenceStr : nonTargetPresenceStr)
+            : basePresenceStr;
+          try { s.send(payload); } catch (e) {}
         }
       }
       return;
@@ -292,9 +330,9 @@ export class LiveRoom {
         await this.state.storage.put('lastPayUrgeAt', now);
         await this.state.storage.put('lastPayUrge', outObj);
       } catch (e) {}
-      const out = JSON.stringify(outObj);
+      const out = JSON.stringify(stripPayUrgeMeta(outObj, false));
       for (const s of this.state.getWebSockets()) {
-        if (s !== ws) {
+        if (s !== ws && shouldDeliverPayUrge(s, outObj, this.last)) {
           try { s.send(out); } catch (e) {}
         }
       }

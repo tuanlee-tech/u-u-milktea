@@ -1625,13 +1625,16 @@
     var paidCnt = 0;
     var totalPeopleCnt = 0;
     var unpaidCnt = 0;
+    var unpaidDebtorsCnt = 0;
     if (cart.length > 0 && typeof computeBillSplit === 'function') {
       var sp = computeBillSplit();
       totalPeopleCnt = sp.people.length;
       paidCnt = sp.people.filter(function (p) { return p.paid; }).length;
       unpaidCnt = sp.people.filter(function (p) { return !p.paid && p.finalPay > 0; }).length;
+      unpaidDebtorsCnt = sp.people.filter(function (p) { return !p.isHost && !p.paid && p.finalPay > 0; }).length;
     }
     var allPaid = !!(submitted && totalPeopleCnt > 0 && unpaidCnt === 0);
+    var allDebtorsPaid = !!(submitted && totalPeopleCnt > 0 && unpaidDebtorsCnt === 0);
 
     if (lbl) {
       if (hostName) {
@@ -1685,17 +1688,17 @@
       if (btnQuickQrTxt) btnQuickQrTxt.textContent = hasQr ? 'Sửa mã QR' : 'Thêm QR vào ảnh';
     }
 
-    // Nút Hối trả tiền & Thu tiền: chỉ hiện khi đã Chốt & Lưu Sheet; tự disable khi cả nhóm đã trả đủ
+    // Nút Hối trả tiền & Thu tiền: chỉ hiện khi đã Chốt & Lưu Sheet; tự disable khi không còn thành viên nào chưa trả
     if (btnUrgePay) {
       btnUrgePay.hidden = !(assigned && amHost && submitted);
-      btnUrgePay.disabled = allPaid;
+      btnUrgePay.disabled = allDebtorsPaid;
       btnUrgePay.classList.remove('is-disabled');
-      btnUrgePay.title = allPaid
-        ? 'Cả nhóm đã thanh toán đủ'
-        : 'Phát loa & thông báo đòi tiền những bạn chưa trả';
+      btnUrgePay.title = allDebtorsPaid
+        ? 'Tất cả thành viên đã thanh toán đủ'
+        : 'Gửi thông báo riêng tới những thành viên chưa trả tiền';
       var urgePayLbl = $('btnUrgePayLabel');
       if (urgePayLbl) {
-        if (allPaid) {
+        if (allDebtorsPaid) {
           urgePayLbl.textContent = 'Đã thu đủ ✓';
         } else {
           var pSec = typeof getPayUrgeRemainingSec === 'function' ? getPayUrgeRemainingSec() : 0;
@@ -1720,8 +1723,8 @@
     }
     if (btnModalPay) {
       btnModalPay.hidden = !(assigned && amHost && submitted);
-      btnModalPay.disabled = allPaid;
-      btnModalPay.title = allPaid ? 'Cả nhóm đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
+      btnModalPay.disabled = allDebtorsPaid;
+      btnModalPay.title = allDebtorsPaid ? 'Tất cả thành viên đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
     }
 
     // Khóa nút Chốt & Lưu Sheet khi non-host HOẶC đơn đã chốt xong
@@ -2383,7 +2386,7 @@
   function updatePayUrgeCooldownUI() {
     var sec = getPayUrgeRemainingSec();
     var isCooling = sec > 0;
-    var allPaidNow = (isOrderSubmitted() && cart.length > 0 && typeof getUnpaidMembers === 'function' && getUnpaidMembers().length === 0);
+    var allPaidNow = (isOrderSubmitted() && cart.length > 0 && typeof getUnpaidNonHostMembers === 'function' && getUnpaidNonHostMembers().length === 0);
     var btnUrgePay = $('btnOpenUrgePay');
     if (btnUrgePay) btnUrgePay.disabled = allPaidNow;
     var btnLbl = $('btnUrgePayLabel');
@@ -2399,7 +2402,7 @@
     var sendBtn = $('btnConfirmUrgePaySend');
     var sendTxt = $('btnConfirmUrgePayText');
     if (sendBtn) sendBtn.disabled = isCooling || allPaidNow;
-    if (sendTxt) sendTxt.textContent = allPaidNow ? 'Cả nhóm đã trả đủ' : (isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa đòi tiền ngay');
+    if (sendTxt) sendTxt.textContent = allPaidNow ? 'Đã thu đủ' : (isCooling ? ('Đợi ' + sec + 's...') : 'Phát loa đòi tiền ngay');
   }
 
   function stopPayPreviewAudio() {
@@ -2512,16 +2515,16 @@
   function renderUrgePayTargetsBox() {
     var box = $('urgePayTargetsBox');
     if (!box) return;
-    var unpaid = getUnpaidMembers();
+    var unpaid = getUnpaidNonHostMembers();
     if (!unpaid.length) {
-      box.innerHTML = '🎉 Tuyệt vời! Tất cả thành viên trong bill đều đã trả tiền rồi.';
+      box.innerHTML = '🎉 Tuyệt vời! Tất cả thành viên khác trong bill đều đã thanh toán rồi.';
       return;
     }
     var summary = unpaid.map(function (p) {
       return esc(p.name) + ' (<strong>' + fmt(p.finalPay) + '</strong>)';
     }).join(', ');
-    box.innerHTML = '🎯 Chỉ phát loa tới <strong>' + unpaid.length + ' bạn chưa trả</strong>: ' + summary +
-      '. <br><span style="opacity:.85;">Những bạn đã trả tiền sẽ tự động mute tiếng & thu gọn bảng nhắc.</span>';
+    box.innerHTML = '🔒 Chỉ gửi thông báo riêng tới <strong>' + unpaid.length + ' bạn chưa trả</strong>: ' + summary +
+      '. <br><span style="opacity:.85;">Người đã trả không nhận được thông báo. Mỗi người chỉ thấy phần tiền của riêng mình.</span>';
   }
 
   function openUrgePayModal() {
@@ -2533,9 +2536,9 @@
       showToast('⏳ Bạn cần bấm "Chốt & Lưu Sheet" trước khi phát loa hối trả tiền!');
       return;
     }
-    var unpaid = getUnpaidMembers();
+    var unpaid = getUnpaidNonHostMembers();
     if (!unpaid.length) {
-      showToast('🎉 Cả nhóm đã trả tiền hết rồi, không cần hối nữa!');
+      showToast('🎉 Các thành viên đã trả tiền đủ rồi, không cần hối nữa!');
       return;
     }
     var modal = $('urgePayModal');
@@ -2577,29 +2580,32 @@
     var panel = $('payReminderPanel');
     if (!panel) return;
 
-    if (!activePayUrge || !cart.length || !isOrderSubmitted()) {
+    if (!activePayUrge || !cart.length || !isOrderSubmitted() || isCurrentHost()) {
+      var hadPanel = !panel.hidden;
       stopPayUrgeAudio();
       panel.hidden = true;
       panel.classList.remove('is-debtor-locked', 'is-collapsed', 'is-manual-open');
+      if (hadPanel && !isCurrentHost() && !isOrderSubmitted()) activePayUrge = null;
       return;
     }
 
     var split = computeBillSplit();
-    var unpaidList = split.people.filter(function (p) { return !p.paid && p.finalPay > 0; });
-
-    if (!unpaidList.length) {
-      var wasVisible = !panel.hidden;
-      stopPayUrgeAudio();
-      panel.hidden = true;
-      panel.classList.remove('is-debtor-locked', 'is-collapsed', 'is-manual-open');
-      if (wasVisible) showToast('🎉 Cả nhóm đã hoàn tất thanh toán!');
-      return;
-    }
-
     var myEntries = split.people.filter(function (p) { return p.isMe; });
     var myUnpaid = myEntries.filter(function (p) { return !p.paid && p.finalPay > 0; });
     var myUnpaidTotal = myUnpaid.reduce(function (s, p) { return s + p.finalPay; }, 0);
     var amUnpaidDebtor = (!isCurrentHost() && myUnpaid.length > 0);
+
+    if (!amUnpaidDebtor) {
+      var wasVisible = !panel.hidden;
+      stopPayUrgeAudio();
+      panel.hidden = true;
+      panel.classList.remove('is-debtor-locked', 'is-collapsed', 'is-manual-open');
+      activePayUrge = null;
+      if (wasVisible && myEntries.length > 0) {
+        showToast('✓ Khoản thanh toán của bạn đã được xác nhận!');
+      }
+      return;
+    }
 
     var badge = $('payReminderBadge');
     var headline = $('payReminderHeadline');
@@ -2608,54 +2614,25 @@
     var qrImg = $('payReminderQrImg');
     var qrHost = $('payReminderQrHost');
     var qrNote = $('payReminderQrNote');
-    var unpaidWrap = $('payReminderUnpaidList');
     var soundBtn = $('btnPlayPayReminderAudio');
-    var toggleBtn = $('btnTogglePayReminder');
 
     panel.hidden = false;
+    panel.classList.add('is-debtor-locked');
+    panel.classList.remove('is-collapsed', 'is-manual-open');
+    if (badge) badge.textContent = 'NHẮC THANH TOÁN RIÊNG';
+    if (headline) headline.textContent = myUnpaid[0].name + ', bạn còn ' + fmt(myUnpaidTotal) + ' chưa thanh toán!';
+    if (personal) {
+      personal.classList.remove('is-paid-info');
+      personal.innerHTML =
+        '<div style="font-style:italic;margin-bottom:5px;color:#9A3412;">"' + esc(activePayUrge.text) + '"</div>' +
+        '<div><strong>' + esc(myUnpaid[0].name) + '</strong> vui lòng chuyển khoản cho <strong>' + esc(split.hostName) + '</strong>:</div>' +
+        '<div class="pay-reminder-amount">' + fmt(myUnpaidTotal) + '</div>';
+    }
+    if (soundBtn) soundBtn.title = 'Nghe lại loa nhắc thanh toán';
 
-    if (amUnpaidDebtor) {
-      // Người chưa trả -> Auto-mở, không thể nhấn đóng cho tới khi đại diện mark Đã trả
-      panel.classList.add('is-debtor-locked');
-      panel.classList.remove('is-collapsed', 'is-manual-open');
-      if (badge) badge.textContent = 'ĐẠI DIỆN ĐANG HỐI TRẢ TIỀN';
-      if (headline) headline.textContent = myUnpaid[0].name + ', bạn còn ' + fmt(myUnpaidTotal) + ' chưa thanh toán!';
-      if (personal) {
-        personal.classList.remove('is-paid-info');
-        personal.innerHTML =
-          '<div style="font-style:italic;margin-bottom:5px;color:#9A3412;">"' + esc(activePayUrge.text) + '"</div>' +
-          '<div><strong>' + esc(myUnpaid[0].name) + '</strong> vui lòng chuyển khoản cho <strong>' + esc(split.hostName) + '</strong>:</div>' +
-          '<div class="pay-reminder-amount">' + fmt(myUnpaidTotal) + '</div>';
-      }
-      if (toggleBtn) toggleBtn.hidden = true;
-      if (soundBtn) soundBtn.title = 'Nghe lại loa nhắc thanh toán';
-
-      if (allowAutoPlay && !activePayUrge.autoPlayedYet) {
-        activePayUrge.autoPlayedYet = true;
-        playPayUrgeSound(activePayUrge.voiceId);
-      }
-    } else {
-      // Người đã trả / Đại diện / Khách xem -> Thu gọn & MUTE âm thanh mặc định
-      stopPayUrgeAudio();
-      panel.classList.remove('is-debtor-locked');
-      panel.classList.add('is-collapsed');
-      if (toggleBtn) {
-        toggleBtn.hidden = false;
-        toggleBtn.textContent = panel.classList.contains('is-manual-open') ? '▴' : '▾';
-      }
-      if (badge) badge.textContent = 'ĐANG NHẮC THANH TOÁN (' + unpaidList.length + ' bạn · Muted)';
-      if (headline) {
-        headline.textContent = isCurrentHost()
-          ? ('Đang đòi tiền ' + unpaidList.length + ' bạn chưa trả')
-          : ('Bạn đã xong · Còn ' + unpaidList.length + ' bạn chưa trả');
-      }
-      if (personal) {
-        personal.classList.add('is-paid-info');
-        personal.innerHTML = isCurrentHost()
-          ? ('Bạn là <strong>Đại diện</strong>. Đang nhắc <strong>' + unpaidList.length + '</strong> thành viên chưa thanh toán.')
-          : ('✓ Bạn đã thanh toán (hoặc không phát sinh nợ). Âm thanh được tắt tự động — bấm icon loa nếu muốn nghe.');
-      }
-      if (soundBtn) soundBtn.title = 'Bấm để nghe thử âm thanh hối thanh toán';
+    if (allowAutoPlay && !activePayUrge.autoPlayedYet) {
+      activePayUrge.autoPlayedYet = true;
+      playPayUrgeSound(activePayUrge.voiceId);
     }
 
     // Hiện QR của đại diện nếu đại diện đã add QR
@@ -2671,21 +2648,27 @@
         qrBox.hidden = true;
       }
     }
-
-    // Danh sách người chưa trả
-    if (unpaidWrap) {
-      unpaidWrap.innerHTML = '';
-      unpaidList.forEach(function (u) {
-        var chip = document.createElement('span');
-        chip.className = 'pay-unpaid-chip' + (u.isMe ? ' is-me' : '');
-        chip.textContent = u.name + ' · ' + fmt(u.finalPay);
-        unpaidWrap.appendChild(chip);
-      });
-    }
   }
 
   function triggerUrgePayAlert(d) {
     if (!d) return;
+    if (isCurrentHost()) return;
+
+    var hasUidFilter = Array.isArray(d.targetUids);
+    var hasNameFilter = Array.isArray(d.targetNames);
+    if (hasUidFilter || hasNameFilter) {
+      var myNormName = String(myUname || '').trim().toLowerCase();
+      var matchedUid = !!(myUid && hasUidFilter && d.targetUids.indexOf(myUid) !== -1);
+      var matchedName = !!(myNormName && hasNameFilter && d.targetNames.indexOf(myNormName) !== -1);
+      if (!matchedUid && !matchedName) return;
+    }
+
+    if (cart.length > 0 && typeof computeBillSplit === 'function') {
+      var splitNow = computeBillSplit();
+      var myUnpaidNow = splitNow.people.filter(function (p) { return p.isMe && !p.paid && p.finalPay > 0; });
+      if (!myUnpaidNow.length) return;
+    }
+
     var urgeId = d.urgePayId || d.urgeId;
     if (urgeId) {
       if (seenPayUrgeIds[urgeId]) return;
@@ -2706,40 +2689,39 @@
 
   function sendUrgePayOrder() {
     if (hasHostAssigned() && !isCurrentHost()) {
-      showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được phát loa hối trả tiền!');
+      showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được hối trả tiền!');
       return;
     }
     if (!isOrderSubmitted()) {
       showToast('⏳ Hãy bấm "Chốt & Lưu Sheet" trước để mở khóa Hối trả tiền!');
       return;
     }
-    var unpaid = getUnpaidMembers();
+    var unpaid = getUnpaidNonHostMembers();
     if (!unpaid.length) {
-      showToast('🎉 Cả nhóm đã trả tiền đủ rồi!');
+      showToast('🎉 Các thành viên khác đã trả tiền đủ rồi!');
       return;
     }
     var remSec = getPayUrgeRemainingSec();
     if (remSec > 0) {
       updatePayUrgeCooldownUI();
-      showToast('⏳ Chống spam: Vui lòng đợi ' + remSec + 's nữa mới gửi loa đòi tiền tiếp được!');
+      showToast('⏳ Chống spam: Vui lòng đợi ' + remSec + 's nữa mới gửi nhắc tiền tiếp được!');
       return;
     }
 
     var voice = getPayVoiceById(selectedPayVoiceId);
     var now = Date.now();
     var urgeId = 'payurge_' + clientId + '_' + now;
-
-    closeUrgePayModal();
-    triggerUrgePayAlert({
-      urgePayId: urgeId,
-      urgePayVoiceId: voice.id,
-      urgePayText: voice.text,
-      uname: myUname + ' (Đại diện)',
-      urgeCooldownMs: PAY_URGE_COOLDOWN_MS,
-      ts: now
+    var targetUids = [];
+    var targetNames = [];
+    unpaid.forEach(function (p) {
+      if (p.uid && targetUids.indexOf(p.uid) === -1) targetUids.push(p.uid);
+      var normN = String(p.name || '').trim().toLowerCase();
+      if (normN && targetNames.indexOf(normN) === -1) targetNames.push(normN);
     });
 
-    // Gửi cả type='urge_pay' (worker mới) & qua presence (tương thích ngược)
+    closeUrgePayModal();
+    startPayUrgeCooldown(PAY_URGE_COOLDOWN_MS);
+
     var msgUrgePay = {
       type: 'urge_pay',
       kind: 'urge_pay',
@@ -2752,16 +2734,17 @@
       urgePayId: urgeId,
       urgePayVoiceId: voice.id,
       urgePayText: voice.text,
+      targetUids: targetUids,
+      targetNames: targetNames,
       ts: now
     };
     try { if (bc) bc.postMessage(msgUrgePay); } catch (e) {}
     if (ws && wsOk) {
       try {
         ws.send(JSON.stringify(msgUrgePay));
-        ws.send(JSON.stringify(Object.assign({}, msgUrgePay, { type: 'presence', kind: 'presence' })));
       } catch (e) {}
     }
-    showToast('💸 Đã phát thông báo đòi tiền tới ' + unpaid.length + ' bạn chưa trả!');
+    showToast('💸 Đã gửi nhắc thanh toán riêng tới ' + unpaid.length + ' bạn chưa trả!');
   }
 
   function fieldChanged(inputId) {
@@ -3713,16 +3696,18 @@
       li.dataset.lid = c.lid;
 
       var isMine = canEditRow(c);
+      var canManagePay = canActAsHostOrOpen();
       var canMutateRow = isMine && !submitted;
       var shortOpt = shortOptText(c);
       var ucol = (isMine ? myUcolor : (c.ucolor || '#0A7259'));
       var rowPayTarget = { uid: c.uid || '', name: c.uname || c.owner || 'Khách' };
-      var rowPaid = submitted ? isMemberPaid(rowPayTarget) : false;
+      var showRowPayState = submitted && (canManagePay || isMine);
+      var rowPaid = showRowPayState ? isMemberPaid(rowPayTarget) : false;
 
-      // 0. Border highlight & paid/unpaid state
-      li.style.borderLeft = '3.5px solid ' + (submitted && rowPaid ? '#10B981' : ucol);
-      li.classList.toggle('is-row-paid', submitted && rowPaid);
-      li.classList.toggle('is-row-unpaid', submitted && !rowPaid);
+      // 0. Border highlight & paid/unpaid state (chỉ hiện công khai với Đại diện; thành viên chỉ thấy phần của mình)
+      li.style.borderLeft = '3.5px solid ' + (showRowPayState && rowPaid ? '#10B981' : ucol);
+      li.classList.toggle('is-row-paid', showRowPayState && rowPaid);
+      li.classList.toggle('is-row-unpaid', showRowPayState && !rowPaid);
 
       // 1. Cột Món & Tùy chọn (Gộp chung Badge người đặt + Tên món + Tùy chọn trên 1 dòng full width)
       var itemCol = document.createElement('div');
@@ -3816,7 +3801,7 @@
       var actCol = document.createElement('div');
       actCol.className = 'c-acts';
       if (submitted) {
-        if (canActAsHostOrOpen()) {
+        if (canManagePay) {
           var lblChk = document.createElement('label');
           lblChk.className = 'c-paid-check';
           lblChk.title = rowPaid
@@ -3833,14 +3818,20 @@
           lblChk.onclick = function (e) { e.stopPropagation(); };
           lblChk.appendChild(chk);
           actCol.appendChild(lblChk);
-        } else {
+        } else if (isMine) {
           var statusPill = document.createElement('span');
           statusPill.className = 'c-row-paid-pill ' + (rowPaid ? 'is-paid' : 'is-unpaid');
-          statusPill.title = rowPaid ? 'Đã thanh toán' : 'Chưa thanh toán';
+          statusPill.title = rowPaid ? 'Bạn đã thanh toán' : 'Bạn chưa thanh toán';
           statusPill.innerHTML = rowPaid
             ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
             : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
           actCol.appendChild(statusPill);
+        } else {
+          var lockedMember = document.createElement('span');
+          lockedMember.className = 'c-lock-icon';
+          lockedMember.title = 'Đơn đã chốt & lưu Sheet';
+          lockedMember.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+          actCol.appendChild(lockedMember);
         }
       } else if (canMutateRow) {
         var btnEdit = document.createElement('button');
@@ -4021,9 +4012,10 @@
       return p;
     });
 
-    // Sắp xếp: Host trước hoặc chưa trả trước để dễ theo dõi
+    // Chỉ Đại diện sắp xếp ưu tiên người chưa trả; thành viên khác giữ thứ tự trung lập
+    var allowSortByPaid = canActAsHostOrOpen();
     people.sort(function (a, b) {
-      if (a.paid !== b.paid) return a.paid ? 1 : -1;
+      if (allowSortByPaid && a.paid !== b.paid) return a.paid ? 1 : -1;
       if (a.isHost !== b.isHost) return a.isHost ? -1 : 1;
       return b.finalPay - a.finalPay;
     });
@@ -4034,6 +4026,10 @@
   function getUnpaidMembers() {
     var split = computeBillSplit();
     return split.people.filter(function (p) { return !p.paid && p.finalPay > 0; });
+  }
+
+  function getUnpaidNonHostMembers() {
+    return getUnpaidMembers().filter(function (p) { return !p.isHost; });
   }
 
   function renderSplitBillIfOpen() {
@@ -4831,26 +4827,29 @@
     if (!container) return;
     container.innerHTML = '';
 
+    var amHost = canActAsHostOrOpen();
     var paidCount = people.filter(function (p) { return p.paid; }).length;
     if ($('splitPersonCount')) {
-      $('splitPersonCount').textContent = paidCount + '/' + people.length + ' đã trả';
+      $('splitPersonCount').textContent = amHost
+        ? (paidCount + '/' + people.length + ' đã trả')
+        : (people.length + ' người');
     }
 
     var cUnit = (currentStore && currentStore.itemUnit) || 'món';
-    var amHost = canActAsHostOrOpen();
     var crownSvg = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-left:3px;"><path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"/></svg>';
 
     people.forEach(function (p) {
       var share = p.share !== undefined ? p.share : ((t.sub > 0) ? Math.round(netAdj * (p.drinkSub / t.sub)) : 0);
       var finalPay = p.finalPay !== undefined ? p.finalPay : Math.max(0, p.drinkSub + share);
+      var showPayBadge = amHost || p.isMe;
 
       var adjStr = '';
       if (share > 0) adjStr = ' <span class="split-adj plus">+ship ' + fmt(share) + '</span>';
       else if (share < 0) adjStr = ' <span class="split-adj minus">−' + fmt(Math.abs(share)) + ' giảm</span>';
 
       var row = document.createElement('div');
-      row.className = 'split-person-row' + (p.paid ? ' is-row-paid' : '');
-      row.style.borderLeft = '3.5px solid ' + (p.paid ? '#10B981' : p.ucolor);
+      row.className = 'split-person-row' + (showPayBadge && p.paid ? ' is-row-paid' : '');
+      row.style.borderLeft = '3.5px solid ' + (showPayBadge && p.paid ? '#10B981' : p.ucolor);
 
       var infoDiv = document.createElement('div');
       infoDiv.className = 'split-person-info';
@@ -4877,7 +4876,7 @@
           toggleMemberPaid(p);
         };
         payDiv.appendChild(btnToggle);
-      } else {
+      } else if (p.isMe) {
         var pill = document.createElement('span');
         pill.className = 'split-status-pill ' + (p.paid ? 'is-paid' : 'is-unpaid');
         pill.textContent = p.paid ? '✓ Đã trả' : 'Chưa trả';
@@ -4902,7 +4901,7 @@
           var adj = '';
           if (share > 0) adj = ' (+ship ' + fmt(share) + ')';
           else if (share < 0) adj = ' (-giảm ' + fmt(Math.abs(share)) + ')';
-          var stTxt = p.paid ? ' [✓ Đã trả]' : ' [Chưa trả]';
+          var stTxt = amHost ? (p.paid ? ' [✓ Đã trả]' : ' [Chưa trả]') : '';
           textLines.push('● ' + p.name + ' (' + p.cups + ' ' + cUnit + '): ' + fmt(p.drinkSub) + adj + ' 👉 Cần trả: ' + fmt(finalPay) + stTxt);
         });
         textLines.push('----------------------------------------');
@@ -6588,25 +6587,6 @@
   }
 
   // Floating Payment Reminder Panel (#payReminderPanel)
-  function togglePayReminderCollapse() {
-    var panel = $('payReminderPanel');
-    if (!panel || panel.classList.contains('is-debtor-locked')) return;
-    panel.classList.toggle('is-manual-open');
-    var btn = $('btnTogglePayReminder');
-    if (btn) btn.textContent = panel.classList.contains('is-manual-open') ? '▴' : '▾';
-  }
-  if ($('btnTogglePayReminder')) {
-    $('btnTogglePayReminder').onclick = function (e) {
-      e.stopPropagation();
-      togglePayReminderCollapse();
-    };
-  }
-  if ($('payReminderHeader')) {
-    $('payReminderHeader').onclick = function (e) {
-      if (e.target && e.target.closest && e.target.closest('#btnPlayPayReminderAudio')) return;
-      togglePayReminderCollapse();
-    };
-  }
   if ($('btnPlayPayReminderAudio')) {
     $('btnPlayPayReminderAudio').onclick = function (e) {
       e.stopPropagation();
@@ -6615,23 +6595,249 @@
     };
   }
 
-  // Mobile Drawer Toggle
+  // Mobile Drawer Toggle + Body Scroll Lock + Swipe-Down to Dismiss
+  var drawerSavedScrollY = 0;
+  var suppressNextHandleClick = false;
+
+  function isMobileDrawerViewport() {
+    return window.innerWidth <= 960;
+  }
+
+  function lockBodyScrollForDrawer() {
+    if (!isMobileDrawerViewport()) return;
+    if (document.body.classList.contains('is-cart-drawer-open')) return;
+    drawerSavedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.documentElement.classList.add('is-cart-drawer-open');
+    document.body.classList.add('is-cart-drawer-open');
+    document.body.style.top = '-' + drawerSavedScrollY + 'px';
+  }
+
+  function unlockBodyScrollForDrawer() {
+    if (!document.body.classList.contains('is-cart-drawer-open')) return;
+    document.documentElement.classList.remove('is-cart-drawer-open');
+    document.body.classList.remove('is-cart-drawer-open');
+    document.body.style.top = '';
+    window.scrollTo(0, drawerSavedScrollY);
+  }
+
   function openMobileDrawer() {
     var sec = $('cartSection');
     var bd = $('drawerBackdrop');
-    if (sec) sec.classList.add('is-open');
-    if (bd) bd.classList.add('is-active');
+    if (sec) {
+      sec.classList.remove('is-dragging');
+      sec.style.transform = '';
+      sec.classList.add('is-open');
+    }
+    if (bd) {
+      bd.classList.remove('is-dragging');
+      bd.style.opacity = '';
+      bd.classList.add('is-active');
+    }
+    lockBodyScrollForDrawer();
   }
+
   function closeMobileDrawer() {
     var sec = $('cartSection');
     var bd = $('drawerBackdrop');
-    if (sec) sec.classList.remove('is-open');
-    if (bd) bd.classList.remove('is-active');
+    if (sec) {
+      sec.classList.remove('is-dragging');
+      sec.classList.remove('is-open');
+      if (sec.style.transform) {
+        void sec.offsetWidth;
+        sec.style.transform = '';
+      }
+    }
+    if (bd) {
+      bd.classList.remove('is-dragging');
+      bd.classList.remove('is-active');
+      bd.style.opacity = '';
+    }
+    unlockBodyScrollForDrawer();
   }
+
+  (function setupMobileDrawerSwipe() {
+    var sec = $('cartSection');
+    var bd = $('drawerBackdrop');
+    var handle = $('cartDrawerHandle');
+    if (!sec) return;
+
+    var startX = 0;
+    var startY = 0;
+    var startTime = 0;
+    var dragDy = 0;
+    var dragging = false;
+    var fromHandleOrHeader = false;
+    var trackingTouch = false;
+    var activeMouseDrag = false;
+    var touchScrollEl = null;
+
+    function findNearestScrollable(el) {
+      var cur = el;
+      while (cur && cur !== sec) {
+        if (cur.nodeType === 1) {
+          var st = window.getComputedStyle(cur);
+          var oy = st.overflowY;
+          if ((oy === 'auto' || oy === 'scroll') && cur.scrollHeight > cur.clientHeight + 2) {
+            return cur;
+          }
+        }
+        cur = cur.parentNode;
+      }
+      return null;
+    }
+
+    function applyDragVisual(dy) {
+      var clamped = Math.max(0, dy);
+      dragDy = clamped;
+      sec.style.transform = 'translateY(' + clamped + 'px)';
+      if (bd) {
+        var h = sec.offsetHeight || 480;
+        var ratio = Math.max(0, 1 - clamped / h);
+        bd.style.opacity = String(ratio);
+      }
+    }
+
+    function finishDrag(shouldDismissCheck) {
+      if (!dragging) return;
+      dragging = false;
+      sec.classList.remove('is-dragging');
+      if (bd) bd.classList.remove('is-dragging');
+
+      var elapsed = Math.max(16, Date.now() - startTime);
+      var vy = dragDy / elapsed;
+      var h = sec.offsetHeight || 480;
+      var dismiss = shouldDismissCheck && (dragDy > Math.min(110, h * 0.25) || (dragDy > 32 && vy > 0.45));
+
+      if (dismiss) {
+        suppressNextHandleClick = true;
+        setTimeout(function () { suppressNextHandleClick = false; }, 180);
+        closeMobileDrawer();
+      } else {
+        sec.style.transform = '';
+        if (bd) bd.style.opacity = '';
+      }
+      dragDy = 0;
+    }
+
+    // Prevent background scroll behind backdrop
+    if (bd) {
+      bd.addEventListener('touchmove', function (e) {
+        if (isMobileDrawerViewport() && sec.classList.contains('is-open')) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    sec.addEventListener('touchstart', function (e) {
+      if (!isMobileDrawerViewport() || !sec.classList.contains('is-open')) return;
+      if (!e.touches || e.touches.length !== 1) return;
+      var target = e.target;
+      var tag = target && target.tagName ? target.tagName.toUpperCase() : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'OPTION') return;
+
+      var t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      startTime = Date.now();
+      dragDy = 0;
+      dragging = false;
+      trackingTouch = true;
+
+      var onHandle = !!(handle && target && handle.contains(target));
+      var headerEl = sec.querySelector('.cart-header');
+      var onHeader = !!(headerEl && target && headerEl.contains(target) && !(target.closest && target.closest('button, a, input')));
+      fromHandleOrHeader = onHandle || onHeader;
+      touchScrollEl = fromHandleOrHeader ? null : findNearestScrollable(target);
+    }, { passive: true });
+
+    sec.addEventListener('touchmove', function (e) {
+      if (!trackingTouch || !isMobileDrawerViewport() || !sec.classList.contains('is-open')) return;
+      if (!e.touches || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - startX;
+      var dy = t.clientY - startY;
+
+      if (!dragging) {
+        if (dy <= 6 || Math.abs(dy) <= Math.abs(dx) * 1.1) {
+          if (dy < -8 || Math.abs(dx) > 16) trackingTouch = false;
+          return;
+        }
+        var secAtTop = (sec.scrollTop <= 1);
+        var childAtTop = (!touchScrollEl || touchScrollEl.scrollTop <= 1);
+        if (!fromHandleOrHeader && (!secAtTop || !childAtTop)) {
+          return;
+        }
+        dragging = true;
+        sec.classList.add('is-dragging');
+        if (bd) bd.classList.add('is-dragging');
+      }
+
+      if (dragging) {
+        if (e.cancelable) e.preventDefault();
+        applyDragVisual(dy);
+      }
+    }, { passive: false });
+
+    sec.addEventListener('touchend', function () {
+      if (!trackingTouch && !dragging) return;
+      trackingTouch = false;
+      finishDrag(true);
+    }, { passive: true });
+
+    sec.addEventListener('touchcancel', function () {
+      trackingTouch = false;
+      finishDrag(false);
+    }, { passive: true });
+
+    // Mouse drag support on handle & header (desktop DevTools mobile mode / touchscreens)
+    function onMouseDownDrag(e) {
+      if (e.button !== 0 || !isMobileDrawerViewport() || !sec.classList.contains('is-open')) return;
+      if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea')) return;
+      activeMouseDrag = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      startTime = Date.now();
+      dragDy = 0;
+      dragging = false;
+    }
+    if (handle) handle.addEventListener('mousedown', onMouseDownDrag);
+    var headerElForMouse = sec.querySelector('.cart-header');
+    if (headerElForMouse) headerElForMouse.addEventListener('mousedown', onMouseDownDrag);
+
+    window.addEventListener('mousemove', function (e) {
+      if (!activeMouseDrag) return;
+      var dy = e.clientY - startY;
+      if (!dragging && dy > 6) {
+        dragging = true;
+        sec.classList.add('is-dragging');
+        if (bd) bd.classList.add('is-dragging');
+      }
+      if (dragging) {
+        applyDragVisual(dy);
+      }
+    });
+
+    window.addEventListener('mouseup', function () {
+      if (!activeMouseDrag) return;
+      activeMouseDrag = false;
+      finishDrag(true);
+    });
+
+    window.addEventListener('resize', function () {
+      if (!isMobileDrawerViewport() && document.body.classList.contains('is-cart-drawer-open')) {
+        closeMobileDrawer();
+      }
+    });
+  })();
 
   if ($('mobileCartToggle')) $('mobileCartToggle').onclick = openMobileDrawer;
   if ($('mobileOpenCartBtn')) $('mobileOpenCartBtn').onclick = openMobileDrawer;
-  if ($('cartDrawerHandle')) $('cartDrawerHandle').onclick = closeMobileDrawer;
+  if ($('cartDrawerHandle')) {
+    $('cartDrawerHandle').onclick = function () {
+      if (suppressNextHandleClick) return;
+      closeMobileDrawer();
+    };
+  }
   if ($('drawerBackdrop')) $('drawerBackdrop').onclick = closeMobileDrawer;
 
   /* ================= 12. KHỞI TẠO HỆ THỐNG ================= */
@@ -6657,5 +6863,42 @@
   syncUrgeCooldownFromStorage();
   syncPayUrgeCooldownFromStorage();
   setupLive();
+
+  // PWA Service Worker & Install Prompt
+  (function setupPwa() {
+    var deferredPwaPrompt = null;
+    var installBtn = $('btnMenuInstallPwa');
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      deferredPwaPrompt = e;
+      if (installBtn) installBtn.hidden = false;
+    });
+    window.addEventListener('appinstalled', function () {
+      deferredPwaPrompt = null;
+      if (installBtn) installBtn.hidden = true;
+      showToast('✓ Đã cài đặt Office Order thành công!');
+    });
+    if (installBtn) {
+      installBtn.onclick = function () {
+        if ($('moreDropdown')) $('moreDropdown').hidden = true;
+        if (!deferredPwaPrompt) {
+          showToast('Hãy dùng menu trình duyệt → "Thêm vào Màn hình chính"!');
+          return;
+        }
+        deferredPwaPrompt.prompt();
+        deferredPwaPrompt.userChoice.then(function () {
+          deferredPwaPrompt = null;
+          installBtn.hidden = true;
+        }).catch(function () {});
+      };
+    }
+    var canRegisterSw = ('serviceWorker' in navigator) &&
+      (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    if (canRegisterSw) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  })();
 
 })();
