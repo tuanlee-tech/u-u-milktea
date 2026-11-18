@@ -1117,9 +1117,12 @@
 
   /* ================= 3. UTILITIES & FORMATTING ================= */
   function newOrderCode() {
-    var d = new Date();
-    function p(n) { return String(n).padStart(2, '0'); }
-    return 'UU-' + d.getFullYear().toString().slice(2) + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+    var chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    var tail = '';
+    for (var i = 0; i < 4; i++) {
+      tail += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return 'U' + tail;
   }
   function fmt(n) { return (Number(n) || 0).toLocaleString('vi-VN') + 'đ'; }
   function fmtK(n) {
@@ -1290,6 +1293,14 @@
     return u + '/bill/' + encodeURIComponent(orderCode);
   }
 
+  function wsHttpOrigin() {
+    var u = wsUrl().replace(/\/$/, '').replace(/\/bill\/.*$/, '');
+    if (u.indexOf('wss://') === 0) return 'https://' + u.slice(6);
+    if (u.indexOf('ws://') === 0) return 'http://' + u.slice(5);
+    if (/^https?:\/\//.test(u)) return u;
+    return '';
+  }
+
   function liveStatus() {
     var parts = ['Bill ' + orderCode];
     parts.push(wsOk ? 'Nối' : 'Chờ');
@@ -1371,6 +1382,7 @@
         submittedRev: (F.orderSubmitted && F.orderSubmitted.rev) ? Number(F.orderSubmitted.rev) : (submittedFlag ? 1 : 0),
         hostUid: getHostUid(),
         hostName: getHostName(),
+        storeName: currentStore ? currentStore.name : '',
         hostQrNote: (F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v) : '',
         hostQr: (qrVal && qrVal.length <= 34000) ? qrVal : '',
         paidMap: (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object') ? F.paidMap.v : {},
@@ -3022,8 +3034,18 @@
 
   function wsConnect() {
     var u = wsEndpoint();
+    clearTimeout(wsRetry);
+    if (ws) {
+      try {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.close();
+      } catch (e) {}
+      ws = null;
+    }
     if (!u) { wsOk = false; liveStatus(); return; }
-    try { if (ws) ws.close(); } catch (e) {}
     var s = null;
     try { s = new WebSocket(u); } catch (e) { wsOk = false; liveStatus(); return; }
     ws = s;
@@ -3885,6 +3907,7 @@
     if ($('grandTotal')) $('grandTotal').textContent = fmt(t.grand);
     var unitStr = (currentStore && currentStore.itemUnit) || 'món';
     if ($('cupCountBadge')) $('cupCountBadge').textContent = t.totalCups + ' ' + unitStr;
+    if (typeof recordRecentBillSnapshot === 'function') recordRecentBillSnapshot(t);
 
     // Cập nhật thanh Mobile bar
     if ($('mobileCartTotal')) $('mobileCartTotal').textContent = fmt(t.grand);
@@ -6214,7 +6237,451 @@
     });
   }
 
-  // Tạo bill mới
+  // Tạo bill mới & Chuyển / Tìm mã bill
+  var RECENT_BILLS_KEY = 'uu_recent_bills';
+  var billSearchSeq = 0;
+  var billSearchDebounce = null;
+
+  function loadRecentBillsLocal() {
+    try {
+      var list = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+
+  function recordRecentBillSnapshot(totalsObj) {
+    if (!orderCode) return;
+    var t = totalsObj || totals();
+    var hasData = (cart.length > 0 || isOrderSubmitted() || !!getHostName());
+    if (!hasData) return;
+    try {
+      var list = loadRecentBillsLocal().filter(function (x) {
+        return x && x.ma_don && String(x.ma_don).toUpperCase() !== String(orderCode).toUpperCase();
+      });
+      list.unshift({
+        ma_don: orderCode,
+        hostName: getHostName() || '',
+        storeName: currentStore ? currentStore.name : '',
+        storeId: currentStore ? currentStore.id : '',
+        itemCount: t.totalCups || 0,
+        tong: t.grand || 0,
+        submitted: isOrderSubmitted(),
+        updatedAt: Date.now()
+      });
+      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(list.slice(0, 30)));
+    } catch (e) {}
+  }
+
+  function switchToBill(targetCode) {
+    var cleanCode = String(targetCode || '').trim();
+    if (!cleanCode) return;
+    if (cleanCode === orderCode) {
+      if ($('billSearchModal')) $('billSearchModal').hidden = true;
+      if ($('historyModal')) $('historyModal').hidden = true;
+      showToast('Bạn đang mở bill #' + orderCode + ' rồi!');
+      return;
+    }
+
+    if (ws && wsOk) {
+      try { ws.send(JSON.stringify({ type: 'peer_left', bill: orderCode, uid: myUid, from: clientId })); } catch (e) {}
+    }
+    if (bc) {
+      try { bc.postMessage({ kind: 'peer_left', bill: orderCode, uid: myUid, from: clientId }); } catch (e) {}
+    }
+
+    cart = [];
+    cartDel = {};
+    F = {};
+    activePayUrge = null;
+    seenPayUrgeIds = {};
+    seenUrgeIds = {};
+    stopPayUrgeAudio();
+    onlineUsers = {};
+    remoteFocus = {};
+
+    orderCode = cleanCode;
+    isInitialSyncing = true;
+    setTimeout(function () { isInitialSyncing = false; }, 2500);
+    updateUrlParams();
+
+    if ($('customer')) $('customer').value = '';
+    if ($('orderNote')) $('orderNote').value = '';
+    if ($('discount')) $('discount').value = '0';
+    if ($('shipFee')) $('shipFee').value = '0';
+    initFields();
+    writeInputs();
+    syncUrgeCooldownFromStorage();
+    syncPayUrgeCooldownFromStorage();
+    renderCart();
+    renderPayReminderPanel(false);
+    fetchBillServerStateFromSheet();
+    wsConnect();
+
+    if ($('billSearchModal')) $('billSearchModal').hidden = true;
+    if ($('historyModal')) $('historyModal').hidden = true;
+    if (typeof closeMobileDrawer === 'function') closeMobileDrawer();
+    showToast('✓ Đã mở bill #' + orderCode);
+  }
+
+  function buildCombinedLocalBills() {
+    var map = {};
+    function upsert(entry) {
+      if (!entry || !entry.ma_don) return;
+      var k = String(entry.ma_don).trim().toUpperCase();
+      var prev = map[k];
+      if (!prev) {
+        map[k] = Object.assign({}, entry);
+      } else {
+        map[k] = {
+          ma_don: entry.ma_don || prev.ma_don,
+          hostName: entry.hostName || prev.hostName || '',
+          storeName: entry.storeName || prev.storeName || '',
+          itemCount: Math.max(Number(entry.itemCount) || 0, Number(prev.itemCount) || 0),
+          tong: (entry.tong !== undefined && entry.tong !== null && entry.tong > 0) ? entry.tong : (prev.tong || 0),
+          submitted: !!(entry.submitted || prev.submitted),
+          updatedAt: Math.max(Number(entry.updatedAt) || 0, Number(prev.updatedAt) || 0),
+          timeLabel: entry.timeLabel || prev.timeLabel || '',
+          source: entry.source || prev.source || 'local'
+        };
+      }
+    }
+
+    if (orderCode && (cart.length > 0 || isOrderSubmitted() || getHostName())) {
+      var curT = totals();
+      upsert({
+        ma_don: orderCode,
+        hostName: getHostName() || '',
+        storeName: currentStore ? currentStore.name : '',
+        itemCount: curT.totalCups || 0,
+        tong: curT.grand || 0,
+        submitted: isOrderSubmitted(),
+        updatedAt: Date.now(),
+        source: 'local'
+      });
+    }
+    loadRecentBillsLocal().forEach(function (r) {
+      upsert(Object.assign({}, r, { source: 'local' }));
+    });
+    try {
+      var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]');
+      (Array.isArray(hist) ? hist : []).forEach(function (h) {
+        if (!h || !h.ma_don) return;
+        upsert({
+          ma_don: h.ma_don,
+          hostName: (h.order && h.order.ten_khach) || '',
+          itemCount: (h.order && Array.isArray(h.order.items)) ? h.order.items.length : 0,
+          tong: Number(h.tong) || 0,
+          submitted: !!h.synced,
+          timeLabel: h.time || '',
+          updatedAt: 0,
+          source: 'sheet_local'
+        });
+      });
+    } catch (e) {}
+
+    return Object.keys(map).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+  }
+
+  function renderBillSearchResults(results, rawQuery, searchingRemote) {
+    var wrap = $('billSearchResults');
+    var stEl = $('billSearchStatus');
+    if (!wrap) return;
+
+    var qClean = String(rawQuery || '').trim();
+    if (stEl) {
+      if (searchingRemote) {
+        stEl.hidden = false;
+        stEl.textContent = 'Đang tìm trên phòng Live và Google Sheet…';
+      } else if (results.length > 0) {
+        stEl.hidden = false;
+        stEl.textContent = 'Tìm thấy ' + results.length + ' bill' + (qClean ? (' khớp "' + qClean + '"') : ' gần đây') + ':';
+      } else {
+        stEl.hidden = true;
+      }
+    }
+
+    wrap.innerHTML = '';
+    var hasExactMatch = results.some(function (r) {
+      return String(r.ma_don || '').trim().toUpperCase() === qClean.toUpperCase();
+    });
+
+    if (!results.length && !qClean) {
+      wrap.innerHTML = '<div class="bill-search-empty">Chưa có bill nào gần đây. Hãy nhập mã bill (vd: U7K4M) để tìm hoặc vào phòng đặt chung!</div>';
+      return;
+    }
+
+    results.forEach(function (item) {
+      var card = document.createElement('div');
+      var isCur = String(item.ma_don || '').trim().toUpperCase() === String(orderCode || '').trim().toUpperCase();
+      card.className = 'bill-result-card' + (isCur ? ' is-current' : '');
+
+      var statusCls = item.submitted ? 'is-saved' : (item.isLive ? 'is-live' : 'is-new');
+      var statusTxt = item.submitted ? 'Đã chốt & lưu Sheet' : (item.isLive ? ('Đang đặt realtime' + (item.onlineCount ? (' · ' + item.onlineCount + ' online') : '')) : 'Gần đây');
+
+      var metaParts = [];
+      if (item.storeName) metaParts.push(item.storeName);
+      if (item.hostName) metaParts.push('Đại diện: ' + item.hostName);
+      if (item.itemCount > 0) metaParts.push(item.itemCount + ' món');
+      if (item.tong > 0) metaParts.push(fmt(item.tong));
+      if (!item.updatedAt && item.timeLabel) metaParts.push(item.timeLabel);
+
+      var mainDiv = document.createElement('div');
+      mainDiv.className = 'bill-result-main';
+      mainDiv.innerHTML =
+        '<div class="bill-result-top">' +
+          '<span class="bill-result-code">#' + esc(item.ma_don) + '</span>' +
+          '<span class="bill-result-pill ' + statusCls + '">' + esc(statusTxt) + '</span>' +
+        '</div>' +
+        '<div class="bill-result-meta">' + (metaParts.length ? esc(metaParts.join(' · ')) : 'Phòng bill sẵn sàng') + '</div>';
+
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-open-bill';
+      btn.textContent = isCur ? 'Đang mở' : 'Mở bill';
+      btn.disabled = isCur;
+      btn.onclick = function () { switchToBill(item.ma_don); };
+
+      card.appendChild(mainDiv);
+      card.appendChild(btn);
+      wrap.appendChild(card);
+    });
+
+    if (qClean && /^[A-Za-z0-9_-]{3,24}$/.test(qClean) && !hasExactMatch && results.length === 0 && !searchingRemote) {
+      var guessCode = qClean.toUpperCase();
+      var directCard = document.createElement('div');
+      directCard.className = 'bill-result-card';
+      directCard.innerHTML =
+        '<div class="bill-result-main">' +
+          '<div class="bill-result-top">' +
+            '<span class="bill-result-code">#' + esc(guessCode) + '</span>' +
+            '<span class="bill-result-pill is-new">Mở phòng theo mã</span>' +
+          '</div>' +
+          '<div class="bill-result-meta">Chưa thấy dữ liệu lưu — bấm để vào/tạo phòng #' + esc(guessCode) + '</div>' +
+        '</div>';
+      var directBtn = document.createElement('button');
+      directBtn.type = 'button';
+      directBtn.className = 'btn-open-bill';
+      directBtn.textContent = 'Vào phòng';
+      directBtn.onclick = function () { switchToBill(guessCode); };
+      directCard.appendChild(directBtn);
+      wrap.appendChild(directCard);
+    }
+  }
+
+  function performBillSearch(rawQuery) {
+    var seq = ++billSearchSeq;
+    var q = String(rawQuery || '').trim();
+    var qLower = q.toLowerCase();
+    var mergedMap = {};
+
+    function mergeEntry(e) {
+      if (!e || !e.ma_don) return;
+      var k = String(e.ma_don).trim().toUpperCase();
+      var prev = mergedMap[k] || {};
+      mergedMap[k] = {
+        ma_don: prev.ma_don || String(e.ma_don).trim(),
+        hostName: e.hostName || prev.hostName || '',
+        storeName: e.storeName || prev.storeName || '',
+        itemCount: Math.max(Number(e.itemCount) || 0, Number(prev.itemCount) || 0),
+        tong: (Number(e.tong) > 0 ? Number(e.tong) : (Number(prev.tong) || 0)),
+        submitted: !!(e.submitted || prev.submitted),
+        isLive: !!(e.isLive || prev.isLive),
+        onlineCount: Math.max(Number(e.onlineCount) || 0, Number(prev.onlineCount) || 0),
+        updatedAt: Math.max(Number(e.updatedAt) || 0, Number(prev.updatedAt) || 0),
+        timeLabel: e.timeLabel || prev.timeLabel || ''
+      };
+    }
+
+    function currentFilteredList() {
+      var arr = Object.keys(mergedMap).map(function (k) { return mergedMap[k]; });
+      if (qLower) {
+        arr = arr.filter(function (it) {
+          return String(it.ma_don || '').toLowerCase().indexOf(qLower) !== -1 ||
+            String(it.hostName || '').toLowerCase().indexOf(qLower) !== -1 ||
+            String(it.storeName || '').toLowerCase().indexOf(qLower) !== -1;
+        });
+      }
+      arr.sort(function (a, b) {
+        var aExact = qLower && String(a.ma_don || '').toLowerCase() === qLower ? 1 : 0;
+        var bExact = qLower && String(b.ma_don || '').toLowerCase() === qLower ? 1 : 0;
+        if (aExact !== bExact) return bExact - aExact;
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+        return (b.updatedAt || 0) - (a.updatedAt || 0);
+      });
+      return arr;
+    }
+
+    buildCombinedLocalBills().forEach(mergeEntry);
+
+    var promises = [];
+    var origin = wsHttpOrigin();
+    if (origin) {
+      promises.push(
+        fetch(origin + '/bills?q=' + encodeURIComponent(q))
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (j && j.ok && Array.isArray(j.bills)) {
+              j.bills.forEach(function (b) {
+                mergeEntry({
+                  ma_don: b.bill,
+                  hostName: b.hostName || '',
+                  storeName: b.storeName || '',
+                  itemCount: b.itemCount || b.linesCount || 0,
+                  tong: b.subTotal || 0,
+                  submitted: !!b.submitted,
+                  isLive: true,
+                  onlineCount: b.onlineCount || 0,
+                  updatedAt: b.updatedAt || Date.now()
+                });
+              });
+            }
+          }).catch(function () {})
+      );
+
+      if (q && /^[A-Za-z0-9_-]{3,24}$/.test(q)) {
+        var candidates = [q];
+        var qUp = q.toUpperCase();
+        if (candidates.indexOf(qUp) === -1) candidates.push(qUp);
+        if (qUp.length === 4 && qUp.charAt(0) !== 'U') candidates.push('U' + qUp);
+        candidates.forEach(function (codeCandidate) {
+          promises.push(
+            fetch(origin + '/bill/' + encodeURIComponent(codeCandidate) + '?info=1')
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (j) {
+                if (j && j.ok && j.exists) {
+                  mergeEntry({
+                    ma_don: j.bill || codeCandidate,
+                    hostName: j.hostName || '',
+                    storeName: j.storeName || '',
+                    itemCount: j.itemCount || j.linesCount || 0,
+                    tong: j.subTotal || 0,
+                    submitted: !!j.submitted,
+                    isLive: true,
+                    onlineCount: j.onlineCount || 0,
+                    updatedAt: Date.now()
+                  });
+                }
+              }).catch(function () {})
+          );
+        });
+      }
+    }
+
+    var sheetUrl = api();
+    if (sheetUrl) {
+      var sep = sheetUrl.indexOf('?') === -1 ? '?' : '&';
+      promises.push(
+        fetch(sheetUrl + sep + 'action=search_bills&q=' + encodeURIComponent(q) + '&t=' + Date.now())
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            if (j && j.ok && Array.isArray(j.bills)) {
+              j.bills.forEach(function (b) {
+                mergeEntry({
+                  ma_don: b.ma_don || b.bill,
+                  hostName: b.hostName || '',
+                  storeName: b.storeName || '',
+                  tong: Number(b.tong_cong) || 0,
+                  submitted: !!b.submitted,
+                  updatedAt: Number(b.updatedAt) || Number(b.thoi_gian) || 0
+                });
+              });
+            }
+          }).catch(function () {})
+      );
+
+      if (q && /^[A-Za-z0-9_-]{3,24}$/.test(q)) {
+        var sheetCandidates = [q];
+        var qSup = q.toUpperCase();
+        if (sheetCandidates.indexOf(qSup) === -1) sheetCandidates.push(qSup);
+        if (qSup.length === 4 && qSup.charAt(0) !== 'U') sheetCandidates.push('U' + qSup);
+        sheetCandidates.forEach(function (cCode) {
+          promises.push(
+            fetch(sheetUrl + sep + 'action=state&key=' + encodeURIComponent('BILL_' + cCode) + '&t=' + Date.now())
+              .then(function (r) { return r.ok ? r.json() : null; })
+              .then(function (j) {
+                if (j && j.ok && j.state && j.state.value) {
+                  var parsed = null;
+                  try { parsed = JSON.parse(j.state.value); } catch (e) {}
+                  if (parsed && (parsed.submitted || parsed.hostName || parsed.bill)) {
+                    mergeEntry({
+                      ma_don: parsed.bill || cCode,
+                      hostName: parsed.hostName || '',
+                      storeName: parsed.storeName || '',
+                      submitted: !!parsed.submitted,
+                      updatedAt: Number(j.state.updatedMs) || Number(parsed.updatedAt) || 0
+                    });
+                  }
+                }
+              }).catch(function () {})
+          );
+        });
+      }
+    }
+
+    renderBillSearchResults(currentFilteredList(), q, promises.length > 0);
+    if (promises.length > 0) {
+      Promise.all(promises).then(function () {
+        if (seq !== billSearchSeq) return;
+        renderBillSearchResults(currentFilteredList(), q, false);
+      });
+    }
+  }
+
+  function openBillSearchModal(initialQuery) {
+    if ($('moreDropdown')) $('moreDropdown').hidden = true;
+    var modal = $('billSearchModal');
+    if (!modal) return;
+    modal.hidden = false;
+    var inp = $('billSearchInput');
+    if (inp) {
+      if (typeof initialQuery === 'string') inp.value = initialQuery;
+      setTimeout(function () {
+        try { inp.focus(); inp.select(); } catch (e) {}
+      }, 40);
+      performBillSearch(inp.value);
+    } else {
+      performBillSearch('');
+    }
+  }
+
+  function closeBillSearchModal() {
+    if ($('billSearchModal')) $('billSearchModal').hidden = true;
+  }
+
+  if ($('btnTopbarBillSearch')) $('btnTopbarBillSearch').onclick = function () { openBillSearchModal(''); };
+  if ($('btnCartFindBill')) $('btnCartFindBill').onclick = function () { openBillSearchModal(''); };
+  if ($('btnMenuFindBill')) $('btnMenuFindBill').onclick = function () { openBillSearchModal(''); };
+  if ($('orderCode')) {
+    $('orderCode').onclick = function () { openBillSearchModal(''); };
+  }
+  if ($('btnCloseBillSearch')) $('btnCloseBillSearch').onclick = closeBillSearchModal;
+  if ($('btnCloseBillSearchBtn')) $('btnCloseBillSearchBtn').onclick = closeBillSearchModal;
+  if ($('billSearchModal')) {
+    $('billSearchModal').onclick = function (e) {
+      if (e.target === $('billSearchModal')) closeBillSearchModal();
+    };
+  }
+  if ($('btnRunBillSearch')) {
+    $('btnRunBillSearch').onclick = function () {
+      performBillSearch($('billSearchInput') ? $('billSearchInput').value : '');
+    };
+  }
+  if ($('billSearchInput')) {
+    $('billSearchInput').oninput = function () {
+      clearTimeout(billSearchDebounce);
+      var val = this.value;
+      billSearchDebounce = setTimeout(function () { performBillSearch(val); }, 220);
+    };
+    $('billSearchInput').onkeydown = function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(billSearchDebounce);
+        performBillSearch(this.value);
+      }
+    };
+  }
+
   function createNewOrder() {
     if (cart.length && !confirm('Tạo bill mới? Bill hiện tại sẽ không bị ảnh hưởng.')) return;
     cart = [];
@@ -6242,20 +6709,50 @@
   if ($('btnMenuNew')) $('btnMenuNew').onclick = createNewOrder;
   if ($('btnNewInline')) $('btnNewInline').onclick = createNewOrder;
 
-  // Lịch sử đơn
+  // Lịch sử đơn (có lọc & bấm để mở lại bill)
+  function renderHistoryModalList(filterText) {
+    var ul = $('historyList');
+    if (!ul) return;
+    var q = String(filterText || '').trim().toLowerCase();
+    var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]');
+    if (q) {
+      hist = hist.filter(function (h) {
+        return String(h.ma_don || '').toLowerCase().indexOf(q) !== -1 ||
+          String(h.time || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    ul.innerHTML = hist.length ? '' : '<li class="bill-search-empty">Chưa có đơn nào phù hợp trên máy này.</li>';
+    hist.forEach(function (h) {
+      var li = document.createElement('li');
+      li.className = 'history-item';
+      var left = document.createElement('div');
+      left.className = 'history-item-main';
+      left.innerHTML =
+        '<span class="history-item-title">' + (h.synced ? '✓ ' : '⏳ ') + '#' + esc(h.ma_don) + ' · ' + Number(h.tong || 0).toLocaleString('vi-VN') + 'đ</span>' +
+        '<span class="history-item-sub">' + esc(h.time || '') + '</span>';
+      var openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'btn-open-bill';
+      openBtn.textContent = 'Mở bill';
+      li.onclick = function () { switchToBill(h.ma_don); };
+      openBtn.onclick = function (e) { e.stopPropagation(); switchToBill(h.ma_don); };
+      li.appendChild(left);
+      li.appendChild(openBtn);
+      ul.appendChild(li);
+    });
+  }
+
   if ($('btnMenuHistory')) {
     $('btnMenuHistory').onclick = function () {
-      var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]');
-      var ul = $('historyList');
-      if (ul) {
-        ul.innerHTML = hist.length ? '' : '<li>Chưa có đơn nào trên máy này.</li>';
-        hist.forEach(function (h) {
-          var li = document.createElement('li');
-          li.textContent = (h.synced ? '✓ ' : '⏳ ') + h.ma_don + ' · ' + Number(h.tong).toLocaleString('vi-VN') + 'đ · ' + h.time;
-          ul.appendChild(li);
-        });
-      }
+      if ($('moreDropdown')) $('moreDropdown').hidden = true;
+      if ($('historyFilterInput')) $('historyFilterInput').value = '';
+      renderHistoryModalList('');
       $('historyModal').hidden = false;
+    };
+  }
+  if ($('historyFilterInput')) {
+    $('historyFilterInput').oninput = function () {
+      renderHistoryModalList(this.value);
     };
   }
   if ($('btnCloseHistory')) $('btnCloseHistory').onclick = function () { $('historyModal').hidden = true; };

@@ -726,11 +726,17 @@ body {
 }
 .order-code-badge {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.03em;
   background: var(--sage-pill);
   color: #204835;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 6px;
+  cursor: pointer;
+  transition: background-color .15s ease, transform .15s ease;
+}
+.order-code-badge:hover {
+  background: #D0E1D3;
 }
 .cup-count-badge {
   font-size: 11.5px;
@@ -2003,6 +2009,9 @@ body {
 }
 
 @media (max-width: 1400px) {
+  .topbar-slogan {
+    display: none;
+  }
   .luxury-sidebar {
     width: 162px;
     padding: 16px 10px;
@@ -3537,9 +3546,17 @@ body {
     gap: 7px;
   }
   .search-pill {
-    width: 100%;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
     max-width: 100%;
     height: 38px;
+  }
+  .btn-bill-search-top {
+    height: 38px;
+    padding: 0 11px;
+    font-size: 12px;
+    flex-shrink: 0;
   }
   .topbar-right {
     justify-content: flex-start;
@@ -4553,6 +4570,184 @@ body {
     height: 150px;
   }
 }
+
+/* ================= 13. TÌM MÃ BILL & MÃ BILL NGẮN ================= */
+.btn-bill-search-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 13px;
+  background: #FFFFFF;
+  border: 1px solid #D8E2DA;
+  border-radius: 9999px;
+  color: var(--forest-dark);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+.btn-bill-search-top:hover {
+  border-color: var(--forest-accent);
+  background: #F4F8F5;
+}
+.bill-search-modal {
+  max-width: 560px !important;
+  width: min(560px, calc(100vw - 24px)) !important;
+}
+.bill-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bill-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  border: 1.5px solid #D5DDD7;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  background: #FAF9F6;
+  outline: none;
+  font-family: inherit;
+}
+.bill-search-input:focus {
+  border-color: var(--forest-accent);
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(45, 85, 69, 0.12);
+}
+.bill-search-go {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.bill-search-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--sage-muted);
+  font-weight: 600;
+}
+.bill-search-results {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.bill-result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--sage-border);
+  border-radius: 12px;
+  background: #FAF9F6;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.bill-result-card:hover {
+  border-color: var(--forest-accent);
+  background: #FFFFFF;
+}
+.bill-result-card.is-current {
+  border-color: #86EFAC;
+  background: #F0FDF4;
+}
+.bill-result-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bill-result-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bill-result-code {
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #132B22;
+  background: var(--sage-pill);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.bill-result-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.bill-result-pill.is-live {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+.bill-result-pill.is-saved {
+  background: #DCFCE7;
+  color: #15803D;
+}
+.bill-result-pill.is-new {
+  background: #F1F5F9;
+  color: #475569;
+}
+.bill-result-meta {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  line-height: 1.35;
+  word-break: break-word;
+}
+.btn-open-bill {
+  background: var(--forest-dark);
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-open-bill:hover {
+  background: var(--forest-accent);
+}
+.bill-search-empty {
+  text-align: center;
+  padding: 18px 10px;
+  font-size: 12.5px;
+  color: var(--sage-muted);
+}
+.history-item-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.history-item-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--forest-dark);
+}
+.history-item-sub {
+  font-size: 11.5px;
+  color: var(--sage-muted);
+}
+
 
 
 

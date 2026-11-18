@@ -322,7 +322,94 @@ function doGet(e) {
     }
     return json_({ok:true, state: st, serverNow: new Date().getTime()});
   }
+  if (action === 'search_bills') {
+    var query = (e.parameter && e.parameter.q) || '';
+    return json_({ok:true, bills: searchBills_(query)});
+  }
   return json_({ok:true, msg:'Office Order POS online. Dung ?action=stores hoac ?action=menu'});
+}
+
+function searchBills_(rawQuery) {
+  var q = String(rawQuery || '').trim().toLowerCase();
+  var byCode = {};
+  var orderList = [];
+
+  try {
+    var stSh = sheet_('STATE', ['key', 'value', 'updated']);
+    var sn = stSh.getLastRow();
+    if (sn > 1) {
+      var sRows = stSh.getRange(2, 1, sn - 1, 3).getValues();
+      for (var i = sRows.length - 1; i >= 0; i--) {
+        var k = String(sRows[i][0] || '');
+        if (k.indexOf('BILL_') !== 0) continue;
+        var code = k.slice(5).trim();
+        if (!code) continue;
+        var parsed = null;
+        try { parsed = JSON.parse(String(sRows[i][1] || '')); } catch (err) {}
+        var hostName = parsed && parsed.hostName ? String(parsed.hostName) : '';
+        var storeName = parsed && parsed.storeName ? String(parsed.storeName) : '';
+        var updatedMs = Number(sRows[i][2]) || 0;
+        var item = {
+          ma_don: code,
+          hostName: hostName,
+          storeName: storeName,
+          submitted: !!(parsed && parsed.submitted),
+          updatedAt: updatedMs,
+          source: 'sheet'
+        };
+        byCode[code.toLowerCase()] = item;
+        orderList.push(item);
+      }
+    }
+  } catch (err) {}
+
+  try {
+    var sh = sheet_('DONHANG', ['ma_don','thoi_gian','ten_khach','kenh','thanh_toan','tam_tinh','giam_gia','ship','tong_cong','ghi_chu']);
+    var n = sh.getLastRow();
+    if (n > 1) {
+      var rows = sh.getRange(2, 1, n - 1, 10).getValues();
+      for (var r = rows.length - 1; r >= 0; r--) {
+        var ma = String(rows[r][0] || '').trim();
+        if (!ma) continue;
+        var lk = ma.toLowerCase();
+        var hostNm = String(rows[r][2] || '').trim();
+        var total = Number(rows[r][8]) || 0;
+        var tVal = rows[r][1];
+        var ts = tVal instanceof Date ? tVal.getTime() : (Number(tVal) || 0);
+        if (byCode[lk]) {
+          byCode[lk].tong_cong = total;
+          byCode[lk].hostName = byCode[lk].hostName || hostNm;
+          byCode[lk].thoi_gian = ts;
+          byCode[lk].submitted = true;
+        } else {
+          var itemD = {
+            ma_don: ma,
+            hostName: hostNm,
+            tong_cong: total,
+            thoi_gian: ts,
+            updatedAt: ts,
+            submitted: true,
+            source: 'sheet'
+          };
+          byCode[lk] = itemD;
+          orderList.push(itemD);
+        }
+      }
+    }
+  } catch (err) {}
+
+  var filtered = [];
+  for (var j = 0; j < orderList.length; j++) {
+    var it = orderList[j];
+    if (!q ||
+        String(it.ma_don || '').toLowerCase().indexOf(q) !== -1 ||
+        String(it.hostName || '').toLowerCase().indexOf(q) !== -1 ||
+        String(it.storeName || '').toLowerCase().indexOf(q) !== -1) {
+      filtered.push(it);
+      if (filtered.length >= 25) break;
+    }
+  }
+  return filtered;
 }
 
 function doPost(e) {

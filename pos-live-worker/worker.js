@@ -3,6 +3,55 @@
 
 const URGE_COOLDOWN_MS = 30000;
 const PAY_URGE_COOLDOWN_MS = 30000;
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+};
+
+function jsonCors(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: Object.assign({ 'Content-Type': 'application/json; charset=utf-8' }, CORS_HEADERS)
+  });
+}
+
+function summarizeRoomWrap(bill, lastWrap, presenceMap) {
+  const lines = lastWrap && Array.isArray(lastWrap.lines) ? lastWrap.lines : [];
+  const fields = (lastWrap && lastWrap.fields) || {};
+  const hostName = (fields.cust && fields.cust.v) ? String(fields.cust.v) : '';
+  const submitted = !!(fields.orderSubmitted && fields.orderSubmitted.v);
+  const storeId = (lastWrap && lastWrap.storeId) || '';
+  const storeName = (lastWrap && lastWrap.storeData && lastWrap.storeData.name) ||
+    (storeId === 'vua-tron' ? 'Vua Trộn' : (storeId ? 'Ú Ụ Milk Tea' : ''));
+  let itemCount = 0;
+  let subTotal = 0;
+  for (const c of lines) {
+    const qty = Number(c.qty) || 1;
+    if (c.size !== 'TP') itemCount += qty;
+    let topSum = 0;
+    if (Array.isArray(c.toppings)) {
+      for (const t of c.toppings) topSum += (Number(t.price) || 0) * (Number(t.qty) || 1);
+    }
+    subTotal += ((Number(c.price) || 0) + topSum) * qty;
+  }
+  const now = Date.now();
+  const onlineCount = Object.keys(presenceMap || {}).filter(k => (now - (presenceMap[k].lastSeen || 0)) < 15000).length;
+  const exists = !!(lastWrap && (lines.length > 0 || submitted || hostName));
+  return {
+    ok: true,
+    exists,
+    bill: bill || '',
+    linesCount: lines.length,
+    itemCount,
+    subTotal,
+    hostName,
+    storeId,
+    storeName,
+    submitted,
+    onlineCount
+  };
+}
 
 function isPaidInLastState(lastWrap, uid, uname) {
   const pm = lastWrap && lastWrap.fields && lastWrap.fields.paidMap && lastWrap.fields.paidMap.v;
@@ -40,21 +89,28 @@ function stripPayUrgeMeta(obj, removeAlertFields) {
 }
 
 export class LiveRoom {
-  constructor(state) {
+  constructor(state, env) {
     this.state = state;
+    this.env = env || {};
     this.bill = '';
     this.last = null;
     this.lastUrgeAt = 0;
     this.lastPayUrgeAt = 0;
     this.lastPayUrge = null;
+    this.lastIndexedAt = 0;
+    this.lastIndexedSubmitted = false;
+    this.lastIndexedCount = -1;
+    this.billIndex = null;
     this.presence = {}; // cid -> { cid, uid, uname, ucolor, lastSeen }
     this.state.blockConcurrencyWhile(async () => {
       try {
+        this.bill = (await this.state.storage.get('billCode')) || '';
         this.last = (await this.state.storage.get('last')) || null;
         this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0;
         this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0;
         this.lastPayUrge = (await this.state.storage.get('lastPayUrge')) || null;
       } catch (e) {
+        this.bill = '';
         this.last = null;
         this.lastUrgeAt = 0;
         this.lastPayUrgeAt = 0;
@@ -64,12 +120,107 @@ export class LiveRoom {
   }
 
   async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+    if (url.pathname === '/__index_upsert' && request.method === 'POST') {
+      try {
+        const entry = await request.json();
+        if (!this.billIndex) {
+          this.billIndex = (await this.state.storage.get('billIndex')) || {};
+        }
+        if (entry && entry.bill) {
+          const code = String(entry.bill).trim();
+          if (entry.remove) {
+            delete this.billIndex[code];
+          } else {
+            this.billIndex[code] = entry;
+          }
+          const cutoff = Date.now() - 14 * 86400000;
+          const entries = Object.values(this.billIndex)
+            .filter(item => item && item.bill && (item.updatedAt || 0) > cutoff)
+            .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+            .slice(0, 120);
+          const nextMap = {};
+          for (const it of entries) nextMap[it.bill] = it;
+          this.billIndex = nextMap;
+          await this.state.storage.put('billIndex', nextMap);
+        }
+        return jsonCors({ ok: true });
+      } catch (e) {
+        return jsonCors({ ok: false }, 400);
+      }
+    }
+    if (url.pathname === '/bills' && request.method === 'GET') {
+      try {
+        if (!this.billIndex) {
+          this.billIndex = (await this.state.storage.get('billIndex')) || {};
+        }
+        const rawQ = (url.searchParams.get('q') || '').trim().toLowerCase();
+        const cutoff = Date.now() - 14 * 86400000;
+        let list = Object.values(this.billIndex)
+          .filter(it => it && it.bill && (it.updatedAt || 0) > cutoff && (it.itemCount > 0 || it.submitted || it.hostName));
+        if (rawQ) {
+          list = list.filter(it =>
+            String(it.bill || '').toLowerCase().includes(rawQ) ||
+            String(it.hostName || '').toLowerCase().includes(rawQ) ||
+            String(it.storeName || '').toLowerCase().includes(rawQ)
+          );
+        }
+        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        return jsonCors({ ok: true, bills: list.slice(0, 25) });
+      } catch (e) {
+        return jsonCors({ ok: true, bills: [] });
+      }
+    }
     if (request.headers.get('Upgrade') !== 'websocket') {
+      if (url.searchParams.get('info') === '1') {
+        if (!this.last) {
+          try { this.last = (await this.state.storage.get('last')) || null; } catch (e) {}
+        }
+        const m = url.pathname.match(/^\/bill\/(.+)/);
+        const billCode = this.bill || (m ? decodeURIComponent(m[1]) : '');
+        return jsonCors(summarizeRoomWrap(billCode, this.last, this.presence));
+      }
       return new Response('POS Live relay. WS: /bill/MÃ', { status: 400 });
     }
     const pair = new WebSocketPair();
     this.state.acceptWebSocket(pair[1]);
     return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  async reportToBillIndex(billCode, wrap, force = false) {
+    if (!this.env || !this.env.LIVE_ROOM || !billCode || billCode === '__BILL_INDEX__') return;
+    const summary = summarizeRoomWrap(billCode, wrap, this.presence);
+    const now = Date.now();
+    if (!summary.exists && !force) return;
+    const keyChanged = (summary.submitted !== this.lastIndexedSubmitted) || (summary.linesCount !== this.lastIndexedCount);
+    if (!force && !keyChanged && (now - this.lastIndexedAt < 8000)) return;
+    this.lastIndexedAt = now;
+    this.lastIndexedSubmitted = summary.submitted;
+    this.lastIndexedCount = summary.linesCount;
+    try {
+      const idxId = this.env.LIVE_ROOM.idFromName('__BILL_INDEX__');
+      const stub = this.env.LIVE_ROOM.get(idxId);
+      await stub.fetch('https://internal/__index_upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bill: billCode,
+          hostName: summary.hostName,
+          storeId: summary.storeId,
+          storeName: summary.storeName,
+          itemCount: summary.itemCount,
+          linesCount: summary.linesCount,
+          subTotal: summary.subTotal,
+          submitted: summary.submitted,
+          onlineCount: summary.onlineCount,
+          updatedAt: now,
+          remove: !summary.exists
+        })
+      });
+    } catch (e) {}
   }
 
   prunePresence() {
@@ -87,7 +238,10 @@ export class LiveRoom {
     if (!d) return;
 
     if (d.type === 'hello') {
-      if (d.bill) this.bill = String(d.bill);
+      if (d.bill) {
+        this.bill = String(d.bill);
+        try { await this.state.storage.put('billCode', this.bill); } catch (e) {}
+      }
       const cid = d.from || Math.random().toString(36).slice(2);
       ws.cid = cid;
       ws.uid = d.uid || cid;
@@ -187,8 +341,13 @@ export class LiveRoom {
       if (prev && prev.fields && prevSubRev > inSubRev && incoming.fields) {
         incoming.fields.orderSubmitted = prev.fields.orderSubmitted;
       }
+      if (d.bill && !this.bill) {
+        this.bill = String(d.bill);
+        try { await this.state.storage.put('billCode', this.bill); } catch (e) {}
+      }
       this.last = incoming;
       try { await this.state.storage.put('last', incoming); } catch (e) {}
+      this.reportToBillIndex(this.bill || d.bill, incoming, false).catch(() => {});
       const out = JSON.stringify({ type: 'state', bill: this.bill || d.bill, wrap: incoming, from: d.from });
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
@@ -293,6 +452,8 @@ export class LiveRoom {
       this.last = null;
       this.lastPayUrge = null;
       this.lastPayUrgeAt = 0;
+      this.lastIndexedCount = 0;
+      this.reportToBillIndex(this.bill || d.bill, null, true).catch(() => {});
       try {
         await this.state.storage.delete('last');
         await this.state.storage.delete('lastPayUrge');
@@ -388,9 +549,16 @@ export class LiveRoom {
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
     const u = new URL(request.url);
+    if (u.pathname === '/bills') {
+      const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');
+      return env.LIVE_ROOM.get(idxId).fetch(request);
+    }
     const m = u.pathname.match(/^\/bill\/(.+)/);
-    if (!m) return new Response('POS Live relay. WS: /bill/MÃ', { status: 200 });
+    if (!m) return new Response('POS Live relay. WS: /bill/MÃ', { status: 200, headers: CORS_HEADERS });
     const id = env.LIVE_ROOM.idFromName(decodeURIComponent(m[1]));
     return env.LIVE_ROOM.get(id).fetch(request);
   }
