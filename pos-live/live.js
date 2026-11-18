@@ -1376,6 +1376,9 @@
     if (!apiUrl || !orderCode) return;
     try {
       var qrVal = (F.hostQr && F.hostQr.v) ? String(F.hostQr.v) : '';
+      var qrChunkSize = 44000;
+      var useChunks = (qrVal && qrVal.length > qrChunkSize && qrVal.length <= 160000);
+      var chunkCount = useChunks ? Math.ceil(qrVal.length / qrChunkSize) : 0;
       var payload = {
         bill: orderCode,
         submitted: !!submittedFlag,
@@ -1384,10 +1387,24 @@
         hostName: getHostName(),
         storeName: currentStore ? currentStore.name : '',
         hostQrNote: (F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v) : '',
-        hostQr: (qrVal && qrVal.length <= 34000) ? qrVal : '',
+        hostQr: (!useChunks && qrVal && qrVal.length <= qrChunkSize) ? qrVal : '',
+        hostQrChunks: chunkCount,
         paidMap: (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object') ? F.paidMap.v : {},
         updatedAt: Date.now()
       };
+      if (useChunks) {
+        for (var ci = 0; ci < chunkCount; ci++) {
+          var part = qrVal.slice(ci * qrChunkSize, (ci + 1) * qrChunkSize);
+          fetch(apiUrl, {
+            method: 'POST',
+            body: JSON.stringify({
+              action: 'state',
+              key: 'BILLQR_' + orderCode + '_' + ci,
+              value: part
+            })
+          }).catch(function () {});
+        }
+      }
       fetch(apiUrl, {
         method: 'POST',
         body: JSON.stringify({
@@ -1397,6 +1414,15 @@
         })
       }).catch(function () {});
     } catch (e) {}
+  }
+
+  function applyLoadedSheetHostQr(qrDataUrl) {
+    if (!qrDataUrl || (F.hostQr && F.hostQr.v)) return;
+    F.hostQr = { v: qrDataUrl, rev: Math.max(1, (F.hostQr && F.hostQr.rev) || 0), by: 'sheet' };
+    renderCart();
+    renderSplitBillIfOpen();
+    if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
+    updateHostDropdownUI();
   }
 
   function fetchBillServerStateFromSheet() {
@@ -1443,6 +1469,23 @@
         if (s.hostQr && (!F.hostQr || !F.hostQr.v)) {
           F.hostQr = { v: s.hostQr, rev: Math.max(1, (F.hostQr && F.hostQr.rev) || 0), by: 'sheet' };
           changed = true;
+        } else if (Number(s.hostQrChunks) > 0 && (!F.hostQr || !F.hostQr.v)) {
+          var cnt = Math.min(8, Number(s.hostQrChunks));
+          var chunkPromises = [];
+          for (var i = 0; i < cnt; i++) {
+            chunkPromises.push(
+              fetch(apiUrl + sep + 'action=state&key=' + encodeURIComponent('BILLQR_' + targetBill + '_' + i) + '&t=' + Date.now())
+                .then(function (r) { return r.json(); })
+                .then(function (cr) { return (cr && cr.ok && cr.state && cr.state.value) ? String(cr.state.value) : ''; })
+                .catch(function () { return ''; })
+            );
+          }
+          Promise.all(chunkPromises).then(function (parts) {
+            if (orderCode !== targetBill) return;
+            if (parts.length === cnt && parts.every(function (p) { return !!p; })) {
+              applyLoadedSheetHostQr(parts.join(''));
+            }
+          });
         }
         if (s.paidMap && typeof s.paidMap === 'object') {
           var curPm = (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object')
@@ -2589,6 +2632,7 @@
   }
 
   var activePayQrZoomData = null;
+  var payReminderCollapsed = false;
 
   function openQrZoomModal(opts) {
     var d = opts || activePayQrZoomData;
@@ -2668,9 +2712,11 @@
     var soundBtn = $('btnPlayPayReminderAudio');
 
     panel.hidden = false;
-    panel.classList.add('is-debtor-locked');
-    panel.classList.remove('is-collapsed', 'is-manual-open');
-    if (badge) badge.textContent = 'NHẮC THANH TOÁN RIÊNG';
+    panel.classList.remove('is-debtor-locked', 'is-manual-open');
+    panel.classList.toggle('is-collapsed', !!payReminderCollapsed);
+    var toggleBtn = $('btnTogglePayReminder');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', payReminderCollapsed ? 'false' : 'true');
+    if (badge) badge.textContent = payReminderCollapsed ? 'NHẮC THANH TOÁN (Bấm để mở QR)' : 'NHẮC THANH TOÁN RIÊNG';
     if (headline) headline.textContent = myUnpaid[0].name + ', bạn còn ' + fmt(myUnpaidTotal) + ' chưa thanh toán!';
     if (personal) {
       personal.classList.remove('is-paid-info');
@@ -2743,6 +2789,7 @@
       ts: d.ts || Date.now(),
       autoPlayedYet: false
     };
+    payReminderCollapsed = false;
     startPayUrgeCooldown(d.urgePayCooldownMs || d.urgeCooldownMs || PAY_URGE_COOLDOWN_MS);
     renderPayReminderPanel(true);
   }
@@ -4163,25 +4210,47 @@
   function resizeImageFileToDataUrl(file, maxDim, cb) {
     var reader = new FileReader();
     reader.onload = function (ev) {
+      var rawDataUrl = ev.target && ev.target.result ? String(ev.target.result) : '';
       var img = new Image();
       img.onload = function () {
         var w = img.naturalWidth || img.width || maxDim;
         var h = img.naturalHeight || img.height || maxDim;
-        var ratio = Math.min(1, maxDim / Math.max(w, h));
-        var tw = Math.max(120, Math.round(w * ratio));
-        var th = Math.max(120, Math.round(h * ratio));
+        var isLosslessSource = (file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/svg+xml');
+        // Giữ nguyên file gốc không nén lại nếu ảnh đã rõ nét và dung lượng gọn
+        if (isLosslessSource && rawDataUrl && rawDataUrl.length <= 130000 && Math.max(w, h) <= 1600) {
+          cb(null, rawDataUrl);
+          return;
+        }
+
+        var targetMax = Math.max(720, maxDim || 1080);
+        var ratio = Math.min(1, targetMax / Math.max(w, h));
+        var tw = Math.max(160, Math.round(w * ratio));
+        var th = Math.max(160, Math.round(h * ratio));
         var c = document.createElement('canvas');
         c.width = tw;
         c.height = th;
         var cx = c.getContext('2d');
         cx.fillStyle = '#FFFFFF';
         cx.fillRect(0, 0, tw, th);
+        cx.imageSmoothingEnabled = (ratio < 1);
+        if (cx.imageSmoothingEnabled) cx.imageSmoothingQuality = 'high';
         cx.drawImage(img, 0, 0, tw, th);
-        var out = c.toDataURL('image/jpeg', 0.78);
+
+        // Ưu tiên PNG không mất nét cho ảnh QR; chỉ dùng WebP chất lượng cao nếu PNG quá nặng
+        var out = c.toDataURL('image/png');
+        if (out.length > 90000) {
+          var webp95 = c.toDataURL('image/webp', 0.95);
+          if (webp95 && webp95.indexOf('data:image/webp') === 0) {
+            out = webp95;
+            if (out.length > 105000) out = c.toDataURL('image/webp', 0.90);
+          } else {
+            out = c.toDataURL('image/jpeg', 0.92);
+          }
+        }
         cb(null, out);
       };
       img.onerror = function () { cb(new Error('Invalid image')); };
-      img.src = ev.target.result;
+      img.src = rawDataUrl;
     };
     reader.onerror = function () { cb(new Error('Read failed')); };
     reader.readAsDataURL(file);
@@ -4203,16 +4272,18 @@
     img.crossOrigin = 'anonymous';
     img.onload = function () {
       try {
-        var maxDim = 360;
-        var ratio = Math.min(1, maxDim / Math.max(img.naturalWidth || 360, img.naturalHeight || 360));
-        var tw = Math.round((img.naturalWidth || 360) * ratio);
-        var th = Math.round((img.naturalHeight || 360) * ratio);
+        var maxDim = 1080;
+        var ratio = Math.min(1, maxDim / Math.max(img.naturalWidth || 540, img.naturalHeight || 640));
+        var tw = Math.round((img.naturalWidth || 540) * ratio);
+        var th = Math.round((img.naturalHeight || 640) * ratio);
         var c = document.createElement('canvas');
         c.width = tw;
         c.height = th;
         var cx = c.getContext('2d');
         cx.fillStyle = '#FFFFFF';
         cx.fillRect(0, 0, tw, th);
+        cx.imageSmoothingEnabled = (ratio < 1);
+        if (cx.imageSmoothingEnabled) cx.imageSmoothingQuality = 'high';
         cx.drawImage(img, 0, 0, tw, th);
         var dataUrl = c.toDataURL('image/png');
         updateHostQrPreview(dataUrl);
@@ -4790,7 +4861,11 @@
       var dh = ih * qRatio;
       var dx = frameX + (frameSize - dw) / 2;
       var dy = frameY + (frameSize - dh) / 2;
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(qrImg, dx, dy, dw, dh);
+      ctx.restore();
 
       // Clean executive payment info (no Step 1/2/3 or meta helper text)
       var infoX = frameX + frameSize + 22;
@@ -7049,7 +7124,7 @@
       showToast('Vui lòng chọn hoặc kéo thả đúng định dạng file ảnh QR!');
       return;
     }
-    resizeImageFileToDataUrl(file, 360, function (err, dataUrl) {
+    resizeImageFileToDataUrl(file, 1080, function (err, dataUrl) {
       if (err || !dataUrl) {
         showToast('Không đọc được file ảnh QR, hãy thử ảnh khác!');
         return;
@@ -7169,7 +7244,29 @@
     };
   }
 
-  // Floating Payment Reminder Panel (#payReminderPanel)
+  // Floating Payment Reminder Panel (#payReminderPanel) — Click header/nút để thu gọn / mở rộng
+  function togglePayReminderCollapse() {
+    var panel = $('payReminderPanel');
+    if (!panel || panel.hidden) return;
+    payReminderCollapsed = !payReminderCollapsed;
+    panel.classList.toggle('is-collapsed', payReminderCollapsed);
+    var toggleBtn = $('btnTogglePayReminder');
+    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', payReminderCollapsed ? 'false' : 'true');
+    var badge = $('payReminderBadge');
+    if (badge) badge.textContent = payReminderCollapsed ? 'NHẮC THANH TOÁN (Bấm để mở QR)' : 'NHẮC THANH TOÁN RIÊNG';
+  }
+  if ($('btnTogglePayReminder')) {
+    $('btnTogglePayReminder').onclick = function (e) {
+      e.stopPropagation();
+      togglePayReminderCollapse();
+    };
+  }
+  if ($('payReminderHeader')) {
+    $('payReminderHeader').onclick = function (e) {
+      if (e.target && e.target.closest && e.target.closest('#btnPlayPayReminderAudio')) return;
+      togglePayReminderCollapse();
+    };
+  }
   if ($('btnPlayPayReminderAudio')) {
     $('btnPlayPayReminderAudio').onclick = function (e) {
       e.stopPropagation();

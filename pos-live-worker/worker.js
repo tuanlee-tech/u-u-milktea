@@ -3,6 +3,53 @@
 
 const URGE_COOLDOWN_MS = 30000;
 const PAY_URGE_COOLDOWN_MS = 30000;
+const DO_QR_CHUNK_SIZE = 96000;
+
+async function saveLastWrap(storage, incoming) {
+  if (!storage || !incoming) return;
+  const raw = JSON.stringify(incoming);
+  if (raw.length <= 105000 || !incoming.fields || !incoming.fields.hostQr || !incoming.fields.hostQr.v) {
+    await storage.put('last', incoming);
+    const oldCnt = Number(await storage.get('lastQrChunks')) || 0;
+    for (let i = 0; i < oldCnt; i++) {
+      await storage.delete('lastQr_' + i);
+    }
+    if (oldCnt > 0) await storage.delete('lastQrChunks');
+    return;
+  }
+  const qrStr = String(incoming.fields.hostQr.v);
+  const chunks = Math.ceil(qrStr.length / DO_QR_CHUNK_SIZE);
+  const slim = Object.assign({}, incoming, {
+    fields: Object.assign({}, incoming.fields, {
+      hostQr: Object.assign({}, incoming.fields.hostQr, { v: '', splitChunks: chunks })
+    })
+  });
+  await storage.put('last', slim);
+  await storage.put('lastQrChunks', chunks);
+  for (let i = 0; i < chunks; i++) {
+    await storage.put('lastQr_' + i, qrStr.slice(i * DO_QR_CHUNK_SIZE, (i + 1) * DO_QR_CHUNK_SIZE));
+  }
+}
+
+async function loadLastWrap(storage) {
+  if (!storage) return null;
+  const last = (await storage.get('last')) || null;
+  if (!last) return null;
+  const qrField = last.fields && last.fields.hostQr;
+  const chunks = qrField && Number(qrField.splitChunks) ? Number(qrField.splitChunks) : 0;
+  if (chunks > 0) {
+    const parts = [];
+    for (let i = 0; i < chunks; i++) {
+      const p = await storage.get('lastQr_' + i);
+      if (p) parts.push(String(p));
+    }
+    if (parts.length === chunks) {
+      qrField.v = parts.join('');
+    }
+    delete qrField.splitChunks;
+  }
+  return last;
+}
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -105,7 +152,7 @@ export class LiveRoom {
     this.state.blockConcurrencyWhile(async () => {
       try {
         this.bill = (await this.state.storage.get('billCode')) || '';
-        this.last = (await this.state.storage.get('last')) || null;
+        this.last = await loadLastWrap(this.state.storage);
         this.lastUrgeAt = Number(await this.state.storage.get('lastUrgeAt')) || 0;
         this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0;
         this.lastPayUrge = (await this.state.storage.get('lastPayUrge')) || null;
@@ -177,7 +224,7 @@ export class LiveRoom {
     if (request.headers.get('Upgrade') !== 'websocket') {
       if (url.searchParams.get('info') === '1') {
         if (!this.last) {
-          try { this.last = (await this.state.storage.get('last')) || null; } catch (e) {}
+          try { this.last = await loadLastWrap(this.state.storage); } catch (e) {}
         }
         const m = url.pathname.match(/^\/bill\/(.+)/);
         const billCode = this.bill || (m ? decodeURIComponent(m[1]) : '');
@@ -258,7 +305,7 @@ export class LiveRoom {
       this.prunePresence();
 
       if (!this.last) {
-        try { this.last = (await this.state.storage.get('last')) || null; } catch (e) {}
+        try { this.last = await loadLastWrap(this.state.storage); } catch (e) {}
       }
       if (this.last) {
         try {
@@ -346,7 +393,7 @@ export class LiveRoom {
         try { await this.state.storage.put('billCode', this.bill); } catch (e) {}
       }
       this.last = incoming;
-      try { await this.state.storage.put('last', incoming); } catch (e) {}
+      try { await saveLastWrap(this.state.storage, incoming); } catch (e) {}
       this.reportToBillIndex(this.bill || d.bill, incoming, false).catch(() => {});
       const out = JSON.stringify({ type: 'state', bill: this.bill || d.bill, wrap: incoming, from: d.from });
       for (const s of this.state.getWebSockets()) {
@@ -455,6 +502,11 @@ export class LiveRoom {
       this.lastIndexedCount = 0;
       this.reportToBillIndex(this.bill || d.bill, null, true).catch(() => {});
       try {
+        const oldQrChunks = Number(await this.state.storage.get('lastQrChunks')) || 0;
+        for (let qi = 0; qi < oldQrChunks; qi++) {
+          await this.state.storage.delete('lastQr_' + qi);
+        }
+        await this.state.storage.delete('lastQrChunks');
         await this.state.storage.delete('last');
         await this.state.storage.delete('lastPayUrge');
         await this.state.storage.delete('lastPayUrgeAt');

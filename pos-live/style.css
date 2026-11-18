@@ -4385,18 +4385,18 @@ body {
   display: none !important;
 }
 .pay-reminder-panel.is-collapsed {
-  border-color: #CBD5E1;
-  box-shadow: 0 10px 26px rgba(18, 43, 34, 0.16);
+  border-color: #EA580C;
+  box-shadow: 0 10px 26px rgba(18, 43, 34, 0.22);
   width: min(350px, calc(100vw - 24px));
 }
 .pay-reminder-panel.is-collapsed .pay-reminder-body {
   display: none;
 }
-.pay-reminder-panel.is-collapsed.is-manual-open .pay-reminder-body {
-  display: block;
+.pay-toggle-chevron {
+  transition: transform 0.2s ease;
 }
-.pay-reminder-panel.is-debtor-locked .btn-pay-toggle {
-  display: none !important;
+.pay-reminder-panel.is-collapsed .pay-toggle-chevron {
+  transform: rotate(180deg);
 }
 .pay-reminder-header {
   display: flex;
@@ -4407,12 +4407,11 @@ body {
   background: linear-gradient(135deg, #EA580C 0%, #DC2626 100%);
   color: #FFFFFF;
   cursor: pointer;
+  user-select: none;
 }
 .pay-reminder-panel.is-collapsed .pay-reminder-header {
-  background: #132B22;
-}
-.pay-reminder-panel.is-debtor-locked .pay-reminder-header {
-  cursor: default;
+  background: linear-gradient(135deg, #C2410C 0%, #B91C1C 100%);
+  padding: 10px 14px;
 }
 .pay-reminder-title-wrap {
   display: flex;
