@@ -8,7 +8,8 @@ const CORE_SHELL = [
   './assets/img/opt/logo.webp',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
-  './assets/icons/apple-touch-icon.png'
+  './assets/icons/apple-touch-icon.png',
+  './assets/audio/pay-confirmed.mp3'
 ];
 
 self.addEventListener('install', (event) => {
@@ -111,6 +112,30 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached);
       return cached || networkFetch;
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  if (event.notification) event.notification.close();
+  const data = (event.notification && event.notification.data) || {};
+  const targetUrl = data.url || './';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (let i = 0; i < clientList.length; i++) {
+        const c = clientList[i];
+        if (c && 'focus' in c) {
+          if (data.bill && c.url && c.url.indexOf(data.bill) !== -1) {
+            return c.focus();
+          }
+        }
+      }
+      if (clientList.length > 0 && 'focus' in clientList[0]) {
+        return clientList[0].focus();
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
     })
   );
 });

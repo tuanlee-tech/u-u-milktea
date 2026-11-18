@@ -156,6 +156,29 @@ function stripPayUrgeMeta(obj, removeAlertFields) {
   return copy;
 }
 
+function isHostPeer(peer, msg, lastWrap) {
+  if (!peer) return false;
+  const f = (lastWrap && lastWrap.fields) || {};
+  const hostUid = String((f.hostUid && f.hostUid.v) || (msg && msg.hostUid) || '').trim();
+  const hostName = String((f.customer && f.customer.v) || (msg && msg.hostName) || '').trim().toLowerCase();
+  const peerUid = peer.uid ? String(peer.uid).trim() : '';
+  const peerName = String(peer.uname || '').trim().toLowerCase();
+  if (hostUid) return !!(peerUid && peerUid === hostUid);
+  if (hostName) return !!(peerName && peerName === hostName);
+  return true;
+}
+
+function matchesTargetPayer(peer, msg) {
+  if (!peer || !msg) return false;
+  const tUid = msg.targetUid ? String(msg.targetUid).trim() : '';
+  const tName = msg.targetName ? String(msg.targetName).trim().toLowerCase() : '';
+  const peerUid = peer.uid ? String(peer.uid).trim() : '';
+  const peerName = String(peer.uname || '').trim().toLowerCase();
+  if (tUid && peerUid && tUid === peerUid) return true;
+  if (tName && peerName && tName === peerName) return true;
+  return !tUid && !tName;
+}
+
 export class LiveRoom {
   constructor(state, env) {
     this.state = state;
@@ -553,6 +576,36 @@ export class LiveRoom {
       this.lastUrgeAt = now;
       try { await this.state.storage.put('lastUrgeAt', now); } catch (e) {}
       const out = JSON.stringify(Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS }));
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      return;
+    }
+
+    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel') {
+      const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws && isHostPeer(s, d, this.last)) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      return;
+    }
+
+    if (d.type === 'pay_claim_rejected') {
+      const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws && matchesTargetPayer(s, d)) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      return;
+    }
+
+    if (d.type === 'pay_confirmed') {
+      const out = JSON.stringify(d);
       for (const s of this.state.getWebSockets()) {
         if (s !== ws) {
           try { s.send(out); } catch (e) {}

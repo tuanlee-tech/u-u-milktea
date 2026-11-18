@@ -50,6 +50,29 @@ function stripPayUrgeMeta(obj, removeAlertFields) {
   return copy;
 }
 
+function isHostPeer(peer, msg, lastWrap) {
+  if (!peer) return false;
+  var f = (lastWrap && lastWrap.fields) || {};
+  var hostUid = String((f.hostUid && f.hostUid.v) || (msg && msg.hostUid) || '').trim();
+  var hostName = String((f.customer && f.customer.v) || (msg && msg.hostName) || '').trim().toLowerCase();
+  var peerUid = peer.uid ? String(peer.uid).trim() : '';
+  var peerName = String(peer.uname || '').trim().toLowerCase();
+  if (hostUid) return !!(peerUid && peerUid === hostUid);
+  if (hostName) return !!(peerName && peerName === hostName);
+  return true;
+}
+
+function matchesTargetPayer(peer, msg) {
+  if (!peer || !msg) return false;
+  var tUid = msg.targetUid ? String(msg.targetUid).trim() : '';
+  var tName = msg.targetName ? String(msg.targetName).trim().toLowerCase() : '';
+  var peerUid = peer.uid ? String(peer.uid).trim() : '';
+  var peerName = String(peer.uname || '').trim().toLowerCase();
+  if (tUid && peerUid && tUid === peerUid) return true;
+  if (tName && peerName && tName === peerName) return true;
+  return !tUid && !tName;
+}
+
 function prunePresence(room) {
   if (!room || !room.presence) return;
   var now = Date.now();
@@ -257,6 +280,36 @@ wss.on('connection', function (s) {
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill) {
           try { c.send(urgePayload); } catch (e) {}
+        }
+      });
+      return;
+    }
+
+    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel') {
+      var claimOut = JSON.stringify(d);
+      wss.clients.forEach(function (c) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill && isHostPeer(c, d, rooms[d.bill].last)) {
+          try { c.send(claimOut); } catch (e) {}
+        }
+      });
+      return;
+    }
+
+    if (d.type === 'pay_claim_rejected') {
+      var rejOut = JSON.stringify(d);
+      wss.clients.forEach(function (c) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill && matchesTargetPayer(c, d)) {
+          try { c.send(rejOut); } catch (e) {}
+        }
+      });
+      return;
+    }
+
+    if (d.type === 'pay_confirmed') {
+      var confOut = JSON.stringify(d);
+      wss.clients.forEach(function (c) {
+        if (c !== s && c.readyState === 1 && c.bill === d.bill) {
+          try { c.send(confOut); } catch (e) {}
         }
       });
       return;

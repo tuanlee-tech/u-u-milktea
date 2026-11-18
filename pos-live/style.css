@@ -890,7 +890,12 @@ body {
   background: #FFFDF5;
   border-color: #FDE68A;
 }
-.c-paid-check {
+.c-row.is-row-claimed {
+  background: #EFF6FF !important;
+  border-color: #93C5FD !important;
+}
+.c-paid-check,
+.c-claim-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -903,10 +908,20 @@ body {
 .c-paid-check:hover {
   background: rgba(10, 114, 89, 0.1);
 }
+.c-claim-check:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
 .c-paid-checkbox {
   width: 17px;
   height: 17px;
   accent-color: #0A7259;
+  cursor: pointer;
+  margin: 0;
+}
+.c-claim-checkbox {
+  width: 17px;
+  height: 17px;
+  accent-color: #2563EB;
   cursor: pointer;
   margin: 0;
 }
@@ -921,6 +936,10 @@ body {
 .c-row-paid-pill.is-paid {
   background: #DCFCE7;
   color: #15803D;
+}
+.c-row-paid-pill.is-claimed {
+  background: #DBEAFE;
+  color: #1D4ED8;
 }
 .c-row-paid-pill.is-unpaid {
   background: #FEF3C7;
@@ -3459,7 +3478,7 @@ body {
   background: rgba(255, 255, 255, 0.32);
 }
 @keyframes urgeBannerPop {
-  0% { opacity: 0; transform: translate(-50%, -24px) scale(0.92); }
+  0% { opacity: 0.9; transform: translate(-50%, -14px) scale(0.96); }
   100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 @keyframes urgeBellRing {
@@ -3823,11 +3842,13 @@ body {
     border: 1px solid #E2E8F0;
     border-radius: 7px;
   }
-  .c-paid-check {
+  .c-paid-check,
+  .c-claim-check {
     width: 30px;
     height: 30px;
   }
-  .c-paid-checkbox {
+  .c-paid-checkbox,
+  .c-claim-checkbox {
     width: 19px;
     height: 19px;
   }
@@ -5040,6 +5061,262 @@ body {
   background: #0A7259;
   border-color: #0A7259;
   color: #FFFFFF;
+}
+
+/* ================= PAYMENT CLAIM (MEMBER CHECK) & HOST CONFIRM ================= */
+.split-status-pill.is-claimed {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+.host-pay-tracker-row.is-row-claimed,
+.split-person-row.is-row-claimed {
+  background: #EFF6FF;
+  border-color: #93C5FD;
+}
+.btn-paid-toggle.is-claimed {
+  background: #DBEAFE;
+  border: 1px solid #60A5FA;
+  color: #1D4ED8;
+}
+.btn-paid-toggle.is-claimed:hover {
+  background: #BFDBFE;
+}
+.btn-claim-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid #93C5FD;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.btn-claim-toggle:hover {
+  background: #DBEAFE;
+  border-color: #3B82F6;
+}
+.btn-claim-toggle.is-claimed {
+  background: #2563EB;
+  border-color: #2563EB;
+  color: #FFFFFF;
+}
+.btn-claim-reject {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid #FCA5A5;
+  background: #FEF2F2;
+  color: #DC2626;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.btn-claim-reject:hover {
+  background: #FEE2E2;
+}
+.btn-pay-tracker-pending,
+.btn-host-tool.has-pending-claim {
+  border-color: #3B82F6 !important;
+  background: #EFF6FF !important;
+  color: #1D4ED8 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+.btn-pay-reminder-claim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1.5px solid #2563EB;
+  background: #EFF6FF;
+  color: #1D4ED8;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-pay-reminder-claim:hover {
+  background: #DBEAFE;
+}
+.btn-pay-reminder-claim.is-claimed {
+  background: #1D4ED8;
+  border-color: #1E40AF;
+  color: #FFFFFF;
+}
+.btn-pay-reminder-claim[hidden] {
+  display: none !important;
+}
+.urge-alert-banner.is-pay-confirmed {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  box-shadow: 0 14px 36px rgba(5, 150, 105, 0.4), 0 0 0 3px rgba(167, 243, 208, 0.7);
+}
+.host-claim-banner {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10010;
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%);
+  color: #FFFFFF;
+  padding: 12px 14px;
+  border-radius: 16px;
+  box-shadow: 0 14px 36px rgba(30, 64, 175, 0.42), 0 0 0 3px rgba(191, 219, 254, 0.65);
+  max-width: min(500px, calc(100vw - 24px));
+  width: max-content;
+  animation: urgeBannerPop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.host-claim-banner[hidden] {
+  display: none !important;
+}
+.host-claim-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  animation: urgeBellRing 0.6s ease-in-out infinite alternate;
+}
+.host-claim-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.host-claim-body strong {
+  font-size: 13.5px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.host-claim-body span {
+  font-size: 12px;
+  opacity: 0.94;
+  line-height: 1.35;
+}
+.host-claim-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.btn-claim-confirm {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: none;
+  background: #10B981;
+  color: #FFFFFF;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.btn-claim-confirm:hover {
+  background: #059669;
+}
+.btn-claim-reject-banner {
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.14);
+  color: #FFFFFF;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-claim-reject-banner:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+.host-claim-close {
+  background: rgba(255, 255, 255, 0.18);
+  border: none;
+  color: #FFFFFF;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-weight: 800;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .host-claim-banner {
+    top: 10px;
+    padding: 10px 12px;
+    width: calc(100vw - 20px);
+  }
+}
+
+/* ================= WEB NOTIFICATION BUTTON ================= */
+.btn-notif-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1.5px solid #F59E0B;
+  background: #FFFBEB;
+  color: #B45309;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.btn-notif-top:hover {
+  background: #FEF3C7;
+}
+.btn-notif-top.is-granted {
+  border-color: #A7F3D0;
+  background: #ECFDF5;
+  color: #047857;
+  padding: 6px 8px;
+}
+.btn-notif-top.is-granted .notif-top-label {
+  display: none;
+}
+.btn-notif-top.is-denied {
+  border-color: #CBD5E1;
+  background: #F1F5F9;
+  color: #64748B;
+  padding: 6px 8px;
+}
+.btn-notif-top.is-denied .notif-top-label {
+  display: none;
+}
+.btn-notif-top[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .btn-notif-top {
+    padding: 6px 8px;
+  }
+  .btn-notif-top .notif-top-label {
+    display: none;
+  }
 }
 
 
