@@ -1853,7 +1853,7 @@ body {
 }
 
 .canvas-scroll-wrapper {
-  max-height: 52vh;
+  max-height: 58vh;
   overflow-y: auto;
   border-radius: 12px;
   box-shadow: var(--shadow-lg);

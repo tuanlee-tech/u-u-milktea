@@ -5416,7 +5416,6 @@
     // Layout Dimensions (Modern 700px wide card)
     var W = 700;
     var pad = 26;
-    var scale = 2;
 
     var headerH = 114;
     var itemH = 32;
@@ -5431,18 +5430,72 @@
       ? (28 + people.length * splitCardH + (people.length - 1) * splitGap + 18)
       : 0;
 
-    var qrCols = (qrItems.length === 3 || qrItems.length >= 5) ? 3 : 2;
-    var qrRows = qrItems.length > 1 ? Math.ceil(qrItems.length / qrCols) : 1;
-    var qrGridRowH = (qrCols === 3) ? 168 : 182;
-    var qrGridGap = 10;
-    var qrHeadH = 54;
-    var qrBoxH = !hasQrBlock ? 0 : (qrItems.length === 1
-      ? 194
-      : (qrHeadH + qrRows * qrGridRowH + (qrRows - 1) * qrGridGap + 14));
+    function fitQrFrameDims(img, maxW, maxH, innerPad, minBoxW, minBoxH) {
+      var iw = (img && (img.naturalWidth || img.width)) || maxW;
+      var ih = (img && (img.naturalHeight || img.height)) || maxH;
+      var availW = Math.max(80, maxW - innerPad * 2);
+      var availH = Math.max(80, maxH - innerPad * 2);
+      var ratio = Math.min(availW / iw, availH / ih);
+      var dw = Math.max(60, Math.round(iw * ratio));
+      var dh = Math.max(60, Math.round(ih * ratio));
+      var fw = Math.max(minBoxW || 0, dw + innerPad * 2);
+      var fh = Math.max(minBoxH || 0, dh + innerPad * 2);
+      return {
+        iw: iw, ih: ih, dw: dw, dh: dh, fw: fw, fh: fh, innerPad: innerPad
+      };
+    }
+
+    var qrOuterPad = 14;
+    var qrInnerW = W - pad * 2 - qrOuterPad * 2;
+    var qrSingleLayout = null;
+    var qrVerticalCards = [];
+    var qrHeadH = 66;
+    var qrCardGap = 14;
+    var qrBoxH = 0;
+
+    if (hasQrBlock) {
+      if (qrItems.length === 1) {
+        var singleImg = qrItems[0].img;
+        var sNatW = (singleImg && (singleImg.naturalWidth || singleImg.width)) || 300;
+        var sNatH = (singleImg && (singleImg.naturalHeight || singleImg.height)) || 300;
+        var isTallSingle = sNatH > sNatW * 1.15;
+        qrSingleLayout = fitQrFrameDims(
+          singleImg,
+          isTallSingle ? 228 : 212,
+          isTallSingle ? 300 : 212,
+          8,
+          196,
+          196
+        );
+        qrBoxH = Math.max(224, qrSingleLayout.fh + 28);
+      } else {
+        var cardsTotalH = 0;
+        qrItems.forEach(function (item, idx) {
+          var noteTxt = (item.note && String(item.note).trim()) ? String(item.note).trim() : '';
+          var cardHeadH = noteTxt ? 68 : 46;
+          var dims = fitQrFrameDims(item.img, 468, 560, 10, 320, 320);
+          var cardH = cardHeadH + dims.fh + 18;
+          qrVerticalCards.push({
+            item: item,
+            idx: idx,
+            noteTxt: noteTxt,
+            cardHeadH: cardHeadH,
+            dims: dims,
+            cardH: cardH
+          });
+          cardsTotalH += cardH + (idx > 0 ? qrCardGap : 0);
+        });
+        qrBoxH = qrHeadH + cardsTotalH + 16;
+      }
+    }
+
     var qrBlockH = hasQrBlock ? (qrBoxH + 16) : 0;
     var footerH = 48;
 
     var totalH = headerH + itemsBlockH + summaryBlockH + splitBlockH + qrBlockH + footerH;
+    // Giữ tỉ lệ 2x sắc nét, chỉ giảm nhẹ nếu bill quá dài vượt giới hạn pixel canvas trên iOS Safari
+    var scale = Math.min(2, Math.sqrt(15500000 / Math.max(1, W * totalH)));
+    if (scale < 1) scale = 1;
 
     canvas.width = W * scale;
     canvas.height = totalH * scale;
@@ -5780,65 +5833,63 @@
       ctx.lineWidth = 1.5;
       drawRoundedRect(ctx, pad, curY, W - pad * 2, qrBoxH, 14, false, true);
 
-      function drawCrispQrBox(img, fx, fy, fSize, radius, innerPad) {
+      function drawCrispQrBox(img, fx, fy, dims, radius) {
         ctx.fillStyle = '#FFFFFF';
-        drawRoundedRect(ctx, fx, fy, fSize, fSize, radius, true, false);
+        drawRoundedRect(ctx, fx, fy, dims.fw, dims.fh, radius, true, false);
         ctx.strokeStyle = '#A7F3D0';
         ctx.lineWidth = 1.5;
-        drawRoundedRect(ctx, fx, fy, fSize, fSize, radius, false, true);
-        var inner = fSize - innerPad * 2;
-        var iw = img.naturalWidth || img.width || inner;
-        var ih = img.naturalHeight || img.height || inner;
-        var qRatio = Math.min(inner / iw, inner / ih);
-        var dw = iw * qRatio;
-        var dh = ih * qRatio;
-        var dx = fx + (fSize - dw) / 2;
-        var dy = fy + (fSize - dh) / 2;
+        drawRoundedRect(ctx, fx, fy, dims.fw, dims.fh, radius, false, true);
+        var dx = fx + (dims.fw - dims.dw) / 2;
+        var dy = fy + (dims.fh - dims.dh) / 2;
+        var isUpscalingQr = (dims.dw > dims.iw * 1.15 || dims.dh > dims.ih * 1.15);
         ctx.save();
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, dx, dy, dw, dh);
+        ctx.imageSmoothingEnabled = !isUpscalingQr;
+        if (!isUpscalingQr) ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, dx, dy, dims.dw, dims.dh);
         ctx.restore();
       }
 
       if (qrItems.length === 1) {
         var single = qrItems[0];
-        var frameSize = 168;
+        var sDims = qrSingleLayout;
         var frameX = pad + 14;
-        var frameY = curY + (qrBoxH - frameSize) / 2;
-        drawCrispQrBox(single.img, frameX, frameY, frameSize, 12, 8);
+        var frameY = curY + Math.round((qrBoxH - sDims.fh) / 2);
+        drawCrispQrBox(single.img, frameX, frameY, sDims, 12);
 
-        var infoX = frameX + frameSize + 22;
+        var infoX = frameX + sDims.fw + 22;
         var infoMaxW = (W - pad - 18) - infoX;
-
-        ctx.fillStyle = '#0A7259';
-        drawRoundedRect(ctx, infoX, curY + 26, 178, 22, 11, true, false);
-        drawCanvasVectorIcon(ctx, 'qr', infoX + 9, curY + 30, 14, '#FFFFFF');
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '800 10.5px ' + fontFam;
-        ctx.fillText('QUÉT MÃ QR THANH TOÁN', infoX + 28, curY + 41);
-
-        ctx.fillStyle = '#132B22';
-        ctx.font = '800 16.5px ' + fontFam;
-        var hostLine = 'Đại diện: ' + hostName + (single.hasCustomLabel ? (' (' + single.label + ')') : '');
-        ctx.fillText(fitText(ctx, hostLine, infoMaxW), infoX, curY + 78);
 
         var bankDetail = (single.note && single.note.trim()) ? single.note.trim() : qrNote;
         if (!bankDetail && currentStore && currentStore.bankInfo && currentStore.bankInfo.account) {
           bankDetail = currentStore.bankInfo.bank + ' · ' + currentStore.bankInfo.account +
             (currentStore.bankInfo.owner ? (' (' + currentStore.bankInfo.owner + ')') : '');
         }
+        var infoBlockH = bankDetail ? 140 : 114;
+        var infoTopY = curY + Math.max(20, Math.round((qrBoxH - infoBlockH) / 2));
+
+        ctx.fillStyle = '#0A7259';
+        drawRoundedRect(ctx, infoX, infoTopY, 178, 22, 11, true, false);
+        drawCanvasVectorIcon(ctx, 'qr', infoX + 9, infoTopY + 4, 14, '#FFFFFF');
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '800 10.5px ' + fontFam;
+        ctx.fillText('QUÉT MÃ QR THANH TOÁN', infoX + 28, infoTopY + 15);
+
+        ctx.fillStyle = '#132B22';
+        ctx.font = '800 16.5px ' + fontFam;
+        var hostLine = 'Đại diện: ' + hostName + (single.hasCustomLabel ? (' (' + single.label + ')') : '');
+        ctx.fillText(fitText(ctx, hostLine, infoMaxW), infoX, infoTopY + 52);
+
         if (bankDetail) {
           ctx.fillStyle = '#065F46';
           ctx.font = '700 13.5px ' + fontFam;
-          ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, curY + 106);
+          ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, infoTopY + 80);
         }
 
         var memoLabel = 'Nội dung CK: #' + orderCode;
         ctx.font = '700 12px ' + fontFam;
         var memoW = Math.min(infoMaxW, ctx.measureText(memoLabel).width + 22);
-        var memoY = bankDetail ? (curY + 126) : (curY + 102);
+        var memoY = bankDetail ? (infoTopY + 100) : (infoTopY + 76);
         ctx.fillStyle = '#FFFFFF';
         drawRoundedRect(ctx, infoX, memoY, memoW, 28, 8, true, false);
         ctx.strokeStyle = '#A7F3D0';
@@ -5847,62 +5898,85 @@
         ctx.fillStyle = '#047857';
         ctx.fillText(fitText(ctx, memoLabel, memoW - 16), infoX + 11, memoY + 18);
       } else {
-        var innerLeft = pad + 14;
-        var innerW = W - pad * 2 - 28;
+        var innerLeft = pad + qrOuterPad;
         ctx.fillStyle = '#0A7259';
-        drawRoundedRect(ctx, innerLeft, curY + 16, 178, 22, 11, true, false);
-        drawCanvasVectorIcon(ctx, 'qr', innerLeft + 9, curY + 20, 14, '#FFFFFF');
+        drawRoundedRect(ctx, innerLeft, curY + 15, 178, 22, 11, true, false);
+        drawCanvasVectorIcon(ctx, 'qr', innerLeft + 9, curY + 19, 14, '#FFFFFF');
         ctx.textAlign = 'left';
         ctx.fillStyle = '#FFFFFF';
         ctx.font = '800 10.5px ' + fontFam;
-        ctx.fillText('QUÉT MÃ QR THANH TOÁN', innerLeft + 28, curY + 31);
-
-        ctx.fillStyle = '#132B22';
-        ctx.font = '800 14px ' + fontFam;
-        ctx.fillText(fitText(ctx, 'Đại diện: ' + hostName, 240), innerLeft + 190, curY + 32);
+        ctx.fillText('QUÉT MÃ QR THANH TOÁN', innerLeft + 28, curY + 30);
 
         var multiMemo = 'ND: #' + orderCode;
         ctx.font = '700 11.5px ' + fontFam;
         var mMemoW = Math.min(180, ctx.measureText(multiMemo).width + 18);
-        var mMemoX = W - pad - 14 - mMemoW;
+        var mMemoX = W - pad - qrOuterPad - mMemoW;
         ctx.fillStyle = '#FFFFFF';
-        drawRoundedRect(ctx, mMemoX, curY + 14, mMemoW, 24, 8, true, false);
+        drawRoundedRect(ctx, mMemoX, curY + 13, mMemoW, 24, 8, true, false);
         ctx.strokeStyle = '#A7F3D0';
         ctx.lineWidth = 1;
-        drawRoundedRect(ctx, mMemoX, curY + 14, mMemoW, 24, 8, false, true);
+        drawRoundedRect(ctx, mMemoX, curY + 13, mMemoW, 24, 8, false, true);
         ctx.fillStyle = '#047857';
-        ctx.fillText(fitText(ctx, multiMemo, mMemoW - 14), mMemoX + 9, curY + 30);
+        ctx.fillText(fitText(ctx, multiMemo, mMemoW - 14), mMemoX + 9, curY + 29);
 
-        var cellW = (innerW - (qrCols - 1) * qrGridGap) / qrCols;
-        var qBoxSize = (qrCols === 3) ? 106 : 120;
-        var gridTop = curY + qrHeadH;
+        var hostMaxW = Math.max(80, mMemoX - 10 - (innerLeft + 190));
+        ctx.fillStyle = '#132B22';
+        ctx.font = '800 14px ' + fontFam;
+        ctx.fillText(fitText(ctx, 'Đại diện: ' + hostName, hostMaxW), innerLeft + 190, curY + 31);
 
-        qrItems.forEach(function (item, idx) {
-          var rowIdx = Math.floor(idx / qrCols);
-          var colIdx = idx % qrCols;
-          var cx = innerLeft + colIdx * (cellW + qrGridGap);
-          var cy = gridTop + rowIdx * (qrGridRowH + qrGridGap);
+        ctx.fillStyle = '#047857';
+        ctx.font = '700 11.5px ' + fontFam;
+        ctx.fillText(
+          fitText(ctx, 'Xếp dọc khổ lớn (' + qrItems.length + ' mã QR) · Chọn 1 mã bên dưới để quét', qrInnerW),
+          innerLeft,
+          curY + 51
+        );
+
+        var cardY = curY + qrHeadH;
+        qrVerticalCards.forEach(function (card) {
+          var cx = innerLeft;
+          var cy = cardY;
 
           ctx.fillStyle = '#FFFFFF';
-          drawRoundedRect(ctx, cx, cy, cellW, qrGridRowH, 10, true, false);
+          drawRoundedRect(ctx, cx, cy, qrInnerW, card.cardH, 12, true, false);
+          ctx.strokeStyle = '#A7F3D0';
+          ctx.lineWidth = 1.25;
+          drawRoundedRect(ctx, cx, cy, qrInnerW, card.cardH, 12, false, true);
+
+          var slotBadgeTxt = card.item.hasCustomLabel ? ('QR #' + (card.idx + 1)) : card.item.label;
+          var slotPillW = drawPillBadge(ctx, cx + 16, cy + 12, slotBadgeTxt, '#0A7259', '#FFFFFF', null, '800 11.5px ' + fontFam);
+
+          ctx.font = '700 11.5px ' + fontFam;
+          var cMemoW = Math.min(180, ctx.measureText(multiMemo).width + 18);
+          var cMemoX = cx + qrInnerW - 16 - cMemoW;
+          ctx.fillStyle = '#F0FDF4';
+          drawRoundedRect(ctx, cMemoX, cy + 11, cMemoW, 22, 7, true, false);
           ctx.strokeStyle = '#A7F3D0';
           ctx.lineWidth = 1;
-          drawRoundedRect(ctx, cx, cy, cellW, qrGridRowH, 10, false, true);
-
-          var qx = cx + (cellW - qBoxSize) / 2;
-          var qy = cy + 10;
-          drawCrispQrBox(item.img, qx, qy, qBoxSize, 8, 5);
-
-          ctx.textAlign = 'center';
-          ctx.fillStyle = '#0A7259';
-          ctx.font = '800 12px ' + fontFam;
-          ctx.fillText(fitText(ctx, item.label, cellW - 14), cx + cellW / 2, qy + qBoxSize + 17);
-
-          var subNote = (item.note && item.note.trim()) ? item.note.trim() : ('ND: #' + orderCode);
-          ctx.fillStyle = '#334155';
-          ctx.font = '600 10.5px ' + fontFam;
-          ctx.fillText(fitText(ctx, subNote, cellW - 14), cx + cellW / 2, qy + qBoxSize + 34);
+          drawRoundedRect(ctx, cMemoX, cy + 11, cMemoW, 22, 7, false, true);
           ctx.textAlign = 'left';
+          ctx.fillStyle = '#047857';
+          ctx.fillText(fitText(ctx, multiMemo, cMemoW - 14), cMemoX + 9, cy + 26);
+
+          if (card.item.hasCustomLabel) {
+            var lblX = cx + 16 + slotPillW + 10;
+            var lblMaxW = Math.max(60, cMemoX - 10 - lblX);
+            ctx.fillStyle = '#132B22';
+            ctx.font = '800 14.5px ' + fontFam;
+            ctx.fillText(fitText(ctx, card.item.label, lblMaxW), lblX, cy + 27);
+          }
+
+          if (card.noteTxt) {
+            ctx.fillStyle = '#065F46';
+            ctx.font = '700 13px ' + fontFam;
+            ctx.fillText(fitText(ctx, card.noteTxt, qrInnerW - 32), cx + 16, cy + 52);
+          }
+
+          var qx = cx + Math.round((qrInnerW - card.dims.fw) / 2);
+          var qy = cy + card.cardHeadH;
+          drawCrispQrBox(card.item.img, qx, qy, card.dims, 12);
+
+          cardY += card.cardH + qrCardGap;
         });
       }
 
