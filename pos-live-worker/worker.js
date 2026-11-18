@@ -1,14 +1,14 @@
 /* POS Live relay — chay tren Cloudflare Workers + Durable Objects.
  * Moi bill (?bill=MÃ) la 1 phong, tu gop o client, server chi chuyen tiep. */
 
-const URGE_COOLDOWN_MS = 30000;
-const PAY_URGE_COOLDOWN_MS = 30000;
+const URGE_COOLDOWN_MS = 10000;
 const DO_QR_CHUNK_SIZE = 96000;
 
 async function saveLastWrap(storage, incoming) {
   if (!storage || !incoming) return;
   const raw = JSON.stringify(incoming);
-  if (raw.length <= 105000 || !incoming.fields || !incoming.fields.hostQr || !incoming.fields.hostQr.v) {
+  const hasQr = !!(incoming.fields && ((incoming.fields.hostQr && incoming.fields.hostQr.v) || (incoming.fields.hostQrs && Array.isArray(incoming.fields.hostQrs.v) && incoming.fields.hostQrs.v.length)));
+  if (raw.length <= 105000 || !hasQr) {
     await storage.put('last', incoming);
     const oldCnt = Number(await storage.get('lastQrChunks')) || 0;
     for (let i = 0; i < oldCnt; i++) {
@@ -17,17 +17,20 @@ async function saveLastWrap(storage, incoming) {
     if (oldCnt > 0) await storage.delete('lastQrChunks');
     return;
   }
-  const qrStr = String(incoming.fields.hostQr.v);
-  const chunks = Math.ceil(qrStr.length / DO_QR_CHUNK_SIZE);
-  const slim = Object.assign({}, incoming, {
-    fields: Object.assign({}, incoming.fields, {
-      hostQr: Object.assign({}, incoming.fields.hostQr, { v: '', splitChunks: chunks })
-    })
+  const bundleStr = JSON.stringify({
+    hostQr: incoming.fields.hostQr || null,
+    hostQrs: incoming.fields.hostQrs || null
   });
+  const chunks = Math.ceil(bundleStr.length / DO_QR_CHUNK_SIZE);
+  const nextFields = Object.assign({}, incoming.fields);
+  if (nextFields.hostQr) nextFields.hostQr = Object.assign({}, nextFields.hostQr, { v: '' });
+  if (nextFields.hostQrs) nextFields.hostQrs = Object.assign({}, nextFields.hostQrs, { v: [] });
+  nextFields._qrBundleChunks = chunks;
+  const slim = Object.assign({}, incoming, { fields: nextFields });
   await storage.put('last', slim);
   await storage.put('lastQrChunks', chunks);
   for (let i = 0; i < chunks; i++) {
-    await storage.put('lastQr_' + i, qrStr.slice(i * DO_QR_CHUNK_SIZE, (i + 1) * DO_QR_CHUNK_SIZE));
+    await storage.put('lastQr_' + i, bundleStr.slice(i * DO_QR_CHUNK_SIZE, (i + 1) * DO_QR_CHUNK_SIZE));
   }
 }
 
@@ -35,18 +38,36 @@ async function loadLastWrap(storage) {
   if (!storage) return null;
   const last = (await storage.get('last')) || null;
   if (!last) return null;
-  const qrField = last.fields && last.fields.hostQr;
-  const chunks = qrField && Number(qrField.splitChunks) ? Number(qrField.splitChunks) : 0;
-  if (chunks > 0) {
+  const fields = last.fields;
+  const bundleChunks = fields && Number(fields._qrBundleChunks) ? Number(fields._qrBundleChunks) : 0;
+  if (bundleChunks > 0) {
     const parts = [];
-    for (let i = 0; i < chunks; i++) {
+    for (let i = 0; i < bundleChunks; i++) {
       const p = await storage.get('lastQr_' + i);
       if (p) parts.push(String(p));
     }
-    if (parts.length === chunks) {
-      qrField.v = parts.join('');
+    if (parts.length === bundleChunks) {
+      try {
+        const parsed = JSON.parse(parts.join(''));
+        if (parsed.hostQr) fields.hostQr = parsed.hostQr;
+        if (parsed.hostQrs) fields.hostQrs = parsed.hostQrs;
+      } catch (e) {}
     }
-    delete qrField.splitChunks;
+    delete fields._qrBundleChunks;
+  } else {
+    const qrField = fields && fields.hostQr;
+    const chunks = qrField && Number(qrField.splitChunks) ? Number(qrField.splitChunks) : 0;
+    if (chunks > 0) {
+      const parts = [];
+      for (let i = 0; i < chunks; i++) {
+        const p = await storage.get('lastQr_' + i);
+        if (p) parts.push(String(p));
+      }
+      if (parts.length === chunks) {
+        qrField.v = parts.join('');
+      }
+      delete qrField.splitChunks;
+    }
   }
   return last;
 }
@@ -332,21 +353,8 @@ export class LiveRoom {
           }));
         } catch (e) {}
       }
-      if (!this.lastPayUrgeAt) {
-        try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
-      }
       if (!this.lastPayUrge) {
         try { this.lastPayUrge = (await this.state.storage.get('lastPayUrge')) || null; } catch (e) {}
-      }
-      const payElapsed = Date.now() - (this.lastPayUrgeAt || 0);
-      if (this.lastPayUrgeAt > 0 && payElapsed < PAY_URGE_COOLDOWN_MS) {
-        try {
-          ws.send(JSON.stringify({
-            type: 'urge_pay_cooldown',
-            bill: this.bill,
-            remainingMs: PAY_URGE_COOLDOWN_MS - payElapsed
-          }));
-        } catch (e) {}
       }
       if (this.lastPayUrge && shouldDeliverPayUrge(ws, this.lastPayUrge, this.last)) {
         try {
@@ -446,26 +454,14 @@ export class LiveRoom {
       let payUrgeAllowed = false;
       if (d.urgePay) {
         const nowPay = Date.now();
-        if (!this.lastPayUrgeAt) {
-          try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
-        }
-        const elapsedPay = nowPay - (this.lastPayUrgeAt || 0);
-        if (elapsedPay < PAY_URGE_COOLDOWN_MS) {
-          const remPayMs = PAY_URGE_COOLDOWN_MS - elapsedPay;
-          try {
-            ws.send(JSON.stringify({ type: 'urge_pay_rejected', bill: this.bill || d.bill, remainingMs: remPayMs }));
-          } catch (e) {}
-          outObj = stripPayUrgeMeta(outObj, true);
-        } else {
-          this.lastPayUrgeAt = nowPay;
-          payUrgeAllowed = true;
-          outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
-          this.lastPayUrge = outObj;
-          try {
-            await this.state.storage.put('lastPayUrgeAt', nowPay);
-            await this.state.storage.put('lastPayUrge', outObj);
-          } catch (e) {}
-        }
+        this.lastPayUrgeAt = nowPay;
+        payUrgeAllowed = true;
+        outObj = Object.assign({}, outObj, { urgePayCooldownMs: 0 });
+        this.lastPayUrge = outObj;
+        try {
+          await this.state.storage.put('lastPayUrgeAt', nowPay);
+          await this.state.storage.put('lastPayUrge', outObj);
+        } catch (e) {}
       }
       const basePresenceStr = payUrgeAllowed ? null : JSON.stringify(stripPayUrgeMeta(outObj, false));
       const targetedPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, false)) : null;
@@ -522,22 +518,8 @@ export class LiveRoom {
 
     if (d.type === 'urge_pay') {
       const now = Date.now();
-      if (!this.lastPayUrgeAt) {
-        try { this.lastPayUrgeAt = Number(await this.state.storage.get('lastPayUrgeAt')) || 0; } catch (e) {}
-      }
-      const elapsed = now - (this.lastPayUrgeAt || 0);
-      if (elapsed < PAY_URGE_COOLDOWN_MS) {
-        try {
-          ws.send(JSON.stringify({
-            type: 'urge_pay_rejected',
-            bill: this.bill || d.bill,
-            remainingMs: PAY_URGE_COOLDOWN_MS - elapsed
-          }));
-        } catch (e) {}
-        return;
-      }
       this.lastPayUrgeAt = now;
-      const outObj = Object.assign({}, d, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+      const outObj = Object.assign({}, d, { urgePayCooldownMs: 0 });
       this.lastPayUrge = outObj;
       try {
         await this.state.storage.put('lastPayUrgeAt', now);

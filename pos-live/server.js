@@ -11,8 +11,8 @@ try {
   process.exit(1);
 }
 var wss = new WebSocketServer({ port: PORT });
-var URGE_COOLDOWN_MS = 30000;
-var PAY_URGE_COOLDOWN_MS = 30000;
+var URGE_COOLDOWN_MS = 10000;
+var PAY_URGE_COOLDOWN_MS = 0;
 var rooms = {}; // bill -> { last: wrap, lastUrgeAt: number, lastPayUrgeAt: number, lastPayUrge: object, presence: { cid -> ... } }
 
 function isPaidInLastState(lastWrap, uid, uname) {
@@ -185,18 +185,10 @@ wss.on('connection', function (s) {
       var payUrgeAllowed = false;
       if (d.urgePay) {
         var nowPay = Date.now();
-        var elapsedPay = nowPay - (rooms[d.bill].lastPayUrgeAt || 0);
-        if (elapsedPay < PAY_URGE_COOLDOWN_MS) {
-          try {
-            s.send(JSON.stringify({ type: 'urge_pay_rejected', bill: d.bill, remainingMs: PAY_URGE_COOLDOWN_MS - elapsedPay }));
-          } catch (e) {}
-          outObj = stripPayUrgeMeta(outObj, true);
-        } else {
-          rooms[d.bill].lastPayUrgeAt = nowPay;
-          payUrgeAllowed = true;
-          outObj = Object.assign({}, outObj, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
-          rooms[d.bill].lastPayUrge = outObj;
-        }
+        rooms[d.bill].lastPayUrgeAt = nowPay;
+        payUrgeAllowed = true;
+        outObj = Object.assign({}, outObj, { urgePayCooldownMs: 0 });
+        rooms[d.bill].lastPayUrge = outObj;
       }
       var basePresenceStr = payUrgeAllowed ? null : JSON.stringify(stripPayUrgeMeta(outObj, false));
       var targetedPresenceStr = payUrgeAllowed ? JSON.stringify(stripPayUrgeMeta(outObj, false)) : null;
@@ -239,15 +231,8 @@ wss.on('connection', function (s) {
 
     if (d.type === 'urge_pay') {
       var nowP = Date.now();
-      var elapsedP = nowP - (rooms[d.bill].lastPayUrgeAt || 0);
-      if (elapsedP < PAY_URGE_COOLDOWN_MS) {
-        try {
-          s.send(JSON.stringify({ type: 'urge_pay_rejected', bill: d.bill, remainingMs: PAY_URGE_COOLDOWN_MS - elapsedP }));
-        } catch (e) {}
-        return;
-      }
       rooms[d.bill].lastPayUrgeAt = nowP;
-      var urgePayOut = Object.assign({}, d, { urgePayCooldownMs: PAY_URGE_COOLDOWN_MS });
+      var urgePayOut = Object.assign({}, d, { urgePayCooldownMs: 0 });
       rooms[d.bill].lastPayUrge = urgePayOut;
       var urgePayPayload = JSON.stringify(stripPayUrgeMeta(urgePayOut, false));
       wss.clients.forEach(function (c) {

@@ -296,6 +296,10 @@
               <span id="btnUrgePayLabel">Hối trả tiền</span>
             </button>
           </div>
+          <button type="button" class="btn-host-tool btn-member-view-qr" id="btnViewHostQrsMember" hidden title="Xem &amp; quét mã QR chuyển khoản của đại diện">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+            <span id="btnMemberQrLabel">Xem QR đại diện</span>
+          </button>
         </div>
 
         <!-- Inline Quick Member Payment Status Tracker (Host marks Paid/Unpaid directly) -->
@@ -939,7 +943,7 @@ Tóp mỡ thêm 5k"></textarea>
           </svg>
           Phát Loa Hối Chốt Đơn
         </h3>
-        <p class="modal-sub">Chọn mẫu thoại gửi tới toàn bộ mọi người đang trong bill (Chống spam: 30s / lần cho cả nhóm)</p>
+        <p class="modal-sub">Chọn mẫu thoại gửi tới toàn bộ mọi người đang trong bill (Chống spam: 10s / lần cho cả nhóm)</p>
       </div>
       <button class="btn-close" id="btnCloseUrgeModal" type="button" aria-label="Đóng">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -948,7 +952,7 @@ Tóp mỡ thêm 5k"></textarea>
     <div class="modal-body">
       <div class="urge-cooldown-box" id="urgeCooldownBox" hidden>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span id="urgeCooldownText">Cả nhóm vừa phát loa hối xong. Đợi 30s nữa để tránh spam nhé!</span>
+        <span id="urgeCooldownText">Cả nhóm vừa phát loa hối xong. Đợi 10s nữa để tránh spam nhé!</span>
       </div>
       <div class="urge-voice-list" id="urgeVoiceList"></div>
     </div>
@@ -999,6 +1003,7 @@ Tóp mỡ thêm 5k"></textarea>
       </button>
     </div>
     <div class="modal-body">
+      <div class="qr-slots-bar" id="hostQrSlotsBar"></div>
       <div class="qr-upload-preview qr-dropzone" id="hostQrPreviewWrap" title="Kéo thả ảnh QR vào đây, dán (Ctrl+V) hoặc bấm để chọn từ máy">
         <img id="hostQrPreviewImg" src="" alt="Preview QR" hidden>
         <button type="button" class="qr-preview-zoom-btn" id="btnZoomHostPreviewQr" hidden title="Phóng to xem &amp; quét thử mã QR">
@@ -1030,13 +1035,17 @@ Tóp mỡ thêm 5k"></textarea>
         </div>
       </details>
 
-      <div class="cust-section" style="margin-top:12px;margin-bottom:0;">
+      <div class="cust-section" style="margin-top:12px;margin-bottom:8px;">
+        <label class="cust-label" for="hostQrLabelInput">Tên ngân hàng / Ví (nhãn tab QR)</label>
+        <input type="text" class="cust-input" id="hostQrLabelInput" placeholder="VD: MB Bank, MoMo, Techcombank..." maxlength="32">
+      </div>
+      <div class="cust-section" style="margin-top:8px;margin-bottom:0;">
         <label class="cust-label" for="hostQrNoteInput">Thông tin STK / Ghi chú kèm QR (tùy chọn)</label>
         <input type="text" class="cust-input" id="hostQrNoteInput" placeholder="VD: MB Bank - 0987654321 - Nguyễn Thành" maxlength="80">
       </div>
     </div>
     <div class="modal-footer urge-modal-footer">
-      <button class="btn ghost" id="btnRemoveHostQr" type="button" style="color:#DC2626;">Xóa QR</button>
+      <button class="btn ghost" id="btnRemoveHostQr" type="button" style="color:#DC2626;">Xóa QR này</button>
       <button class="btn btn-primary" id="btnSaveHostQr" type="button">Lưu mã QR</button>
     </div>
   </div>
@@ -1051,7 +1060,7 @@ Tóp mỡ thêm 5k"></textarea>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
           Phát Loa Hối Trả Tiền
         </h3>
-        <p class="modal-sub">Chỉ gửi thông báo riêng cho thành viên chưa thanh toán (Chống spam: 30s / lần)</p>
+        <p class="modal-sub">Chỉ gửi thông báo riêng cho thành viên chưa thanh toán (Đại diện chủ động nhắc, không giới hạn thời gian)</p>
       </div>
       <button class="btn-close" id="btnCloseUrgePayModal" type="button" aria-label="Đóng">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -1059,10 +1068,6 @@ Tóp mỡ thêm 5k"></textarea>
     </div>
     <div class="modal-body">
       <div class="urge-pay-targets-box" id="urgePayTargetsBox"></div>
-      <div class="urge-cooldown-box" id="urgePayCooldownBox" hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <span id="urgePayCooldownText">Vừa phát loa hối trả tiền. Vui lòng đợi 30s nữa!</span>
-      </div>
       <div class="urge-voice-list" id="urgePayVoiceList"></div>
     </div>
     <div class="modal-footer urge-modal-footer">
@@ -1094,6 +1099,7 @@ Tóp mỡ thêm 5k"></textarea>
   <div class="pay-reminder-body" id="payReminderBody">
     <div class="pay-reminder-personal" id="payReminderPersonal"></div>
     <div class="pay-reminder-qr-box" id="payReminderQrBox" hidden>
+      <div class="qr-switch-tabs" id="payReminderQrTabs" hidden></div>
       <button type="button" class="qr-zoom-thumb-btn" id="btnZoomPayQr" aria-label="Phóng to mã QR thanh toán" title="Bấm để phóng to mã QR rồi quét">
         <img id="payReminderQrImg" src="" alt="Mã QR thanh toán cho đại diện">
         <span class="qr-zoom-hover-mask" aria-hidden="true">
@@ -1128,6 +1134,7 @@ Tóp mỡ thêm 5k"></textarea>
       </button>
     </div>
     <div class="modal-body qr-zoom-body">
+      <div class="qr-switch-tabs is-center" id="qrZoomSlotTabs" hidden></div>
       <div class="qr-zoom-stage">
         <img id="qrZoomImg" src="" alt="Mã QR phóng to để quét">
       </div>
