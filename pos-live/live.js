@@ -2588,6 +2588,42 @@
     }
   }
 
+  var activePayQrZoomData = null;
+
+  function openQrZoomModal(opts) {
+    var d = opts || activePayQrZoomData;
+    if (!d || !d.src) return;
+    var modal = $('qrZoomModal');
+    var img = $('qrZoomImg');
+    var titleEl = $('qrZoomTitle');
+    var subEl = $('qrZoomSub');
+    var infoCard = $('qrZoomInfoCard');
+    var amtEl = $('qrZoomAmount');
+    var noteEl = $('qrZoomNote');
+    if (!modal || !img) return;
+
+    img.src = d.src;
+    if (titleEl) titleEl.textContent = d.title || 'Quét mã QR chuyển khoản';
+    if (subEl) subEl.textContent = d.sub || 'Đưa camera app ngân hàng hoặc ví điện tử vào mã QR bên dưới';
+    if (infoCard && amtEl && noteEl) {
+      if (d.amount || d.note) {
+        amtEl.textContent = d.amount ? ('Số tiền: ' + d.amount) : '';
+        amtEl.hidden = !d.amount;
+        noteEl.textContent = d.note || '';
+        noteEl.hidden = !d.note;
+        infoCard.hidden = false;
+      } else {
+        infoCard.hidden = true;
+      }
+    }
+    modal.hidden = false;
+  }
+
+  function closeQrZoomModal() {
+    var modal = $('qrZoomModal');
+    if (modal) modal.hidden = true;
+  }
+
   function renderPayReminderPanel(allowAutoPlay) {
     var panel = $('payReminderPanel');
     if (!panel) return;
@@ -2597,6 +2633,7 @@
       stopPayUrgeAudio();
       panel.hidden = true;
       panel.classList.remove('is-debtor-locked', 'is-collapsed', 'is-manual-open');
+      activePayQrZoomData = null;
       if (hadPanel && !isCurrentHost() && !isOrderSubmitted()) activePayUrge = null;
       return;
     }
@@ -2613,8 +2650,10 @@
       panel.hidden = true;
       panel.classList.remove('is-debtor-locked', 'is-collapsed', 'is-manual-open');
       activePayUrge = null;
-      if (wasVisible && myEntries.length > 0) {
-        showToast('✓ Khoản thanh toán của bạn đã được xác nhận!');
+      activePayQrZoomData = null;
+      if (wasVisible) {
+        closeQrZoomModal();
+        if (myEntries.length > 0) showToast('✓ Khoản thanh toán của bạn đã được xác nhận!');
       }
       return;
     }
@@ -2650,14 +2689,23 @@
     // Hiện QR của đại diện nếu đại diện đã add QR
     var hostQrVal = (F.hostQr && F.hostQr.v) ? F.hostQr.v : '';
     var hostQrNote = (F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v).trim() : '';
+    var resolvedNote = hostQrNote || ('Nội dung CK: ' + orderCode);
     if (qrBox && qrImg) {
       if (hostQrVal) {
         qrImg.src = hostQrVal;
         qrBox.hidden = false;
         if (qrHost) qrHost.textContent = 'Quét QR chuyển cho ' + split.hostName;
-        if (qrNote) qrNote.textContent = hostQrNote || ('Nội dung CK: ' + orderCode);
+        if (qrNote) qrNote.textContent = resolvedNote;
+        activePayQrZoomData = {
+          src: hostQrVal,
+          title: 'Quét QR chuyển cho ' + split.hostName,
+          sub: 'Đưa camera app ngân hàng / ví điện tử vào mã QR bên dưới',
+          amount: fmt(myUnpaidTotal),
+          note: resolvedNote
+        };
       } else {
         qrBox.hidden = true;
+        activePayQrZoomData = null;
       }
     }
   }
@@ -4068,16 +4116,19 @@
   function updateHostQrPreview(src) {
     var img = $('hostQrPreviewImg');
     var hint = $('hostQrEmptyHint');
+    var zoomBtn = $('btnZoomHostPreviewQr');
     pendingHostQrData = src || '';
     if (img && hint) {
       if (pendingHostQrData) {
         img.src = pendingHostQrData;
         img.hidden = false;
         hint.hidden = true;
+        if (zoomBtn) zoomBtn.hidden = false;
       } else {
         img.src = '';
         img.hidden = true;
         hint.hidden = false;
+        if (zoomBtn) zoomBtn.hidden = true;
       }
     }
   }
@@ -6998,7 +7049,7 @@
       showToast('Vui lòng chọn hoặc kéo thả đúng định dạng file ảnh QR!');
       return;
     }
-    resizeImageFileToDataUrl(file, 300, function (err, dataUrl) {
+    resizeImageFileToDataUrl(file, 360, function (err, dataUrl) {
       if (err || !dataUrl) {
         showToast('Không đọc được file ảnh QR, hãy thử ảnh khác!');
         return;
@@ -7027,7 +7078,8 @@
   }
   if ($('hostQrPreviewWrap')) {
     var dz = $('hostQrPreviewWrap');
-    dz.onclick = function () {
+    dz.onclick = function (e) {
+      if (e && e.target && e.target.closest && e.target.closest('#btnZoomHostPreviewQr')) return;
       if ($('hostQrFileInput')) $('hostQrFileInput').click();
     };
     ['dragenter', 'dragover'].forEach(function (evName) {
@@ -7070,6 +7122,40 @@
   if ($('btnGenerateVietQr')) $('btnGenerateVietQr').onclick = generateVietQrToDataUrl;
   if ($('btnSaveHostQr')) $('btnSaveHostQr').onclick = saveHostQr;
   if ($('btnRemoveHostQr')) $('btnRemoveHostQr').onclick = removeHostQr;
+
+  // Phóng to mã QR để quét dễ hơn (#qrZoomModal)
+  if ($('btnZoomPayQr')) {
+    $('btnZoomPayQr').onclick = function (e) {
+      e.stopPropagation();
+      if (activePayQrZoomData) openQrZoomModal(activePayQrZoomData);
+    };
+  }
+  if ($('btnZoomHostPreviewQr')) {
+    $('btnZoomHostPreviewQr').onclick = function (e) {
+      e.stopPropagation();
+      if (!pendingHostQrData) return;
+      var noteVal = $('hostQrNoteInput') ? $('hostQrNoteInput').value.trim() : '';
+      openQrZoomModal({
+        src: pendingHostQrData,
+        title: 'Xem trước mã QR nhận tiền',
+        sub: 'Kiểm tra quét thử bằng camera điện thoại trước khi lưu',
+        amount: '',
+        note: noteVal
+      });
+    };
+  }
+  if ($('btnCloseQrZoomModal')) $('btnCloseQrZoomModal').onclick = closeQrZoomModal;
+  if ($('btnCloseQrZoomBtn')) $('btnCloseQrZoomBtn').onclick = closeQrZoomModal;
+  if ($('qrZoomModal')) {
+    $('qrZoomModal').onclick = function (e) {
+      if (e.target === $('qrZoomModal')) closeQrZoomModal();
+    };
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && $('qrZoomModal') && !$('qrZoomModal').hidden) {
+      closeQrZoomModal();
+    }
+  });
 
   // Modal Hối trả tiền (chỉ Đại diện sau khi Chốt & Lưu Sheet)
   if ($('btnOpenUrgePay')) $('btnOpenUrgePay').onclick = openUrgePayModal;

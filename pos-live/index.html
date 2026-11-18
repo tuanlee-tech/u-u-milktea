@@ -1001,6 +1001,10 @@ Tóp mỡ thêm 5k"></textarea>
     <div class="modal-body">
       <div class="qr-upload-preview qr-dropzone" id="hostQrPreviewWrap" title="Kéo thả ảnh QR vào đây, dán (Ctrl+V) hoặc bấm để chọn từ máy">
         <img id="hostQrPreviewImg" src="" alt="Preview QR" hidden>
+        <button type="button" class="qr-preview-zoom-btn" id="btnZoomHostPreviewQr" hidden title="Phóng to xem &amp; quét thử mã QR">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          <span>Phóng to</span>
+        </button>
         <div class="qr-empty-placeholder" id="hostQrEmptyHint">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
           <strong>Kéo thả ảnh QR vào đây</strong>
@@ -1087,11 +1091,50 @@ Tóp mỡ thêm 5k"></textarea>
   <div class="pay-reminder-body" id="payReminderBody">
     <div class="pay-reminder-personal" id="payReminderPersonal"></div>
     <div class="pay-reminder-qr-box" id="payReminderQrBox" hidden>
-      <img id="payReminderQrImg" src="" alt="Mã QR thanh toán cho đại diện">
+      <button type="button" class="qr-zoom-thumb-btn" id="btnZoomPayQr" aria-label="Phóng to mã QR thanh toán" title="Bấm để phóng to mã QR rồi quét">
+        <img id="payReminderQrImg" src="" alt="Mã QR thanh toán cho đại diện">
+        <span class="qr-zoom-hover-mask" aria-hidden="true">
+          <span class="qr-zoom-icon-circle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+          </span>
+          <span class="qr-zoom-label">Phóng to</span>
+        </span>
+        <span class="qr-zoom-corner-badge" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+        </span>
+      </button>
       <div class="pay-reminder-qr-meta">
         <strong id="payReminderQrHost">Quét QR chuyển khoản</strong>
         <span id="payReminderQrNote"></span>
+        <span class="pay-reminder-qr-hint">Bấm ảnh QR để phóng to &amp; quét</span>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 10: PHÓNG TO ẢNH QR QUÉT NHANH -->
+<div class="modal qr-zoom-modal" id="qrZoomModal" hidden>
+  <div class="modal-box qr-zoom-modal-box">
+    <div class="modal-head">
+      <div>
+        <h3 id="qrZoomTitle">Quét mã QR chuyển khoản</h3>
+        <p class="modal-sub" id="qrZoomSub">Mở app ngân hàng / ví điện tử và quét mã bên dưới</p>
+      </div>
+      <button class="btn-close" id="btnCloseQrZoomModal" type="button" aria-label="Đóng">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body qr-zoom-body">
+      <div class="qr-zoom-stage">
+        <img id="qrZoomImg" src="" alt="Mã QR phóng to để quét">
+      </div>
+      <div class="qr-zoom-info-card" id="qrZoomInfoCard" hidden>
+        <div class="qr-zoom-amt" id="qrZoomAmount"></div>
+        <div class="qr-zoom-note" id="qrZoomNote"></div>
+      </div>
+    </div>
+    <div class="modal-footer urge-modal-footer">
+      <button class="btn ghost" id="btnCloseQrZoomBtn" type="button">Đóng</button>
     </div>
   </div>
 </div>
