@@ -1351,10 +1351,26 @@
       .slice(0, 26);
   }
 
-  function buildMemberTransferMemo(memberName) {
+  function needsSevqrPrefix(bankCode) {
+    var b = String(bankCode || '').trim().toUpperCase();
+    return b === 'ICB' || b === 'VIETINBANK' || b === 'CTG' || b === '970415';
+  }
+
+  function applyBankMemoPrefix(memoText, bankCode) {
+    var des = String(memoText || '').trim();
+    if (needsSevqrPrefix(bankCode)) {
+      if (!/(^|\s)SEVQR(\s|$)/i.test(des)) {
+        des = des ? ('SEVQR ' + des) : 'SEVQR';
+      }
+    }
+    return des;
+  }
+
+  function buildMemberTransferMemo(memberName, bankCode) {
     var code = String(orderCode || '').trim().toUpperCase();
     var cleanName = toAsciiTransferName(memberName);
-    return (code + (cleanName ? (' ' + cleanName) : '')).trim();
+    var base = (code + (cleanName ? (' ' + cleanName) : '')).trim();
+    return applyBankMemoPrefix(base, bankCode !== undefined ? bankCode : (getHostBankInfo().bank || ''));
   }
 
   function buildSePayQrUrl(bankCode, accountNo, amount, memoText) {
@@ -1367,7 +1383,7 @@
     ];
     var amt = Math.round(Number(amount) || 0);
     if (amt > 0) params.push('amount=' + encodeURIComponent(String(amt)));
-    var des = String(memoText || '').trim();
+    var des = applyBankMemoPrefix(memoText, bank);
     if (des) params.push('des=' + encodeURIComponent(des));
     params.push('template=compact');
     return 'https://qr.sepay.vn/img?' + params.join('&');
@@ -6277,7 +6293,9 @@
           ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, infoTopY + 80);
         }
 
-        var memoLabel = 'Nội dung CK: ' + orderCode + ' [Tên bạn]';
+        var hbCanvas = getHostBankInfo();
+        var memoPrefixCanvas = needsSevqrPrefix(hbCanvas.bank) ? 'SEVQR ' : '';
+        var memoLabel = 'Nội dung CK: ' + memoPrefixCanvas + orderCode + ' [Tên bạn]';
         ctx.font = '700 12px ' + fontFam;
         var memoW = Math.min(infoMaxW, ctx.measureText(memoLabel).width + 22);
         var memoY = bankDetail ? (infoTopY + 100) : (infoTopY + 76);
