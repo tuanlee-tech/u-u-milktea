@@ -74,8 +74,11 @@ async function loadLastWrap(storage) {
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type, X-SePay-Signature, X-SePay-Timestamp'
 };
+
+const PAY_CONFIRMED_TEXT = 'Cám ơn bà con rất là nhiều ... Đó, tiếng ting ting đó là tiếng gửi tiền vào đó.';
+const PAY_CONFIRMED_AUDIO = 'assets/audio/pay-confirmed.mp3';
 
 function jsonCors(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
@@ -84,10 +87,172 @@ function jsonCors(obj, status = 200) {
   });
 }
 
+function toAsciiUpper(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeRegExp(str) {
+  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeAccNo(raw) {
+  return String(raw || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}
+
+function accountNumbersMatch(a, b) {
+  const na = normalizeAccNo(a);
+  const nb = normalizeAccNo(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (/^\d+$/.test(na) && /^\d+$/.test(nb)) {
+    return na.replace(/^0+/, '') === nb.replace(/^0+/, '');
+  }
+  return false;
+}
+
+async function hmacSha256Hex(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(String(secret)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(String(message)));
+  const bytes = new Uint8Array(sigBuf);
+  let hex = '';
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0');
+  }
+  return hex;
+}
+
+function timingSafeEqualHex(a, b) {
+  const s1 = String(a || '').toLowerCase().trim();
+  const s2 = String(b || '').toLowerCase().trim();
+  if (!s1 || s1.length !== s2.length) return false;
+  let diff = 0;
+  for (let i = 0; i < s1.length; i++) {
+    diff |= s1.charCodeAt(i) ^ s2.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+async function verifySePaySignature(request, rawBody, secretKey) {
+  if (!secretKey) return { valid: false, reason: 'secret_not_configured' };
+  const sigHeader = (request.headers.get('X-SePay-Signature') || request.headers.get('x-sepay-signature') || '').trim();
+  let tsHeader = (request.headers.get('X-SePay-Timestamp') || request.headers.get('x-sepay-timestamp') || '').trim();
+  if (!sigHeader) return { valid: false, reason: 'missing_signature' };
+
+  let receivedHex = '';
+  if (sigHeader.includes(',') && sigHeader.includes('v1=')) {
+    const parts = sigHeader.split(',');
+    for (const part of parts) {
+      const [k, v] = part.split('=').map(s => (s || '').trim());
+      if (k === 't' && !tsHeader) tsHeader = v;
+      if (k === 'v1' || k === 'sha256') receivedHex = v;
+    }
+  } else if (sigHeader.toLowerCase().startsWith('sha256=')) {
+    receivedHex = sigHeader.slice(7).trim();
+  } else {
+    receivedHex = sigHeader;
+  }
+
+  if (!/^[a-fA-F0-9]{64}$/.test(receivedHex)) {
+    return { valid: false, reason: 'invalid_signature_format' };
+  }
+
+  if (tsHeader) {
+    const tsNum = Number(tsHeader);
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!Number.isFinite(tsNum) || Math.abs(nowSec - tsNum) > 600) {
+      return { valid: false, reason: 'timestamp_expired' };
+    }
+    const expectedWithTs = await hmacSha256Hex(secretKey, `${tsHeader}.${rawBody}`);
+    if (timingSafeEqualHex(receivedHex, expectedWithTs)) {
+      return { valid: true, mode: 'timestamp_raw' };
+    }
+  }
+
+  const expectedRaw = await hmacSha256Hex(secretKey, rawBody);
+  if (timingSafeEqualHex(receivedHex, expectedRaw)) {
+    return { valid: true, mode: 'raw_only' };
+  }
+  return { valid: false, reason: 'signature_mismatch' };
+}
+
+function computeRoomBillSplit(lastWrap) {
+  const lines = lastWrap && Array.isArray(lastWrap.lines) ? lastWrap.lines : [];
+  const fields = (lastWrap && lastWrap.fields) || {};
+  const disc = Math.max(0, Number(fields.disc && fields.disc.v) || 0);
+  const ship = Math.max(0, Number(fields.ship && fields.ship.v) || 0);
+  let sub = 0;
+  const personMap = {};
+
+  for (const c of lines) {
+    const qty = Number(c.qty) || 1;
+    let topSum = 0;
+    if (Array.isArray(c.toppings)) {
+      for (const t of c.toppings) topSum += (Number(t.price) || 0) * (Number(t.qty) || 1);
+    }
+    const lineTot = ((Number(c.price) || 0) + topSum) * qty;
+    sub += lineTot;
+
+    const name = String(c.uname || c.owner || 'Bạn').trim() || 'Bạn';
+    const uid = c.uid ? String(c.uid).trim() : '';
+    const nameKey = 'n:' + name.toLowerCase();
+    const key = uid ? ('u:' + uid) : nameKey;
+    if (uid && !personMap[key] && personMap[nameKey]) {
+      personMap[key] = personMap[nameKey];
+      personMap[key].uid = uid;
+      delete personMap[nameKey];
+    }
+    if (!personMap[key]) {
+      personMap[key] = {
+        uid,
+        name,
+        drinkSub: 0
+      };
+    }
+    personMap[key].drinkSub += lineTot;
+  }
+
+  const netAdj = ship - disc;
+  const people = Object.keys(personMap).map(k => {
+    const p = personMap[k];
+    const share = sub > 0 ? Math.round(netAdj * (p.drinkSub / sub)) : 0;
+    const finalPay = Math.max(0, p.drinkSub + share);
+    const payKey = p.uid ? ('u:' + p.uid) : ('n:' + p.name.toLowerCase());
+    const paid = isPaidInLastState(lastWrap, p.uid, p.name);
+    return {
+      uid: p.uid,
+      name: p.name,
+      drinkSub: p.drinkSub,
+      share,
+      finalPay,
+      payKey,
+      paid
+    };
+  });
+
+  return { sub, disc, ship, netAdj, people };
+}
+
 function summarizeRoomWrap(bill, lastWrap, presenceMap) {
   const lines = lastWrap && Array.isArray(lastWrap.lines) ? lastWrap.lines : [];
   const fields = (lastWrap && lastWrap.fields) || {};
-  const hostName = (fields.cust && fields.cust.v) ? String(fields.cust.v) : '';
+  const hostName = (fields.customer && fields.customer.v)
+    ? String(fields.customer.v)
+    : ((fields.cust && fields.cust.v) ? String(fields.cust.v) : '');
   const submitted = !!(fields.orderSubmitted && fields.orderSubmitted.v);
   const storeId = (lastWrap && lastWrap.storeId) || '';
   const storeName = (lastWrap && lastWrap.storeData && lastWrap.storeData.name) ||
@@ -241,6 +406,29 @@ export class LiveRoom {
         return jsonCors({ ok: true });
       } catch (e) {
         return jsonCors({ ok: false }, 400);
+      }
+    }
+    if (url.pathname === '/__index_list' && request.method === 'GET') {
+      try {
+        if (!this.billIndex) {
+          this.billIndex = (await this.state.storage.get('billIndex')) || {};
+        }
+        const cutoff = Date.now() - 14 * 86400000;
+        const list = Object.values(this.billIndex)
+          .filter(it => it && it.bill && (it.updatedAt || 0) > cutoff)
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        return jsonCors({ ok: true, bills: list });
+      } catch (e) {
+        return jsonCors({ ok: true, bills: [] });
+      }
+    }
+    if (url.pathname === '/__sepay_webhook' && request.method === 'POST') {
+      try {
+        const payload = await request.json();
+        const result = await this.handleSepayWebhook(payload);
+        return jsonCors(result);
+      } catch (e) {
+        return jsonCors({ ok: false, matched: false, error: String(e && e.message || e) }, 500);
       }
     }
     if (url.pathname === '/bills' && request.method === 'GET') {
@@ -615,6 +803,166 @@ export class LiveRoom {
     }
   }
 
+  async handleSepayWebhook(tx) {
+    if (!tx || typeof tx !== 'object') {
+      return { ok: true, matched: false, reason: 'invalid_payload' };
+    }
+    if (!this.last) {
+      try { this.last = await loadLastWrap(this.state.storage); } catch (e) {}
+    }
+    if (!this.bill && tx._candidateBill) {
+      this.bill = String(tx._candidateBill).trim();
+    }
+    if (!this.last || !Array.isArray(this.last.lines) || !this.last.lines.length) {
+      return { ok: true, matched: false, reason: 'empty_bill', bill: this.bill };
+    }
+
+    const txKey = String(tx.id || tx.referenceCode || '').trim();
+    let processedMap = (await this.state.storage.get('processedSepayTx')) || {};
+    if (txKey && processedMap[txKey]) {
+      return { ok: true, matched: true, duplicate: true, bill: this.bill, payer: processedMap[txKey].payer || '' };
+    }
+
+    const fields = this.last.fields || (this.last.fields = {});
+    const hostBank = (fields.hostBank && fields.hostBank.v && typeof fields.hostBank.v === 'object')
+      ? fields.hostBank.v
+      : null;
+    if (hostBank && hostBank.account) {
+      const accOk = accountNumbersMatch(hostBank.account, tx.accountNumber) ||
+        accountNumbersMatch(hostBank.account, tx.subAccount);
+      if (!accOk) {
+        return { ok: true, matched: false, reason: 'account_mismatch', bill: this.bill };
+      }
+    }
+
+    const transferAmount = Math.round(Number(tx.transferAmount) || 0);
+    if (transferAmount <= 0) {
+      return { ok: true, matched: false, reason: 'invalid_amount', bill: this.bill };
+    }
+
+    const split = computeRoomBillSplit(this.last);
+    // Đối khớp CHÍNH XÁC 100% số tiền cần trả (transferAmount === finalPay)
+    const exactAmtUnpaid = split.people.filter(p => !p.paid && p.finalPay === transferAmount && p.finalPay > 0);
+    if (!exactAmtUnpaid.length) {
+      return { ok: true, matched: false, reason: 'no_exact_amount_match', bill: this.bill, transferAmount };
+    }
+
+    const billUpper = toAsciiUpper(this.bill || '');
+    const billCompact = billUpper.replace(/\s+/g, '');
+    const rawUpper = toAsciiUpper([tx.content, tx.description, tx.code].filter(Boolean).join(' '));
+    const compactUpper = rawUpper.replace(/\s+/g, '');
+    const idxBillCompact = billCompact ? compactUpper.indexOf(billCompact) : -1;
+    const afterBillCompact = idxBillCompact !== -1 ? compactUpper.slice(idxBillCompact + billCompact.length) : '';
+
+    const scored = exactAmtUnpaid.map(p => {
+      const pAscii = toAsciiUpper(p.name).slice(0, 26).trim();
+      const pCompact = pAscii.replace(/\s+/g, '');
+      let score = 0;
+      if (pAscii && billUpper && rawUpper.includes(billUpper + ' ' + pAscii)) {
+        score = 4;
+      } else if (pCompact && billCompact && compactUpper.includes(billCompact + pCompact)) {
+        score = 3;
+      } else if (pAscii && (rawUpper.includes(pAscii) || (pCompact.length >= 2 && compactUpper.includes(pCompact)))) {
+        score = 2;
+      } else if (pCompact.length >= 4 && afterBillCompact && afterBillCompact.startsWith(pCompact.slice(0, Math.min(pCompact.length, 8)))) {
+        score = 1;
+      }
+      return { p, score, nameLen: pCompact.length };
+    });
+
+    scored.sort((a, b) => (b.score - a.score) || (b.nameLen - a.nameLen));
+
+    let targetMember = null;
+    if (scored[0] && scored[0].score > 0) {
+      targetMember = scored[0].p;
+    } else if (exactAmtUnpaid.length === 1 && billCompact && (rawUpper.includes(billUpper) || compactUpper.includes(billCompact))) {
+      targetMember = exactAmtUnpaid[0];
+    }
+
+    if (!targetMember) {
+      return { ok: true, matched: false, reason: 'member_not_matched', bill: this.bill, transferAmount };
+    }
+
+    const prevPmField = fields.paidMap;
+    const nextPm = (prevPmField && prevPmField.v && typeof prevPmField.v === 'object')
+      ? Object.assign({}, prevPmField.v)
+      : {};
+    nextPm[targetMember.payKey] = true;
+    fields.paidMap = {
+      v: nextPm,
+      rev: ((prevPmField && Number(prevPmField.rev)) || 0) + 1,
+      by: 'sepay'
+    };
+
+    const prevClaimField = fields.payClaimMap;
+    if (prevClaimField && prevClaimField.v && typeof prevClaimField.v === 'object') {
+      const nextClaims = Object.assign({}, prevClaimField.v);
+      const nameKey = 'n:' + String(targetMember.name || '').trim().toLowerCase();
+      let claimChanged = false;
+      if (nextClaims[targetMember.payKey] !== undefined) {
+        delete nextClaims[targetMember.payKey];
+        claimChanged = true;
+      }
+      if (nextClaims[nameKey] !== undefined) {
+        delete nextClaims[nameKey];
+        claimChanged = true;
+      }
+      if (claimChanged) {
+        fields.payClaimMap = {
+          v: nextClaims,
+          rev: (Number(prevClaimField.rev) || 0) + 1,
+          by: 'sepay'
+        };
+      }
+    }
+
+    if (txKey) {
+      processedMap[txKey] = { at: Date.now(), payer: targetMember.name, amount: transferAmount };
+      const keys = Object.keys(processedMap);
+      if (keys.length > 200) {
+        keys.sort((a, b) => (processedMap[a].at || 0) - (processedMap[b].at || 0));
+        for (let i = 0; i < keys.length - 200; i++) delete processedMap[keys[i]];
+      }
+      try { await this.state.storage.put('processedSepayTx', processedMap); } catch (e) {}
+    }
+
+    try { await saveLastWrap(this.state.storage, this.last); } catch (e) {}
+    this.reportToBillIndex(this.bill, this.last, false).catch(() => {});
+
+    const hostUid = (fields.hostUid && fields.hostUid.v) ? String(fields.hostUid.v) : '';
+    const hostName = (fields.customer && fields.customer.v) ? String(fields.customer.v) : 'Đại diện';
+    const stateMsg = JSON.stringify({ type: 'state', bill: this.bill, wrap: this.last, from: 'sepay' });
+    const confirmMsg = JSON.stringify({
+      type: 'pay_confirmed',
+      bill: this.bill,
+      from: 'sepay',
+      viaSePay: true,
+      confirmId: 'sepay_' + (txKey || (Date.now() + '_' + Math.random().toString(36).slice(2, 6))),
+      hostUid,
+      hostName,
+      payerUid: targetMember.uid || '',
+      payerName: targetMember.name,
+      amount: transferAmount,
+      text: PAY_CONFIRMED_TEXT,
+      audio: PAY_CONFIRMED_AUDIO,
+      ts: Date.now()
+    });
+
+    for (const s of this.state.getWebSockets()) {
+      try { s.send(stateMsg); } catch (e) {}
+      try { s.send(confirmMsg); } catch (e) {}
+    }
+
+    return {
+      ok: true,
+      matched: true,
+      bill: this.bill,
+      payer: targetMember.name,
+      amount: transferAmount,
+      txId: txKey
+    };
+  }
+
   async webSocketClose(ws) {
     const cid = ws.cid;
     if (cid && this.presence[cid]) {
@@ -634,12 +982,125 @@ export class LiveRoom {
   }
 }
 
+async function handleIncomingSePayWebhookRequest(request, env) {
+  if (request.method === 'GET') {
+    return jsonCors({ ok: true, service: 'sepay-webhook', auth: 'HMAC-SHA256', configured: !!env.SEPAY_WEBHOOK_SECRET });
+  }
+  if (request.method !== 'POST') {
+    return jsonCors({ success: false, error: 'Method not allowed' }, 405);
+  }
+  const secretKey = env && env.SEPAY_WEBHOOK_SECRET ? String(env.SEPAY_WEBHOOK_SECRET).trim() : '';
+  if (!secretKey) {
+    return jsonCors({ success: false, error: 'Webhook secret not configured on server' }, 500);
+  }
+
+  const rawBody = await request.text();
+  const sigCheck = await verifySePaySignature(request, rawBody, secretKey);
+  if (!sigCheck.valid) {
+    return jsonCors({ success: false, error: 'Unauthorized', reason: sigCheck.reason }, 401);
+  }
+
+  let tx = null;
+  try {
+    tx = JSON.parse(rawBody);
+  } catch (e) {
+    return jsonCors({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  if (!tx || typeof tx !== 'object') {
+    return jsonCors({ success: false, error: 'Empty payload' }, 400);
+  }
+
+  if (String(tx.transferType || '').toLowerCase() !== 'in') {
+    return jsonCors({ success: true, ignored: 'not_incoming' });
+  }
+  const transferAmount = Math.round(Number(tx.transferAmount) || 0);
+  if (transferAmount <= 0) {
+    return jsonCors({ success: true, ignored: 'zero_amount' });
+  }
+
+  const rawUpper = toAsciiUpper([tx.content, tx.description, tx.code].filter(Boolean).join(' '));
+  const compactUpper = rawUpper.replace(/\s+/g, '');
+
+  const candidateBills = [];
+  const addCandidate = (code) => {
+    const clean = String(code || '').trim();
+    if (!clean) return;
+    if (!candidateBills.includes(clean)) candidateBills.push(clean);
+  };
+
+  // 1. Tìm trong danh sách bill gần đây ở __BILL_INDEX__ (ưu tiên mới nhất trước)
+  try {
+    const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');
+    const idxRes = await env.LIVE_ROOM.get(idxId).fetch('https://internal/__index_list');
+    const idxData = await idxRes.json();
+    if (idxData && Array.isArray(idxData.bills)) {
+      for (const b of idxData.bills) {
+        if (!b || !b.bill) continue;
+        const bCode = String(b.bill).trim();
+        const bUpper = toAsciiUpper(bCode);
+        const bCompact = bUpper.replace(/\s+/g, '');
+        if (!bCompact || bCompact.length < 3) continue;
+        const wordRe = new RegExp('(^|[^A-Z0-9])' + escapeRegExp(bUpper) + '([^A-Z0-9]|$)');
+        if (wordRe.test(rawUpper) || (bCompact.length >= 4 && compactUpper.includes(bCompact))) {
+          addCandidate(bCode);
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. Fallback regex tìm mã bill chuẩn dạng Uxxxx (5 ký tự) trong nội dung chuyển khoản
+  const regexMatches = rawUpper.match(/\bU[2-9A-HJ-NP-Z]{4}\b/g) || [];
+  for (const m of regexMatches) addCandidate(m);
+
+  // 3. Fallback từ trường tx.code nếu SePay tự tách mã
+  if (tx.code) {
+    const cleanTxCode = toAsciiUpper(tx.code).replace(/\s+/g, '');
+    if (cleanTxCode.length >= 4 && cleanTxCode.length <= 14) {
+      addCandidate(cleanTxCode);
+    }
+  }
+
+  const attempts = [];
+  for (const billCode of candidateBills.slice(0, 5)) {
+    try {
+      const roomId = env.LIVE_ROOM.idFromName(billCode);
+      const roomRes = await env.LIVE_ROOM.get(roomId).fetch('https://internal/__sepay_webhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(Object.assign({}, tx, { _candidateBill: billCode }))
+      });
+      const roomJson = await roomRes.json();
+      attempts.push(roomJson);
+      if (roomJson && roomJson.matched) {
+        return jsonCors({
+          success: true,
+          matched: true,
+          duplicate: !!roomJson.duplicate,
+          bill: roomJson.bill || billCode,
+          payer: roomJson.payer || '',
+          amount: roomJson.amount || transferAmount
+        });
+      }
+    } catch (e) {}
+  }
+
+  return jsonCors({
+    success: true,
+    matched: false,
+    candidates: candidateBills.slice(0, 5),
+    attempts
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
     const u = new URL(request.url);
+    if (u.pathname === '/webhook/sepay' || u.pathname === '/webhook/sepay/') {
+      return handleIncomingSePayWebhookRequest(request, env);
+    }
     if (u.pathname === '/bills') {
       const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');
       return env.LIVE_ROOM.get(idxId).fetch(request);

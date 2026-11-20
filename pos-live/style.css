@@ -4311,8 +4311,55 @@ body {
   background: #DCFCE7;
   color: #15803D;
 }
+.btn-person-qr {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1.5px solid #0A7259;
+  background: #ECFDF5;
+  color: #065F46;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.btn-person-qr:hover {
+  background: #0A7259;
+  color: #FFFFFF;
+}
 
 /* Host QR Modal */
+.sepay-account-card {
+  background: #F0FDF4;
+  border: 1.5px solid #A7F3D0;
+  border-radius: 12px;
+  padding: 11px 12px 12px;
+  margin-bottom: 12px;
+}
+.sepay-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #047857;
+  background: #D1FAE5;
+  border: 1px solid #6EE7B7;
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-bottom: 6px;
+}
+.sepay-account-card .qr-vietqr-form {
+  margin-top: 4px;
+}
+.sepay-account-card select.cust-input {
+  background-color: #FFFFFF;
+}
 .qr-upload-preview {
   position: relative;
   width: 100%;

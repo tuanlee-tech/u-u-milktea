@@ -1324,6 +1324,7 @@
       hostQr: '',
       hostQrNote: '',
       hostQrs: [],
+      hostBank: { bank: '', account: '', owner: '' },
       orderSubmitted: false,
       savedDisc: null,
       savedShip: null,
@@ -1335,19 +1336,129 @@
     });
   }
 
-  var MAX_HOST_QR_SLOTS = 6;
+  var MAX_HOST_QR_SLOTS = 1;
+
+  function toAsciiTransferName(rawName) {
+    if (!rawName) return '';
+    return String(rawName)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[đĐ]/g, 'd')
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 26);
+  }
+
+  function buildMemberTransferMemo(memberName) {
+    var code = String(orderCode || '').trim().toUpperCase();
+    var cleanName = toAsciiTransferName(memberName);
+    return (code + (cleanName ? (' ' + cleanName) : '')).trim();
+  }
+
+  function buildSePayQrUrl(bankCode, accountNo, amount, memoText) {
+    var bank = String(bankCode || '').trim().toUpperCase();
+    var acc = String(accountNo || '').replace(/\s+/g, '');
+    if (!bank || !acc) return '';
+    var params = [
+      'acc=' + encodeURIComponent(acc),
+      'bank=' + encodeURIComponent(bank)
+    ];
+    var amt = Math.round(Number(amount) || 0);
+    if (amt > 0) params.push('amount=' + encodeURIComponent(String(amt)));
+    var des = String(memoText || '').trim();
+    if (des) params.push('des=' + encodeURIComponent(des));
+    params.push('template=compact');
+    return 'https://qr.sepay.vn/img?' + params.join('&');
+  }
+
+  function normalizeHostBankInfo(rawBank) {
+    if (!rawBank || typeof rawBank !== 'object') return { bank: '', account: '', owner: '' };
+    var bank = String(rawBank.bank || '').trim().toUpperCase();
+    var account = String(rawBank.account || '').replace(/\s+/g, '');
+    var owner = toAsciiTransferName(rawBank.owner || '');
+    if (!bank || !account) return { bank: '', account: '', owner: '' };
+    return { bank: bank, account: account, owner: owner };
+  }
+
+  function getHostBankInfo() {
+    var hb = (F.hostBank && F.hostBank.v && typeof F.hostBank.v === 'object')
+      ? normalizeHostBankInfo(F.hostBank.v)
+      : { bank: '', account: '', owner: '' };
+    if (hb.bank && hb.account) return hb;
+    var slots = (F.hostQrs && Array.isArray(F.hostQrs.v)) ? F.hostQrs.v : [];
+    for (var i = 0; i < slots.length; i++) {
+      var s = slots[i];
+      if (s && s.bank && s.account) {
+        return normalizeHostBankInfo({ bank: s.bank, account: s.account, owner: s.owner || '' });
+      }
+    }
+    return { bank: '', account: '', owner: '' };
+  }
+
+  function formatHostBankSummary(hb) {
+    var info = hb || getHostBankInfo();
+    if (!info || !info.bank || !info.account) return '';
+    return info.bank + ' - ' + info.account + (info.owner ? (' - ' + info.owner) : '');
+  }
+
+  function getQrForMember(memberObj, overrideAmount) {
+    var hb = getHostBankInfo();
+    var memberName = (memberObj && memberObj.name) ? memberObj.name : '';
+    var amt = overrideAmount !== undefined
+      ? Math.round(Number(overrideAmount) || 0)
+      : Math.round(Number(memberObj && memberObj.finalPay) || 0);
+    var memo = buildMemberTransferMemo(memberName);
+    if (hb.bank && hb.account) {
+      var sepayUrl = buildSePayQrUrl(hb.bank, hb.account, amt, memo);
+      return {
+        isSePay: true,
+        qr: sepayUrl,
+        bank: hb.bank,
+        account: hb.account,
+        owner: hb.owner || '',
+        label: hb.bank,
+        note: formatHostBankSummary(hb),
+        memo: memo,
+        amount: amt
+      };
+    }
+    var slots = getHostQrSlots();
+    var first = slots[0] || null;
+    return {
+      isSePay: false,
+      qr: first ? first.qr : '',
+      bank: '',
+      account: '',
+      owner: '',
+      label: first ? (first.label || 'QR') : 'QR',
+      note: first ? (first.note || '') : '',
+      memo: memo,
+      amount: amt
+    };
+  }
 
   function normalizeQrSlotList(rawList, fallbackQr, fallbackNote) {
     var out = [];
     if (Array.isArray(rawList)) {
       rawList.forEach(function (item, idx) {
         if (out.length >= MAX_HOST_QR_SLOTS) return;
-        if (!item || !item.qr) return;
+        if (!item) return;
+        var bInfo = normalizeHostBankInfo({ bank: item.bank, account: item.account, owner: item.owner });
+        var qrSrc = String(item.qr || '');
+        if (bInfo.bank && bInfo.account) {
+          qrSrc = buildSePayQrUrl(bInfo.bank, bInfo.account, 0, orderCode);
+        }
+        if (!qrSrc) return;
         out.push({
           id: String(item.id || ('qr_' + idx)),
-          label: String(item.label || '').trim(),
-          qr: String(item.qr),
-          note: String(item.note || '').trim()
+          label: String(item.label || bInfo.bank || '').trim(),
+          qr: qrSrc,
+          note: String(item.note || (bInfo.bank ? formatHostBankSummary(bInfo) : '') || '').trim(),
+          bank: bInfo.bank,
+          account: bInfo.account,
+          owner: bInfo.owner
         });
       });
     }
@@ -1356,7 +1467,10 @@
         id: 'qr_0',
         label: '',
         qr: String(fallbackQr),
-        note: String(fallbackNote || '').trim()
+        note: String(fallbackNote || '').trim(),
+        bank: '',
+        account: '',
+        owner: ''
       });
     }
     return out;
@@ -1366,8 +1480,22 @@
     var list = (F.hostQrs && Array.isArray(F.hostQrs.v)) ? F.hostQrs.v : [];
     var fallbackQr = (F.hostQr && F.hostQr.v) ? String(F.hostQr.v) : '';
     var fallbackNote = (F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v).trim() : '';
+    var hb = (F.hostBank && F.hostBank.v && typeof F.hostBank.v === 'object')
+      ? normalizeHostBankInfo(F.hostBank.v)
+      : { bank: '', account: '', owner: '' };
     if (list.length > 0) {
       return normalizeQrSlotList(list, fallbackQr, fallbackNote);
+    }
+    if (!fallbackQr && hb.bank && hb.account) {
+      return [{
+        id: 'qr_0',
+        label: hb.bank,
+        qr: buildSePayQrUrl(hb.bank, hb.account, 0, orderCode),
+        note: formatHostBankSummary(hb),
+        bank: hb.bank,
+        account: hb.account,
+        owner: hb.owner
+      }];
     }
     return normalizeQrSlotList([], fallbackQr, fallbackNote);
   }
@@ -1375,14 +1503,19 @@
   function applyHostQrSlots(rawSlots, keepRevOnlyFromSheet) {
     var clean = normalizeQrSlotList(rawSlots, '', '');
     var first = clean[0] || null;
+    var bInfo = first ? normalizeHostBankInfo({ bank: first.bank, account: first.account, owner: first.owner }) : { bank: '', account: '', owner: '' };
     if (keepRevOnlyFromSheet) {
       F.hostQrs = { v: clean, rev: Math.max(1, (F.hostQrs && F.hostQrs.rev) || 0), by: 'sheet' };
       F.hostQr = { v: first ? first.qr : '', rev: Math.max(1, (F.hostQr && F.hostQr.rev) || 0), by: 'sheet' };
       F.hostQrNote = { v: first ? first.note : '', rev: Math.max(1, (F.hostQrNote && F.hostQrNote.rev) || 0), by: 'sheet' };
+      if (bInfo.bank && bInfo.account) {
+        F.hostBank = { v: bInfo, rev: Math.max(1, (F.hostBank && F.hostBank.rev) || 0), by: 'sheet' };
+      }
     } else {
       setSyncedField('hostQrs', clean);
       setSyncedField('hostQr', first ? first.qr : '');
       setSyncedField('hostQrNote', first ? first.note : '');
+      setSyncedField('hostBank', bInfo);
     }
     return clean;
   }
@@ -1444,12 +1577,11 @@
 
   function buildSheetQrPayloadString(slots) {
     if (!slots || !slots.length) return '';
-    if (slots.length === 1 && !slots[0].label) {
-      return String(slots[0].qr || '');
-    }
+    var hb = getHostBankInfo();
     return JSON.stringify({
       hostQr: slots[0].qr || '',
       hostQrNote: slots[0].note || '',
+      hostBank: hb,
       hostQrs: slots
     });
   }
@@ -1461,6 +1593,10 @@
     if (str.charAt(0) === '{') {
       try {
         var obj = JSON.parse(str);
+        if (obj && obj.hostBank && obj.hostBank.bank && obj.hostBank.account) {
+          var hbNorm = normalizeHostBankInfo(obj.hostBank);
+          F.hostBank = { v: hbNorm, rev: Math.max(1, (F.hostBank && F.hostBank.rev) || 0), by: 'sheet' };
+        }
         if (obj && (Array.isArray(obj.hostQrs) || obj.hostQr)) {
           parsedSlots = normalizeQrSlotList(obj.hostQrs || [], obj.hostQr || '', obj.hostQrNote || fallbackNote || '');
         }
@@ -1490,6 +1626,7 @@
       var useChunks = (qrVal && qrVal.length > qrChunkSize && qrVal.length <= 750000);
       var chunkCount = useChunks ? Math.ceil(qrVal.length / qrChunkSize) : 0;
       var primaryNote = (qrSlots[0] && qrSlots[0].note) ? qrSlots[0].note : ((F.hostQrNote && F.hostQrNote.v) ? String(F.hostQrNote.v) : '');
+      var hbInfo = getHostBankInfo();
       var payload = {
         bill: orderCode,
         submitted: !!submittedFlag,
@@ -1497,6 +1634,7 @@
         hostUid: getHostUid(),
         hostName: getHostName(),
         storeName: currentStore ? currentStore.name : '',
+        hostBank: hbInfo,
         hostQrNote: primaryNote,
         hostQr: (!useChunks && qrVal && qrVal.length <= qrChunkSize) ? qrVal : '',
         hostQrChunks: chunkCount,
@@ -1589,6 +1727,10 @@
           F.hostQrNote = { v: s.hostQrNote, rev: Math.max(1, (F.hostQrNote && F.hostQrNote.rev) || 0), by: 'sheet' };
           changed = true;
         }
+        if (s.hostBank && s.hostBank.bank && s.hostBank.account && (!F.hostBank || !F.hostBank.v || !F.hostBank.v.account)) {
+          F.hostBank = { v: normalizeHostBankInfo(s.hostBank), rev: Math.max(1, (F.hostBank && F.hostBank.rev) || 0), by: 'sheet' };
+          changed = true;
+        }
         if (s.hostQr && getHostQrSlots().length === 0) {
           if (applySheetQrValue(s.hostQr, s.hostQrNote || '', false)) {
             changed = true;
@@ -1679,6 +1821,22 @@
       if (!raw) return null;
       var parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return null;
+      if (parsed.bank && parsed.account && !parsed.qr && (!Array.isArray(parsed.slots) || !parsed.slots.length)) {
+        var bNorm = normalizeHostBankInfo(parsed);
+        if (bNorm.bank && bNorm.account) {
+          var sUrl = buildSePayQrUrl(bNorm.bank, bNorm.account, 0, orderCode);
+          var sSlot = [{
+            id: 'qr_0',
+            label: bNorm.bank,
+            qr: sUrl,
+            note: formatHostBankSummary(bNorm),
+            bank: bNorm.bank,
+            account: bNorm.account,
+            owner: bNorm.owner
+          }];
+          return { qr: sUrl, note: sSlot[0].note, label: bNorm.bank, bank: bNorm.bank, account: bNorm.account, owner: bNorm.owner, slots: sSlot };
+        }
+      }
       if (Array.isArray(parsed.slots) && parsed.slots.length) {
         var norm = normalizeQrSlotList(parsed.slots, parsed.qr || '', parsed.note || '');
         if (!norm.length) return null;
@@ -1686,6 +1844,9 @@
           qr: norm[0].qr,
           note: norm[0].note || '',
           label: norm[0].label || '',
+          bank: norm[0].bank || '',
+          account: norm[0].account || '',
+          owner: norm[0].owner || '',
           slots: norm
         };
       }
@@ -1694,9 +1855,12 @@
           id: 'qr_0',
           label: String(parsed.label || '').trim(),
           qr: String(parsed.qr),
-          note: String(parsed.note || '').trim()
+          note: String(parsed.note || '').trim(),
+          bank: String(parsed.bank || '').trim(),
+          account: String(parsed.account || '').trim(),
+          owner: String(parsed.owner || '').trim()
         }];
-        return { qr: single[0].qr, note: single[0].note, label: single[0].label, slots: single };
+        return { qr: single[0].qr, note: single[0].note, label: single[0].label, bank: single[0].bank, account: single[0].account, owner: single[0].owner, slots: single };
       }
       return null;
     } catch (e) {
@@ -1901,21 +2065,24 @@
     if (hostOnlyActions) {
       hostOnlyActions.hidden = !(assigned && amHost);
     }
+    var hbActive = getHostBankInfo();
     if (btnMemberQr) {
       btnMemberQr.hidden = !(hasQr && !(assigned && amHost));
       if (btnMemberQrLbl) {
-        btnMemberQrLbl.textContent = qrSlots.length > 1 ? ('Xem ' + qrSlots.length + ' QR đại diện') : 'Xem QR đại diện';
+        btnMemberQrLbl.textContent = (hbActive.bank && hbActive.account) ? 'Quét QR trả tiền' : 'Xem QR đại diện';
       }
     }
     if (btnQrLbl) {
-      btnQrLbl.textContent = hasQr ? (qrSlots.length > 1 ? ('Đã có ' + qrSlots.length + ' QR ✓') : 'Đã có QR ✓') : 'Thêm QR';
+      btnQrLbl.textContent = hasQr
+        ? ((hbActive.bank && hbActive.account) ? ('SePay ' + hbActive.bank + ' ✓') : 'Đã có QR ✓')
+        : 'Thêm TK / QR';
     }
     if (btnQr) {
       btnQr.classList.toggle('has-qr', hasQr);
     }
     if (btnQuickQr) {
       btnQuickQr.hidden = !(assigned && amHost);
-      if (btnQuickQrTxt) btnQuickQrTxt.textContent = hasQr ? (qrSlots.length > 1 ? ('Sửa ' + qrSlots.length + ' mã QR') : 'Sửa mã QR') : 'Thêm QR vào ảnh';
+      if (btnQuickQrTxt) btnQuickQrTxt.textContent = hasQr ? 'Sửa TK / QR' : 'Thêm TK / QR';
     }
 
     // Nút Hối trả tiền & Thu tiền: chỉ hiện khi đã Chốt & Lưu Sheet; tự disable khi không còn thành viên nào chưa trả
@@ -2064,6 +2231,18 @@
 
       row.appendChild(u);
       row.appendChild(amt);
+      if (getHostQrSlots().length > 0 && p.finalPay > 0 && !p.paid) {
+        var qrBtn = document.createElement('button');
+        qrBtn.type = 'button';
+        qrBtn.className = 'btn-person-qr';
+        qrBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg><span>QR</span>';
+        qrBtn.title = 'Mở mã QR thanh toán riêng của ' + p.name;
+        qrBtn.onclick = function (e) {
+          e.stopPropagation();
+          openMemberPersonalQrModal(p);
+        };
+        row.appendChild(qrBtn);
+      }
       if (isClaimed) {
         var rej = document.createElement('button');
         rej.type = 'button';
@@ -2447,13 +2626,23 @@
 
   var PAY_CONFIRMED_AUDIO = 'assets/audio/pay-confirmed.mp3';
   var PAY_CONFIRMED_TEXT = 'Cám ơn bà con rất là nhiều ... Đó, tiếng ting ting đó là tiếng gửi tiền vào đó.';
+  var PAY_CONFIRMED_DEBOUNCE_MS = 3000;
   var seenPayClaimIds = {};
   var seenPayConfirmIds = {};
   var lastAlertReplayFn = null;
   var activeHostClaimTarget = null;
   var payConfirmedAudioEl = null;
+  var payConfirmedAudioPlaying = false;
+  var payConfirmedAudioSafetyTimer = null;
+  var lastPayConfirmedAudioStartedAt = 0;
+  var lastClaimBellAt = 0;
+  var recentConfirmedPayers = [];
+  var recentConfirmedBatchTimer = null;
 
-  function playSynthesizedClaimBell() {
+  function playSynthesizedClaimBell(forcePlay) {
+    var now = Date.now();
+    if (!forcePlay && (now - lastClaimBellAt < 1800)) return;
+    lastClaimBellAt = now;
     try {
       var AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -2486,8 +2675,8 @@
       replayBtn.textContent = '🔊 Nghe';
     }
     try {
-      if (urgeAudioEl) {
-        try { urgeAudioEl.pause(); } catch (e) {}
+      if (urgeAudioEl && !urgeAudioEl.paused && !urgeAudioEl.ended) {
+        return;
       }
       urgeAudioEl = new Audio(audioSrc);
       urgeAudioEl.currentTime = 0;
@@ -2513,29 +2702,64 @@
     playAlertBannerAudio(voice.audio, playSynthesizedUrgeBell, onBlocked);
   }
 
-  function playPayConfirmedSound(onBlocked) {
+  function playPayConfirmedSound(onBlocked, forceRestart) {
+    var now = Date.now();
+    var isStillPlaying = !!(payConfirmedAudioEl && payConfirmedAudioPlaying && !payConfirmedAudioEl.ended);
+    var withinDebounce = (now - lastPayConfirmedAudioStartedAt < PAY_CONFIRMED_DEBOUNCE_MS);
+    if (!forceRestart && (isStillPlaying || withinDebounce)) {
+      return;
+    }
     stopPreviewAudio();
     stopPayUrgeAudio();
     try {
+      clearTimeout(payConfirmedAudioSafetyTimer);
       if (payConfirmedAudioEl) {
-        try { payConfirmedAudioEl.pause(); } catch (e) {}
+        try {
+          payConfirmedAudioEl.onended = null;
+          payConfirmedAudioEl.onerror = null;
+          payConfirmedAudioEl.pause();
+        } catch (e) {}
       }
-      payConfirmedAudioEl = new Audio(PAY_CONFIRMED_AUDIO);
-      payConfirmedAudioEl.currentTime = 0;
-      var p = payConfirmedAudioEl.play();
+      var audioEl = new Audio(PAY_CONFIRMED_AUDIO);
+      payConfirmedAudioEl = audioEl;
+      audioEl.currentTime = 0;
+      payConfirmedAudioPlaying = true;
+      lastPayConfirmedAudioStartedAt = now;
+      payConfirmedAudioSafetyTimer = setTimeout(function () {
+        if (payConfirmedAudioEl === audioEl) payConfirmedAudioPlaying = false;
+      }, 18000);
+      audioEl.onended = function () {
+        if (payConfirmedAudioEl === audioEl) {
+          payConfirmedAudioPlaying = false;
+          clearTimeout(payConfirmedAudioSafetyTimer);
+        }
+      };
+      audioEl.onerror = function () {
+        if (payConfirmedAudioEl === audioEl) {
+          payConfirmedAudioPlaying = false;
+          clearTimeout(payConfirmedAudioSafetyTimer);
+        }
+      };
+      var p = audioEl.play();
       if (p && typeof p.catch === 'function') {
         p.catch(function () {
+          if (payConfirmedAudioEl === audioEl) {
+            payConfirmedAudioPlaying = false;
+            clearTimeout(payConfirmedAudioSafetyTimer);
+          }
           var replayBtn = $('btnReplayUrgeAudio');
           if (replayBtn) {
             replayBtn.classList.add('is-urgent');
             replayBtn.textContent = '🔊 Bấm nghe!';
           }
           if (typeof onBlocked === 'function') onBlocked();
-          playSynthesizedClaimBell();
+          playSynthesizedClaimBell(!!forceRestart);
         });
       }
     } catch (e) {
-      playSynthesizedClaimBell();
+      payConfirmedAudioPlaying = false;
+      clearTimeout(payConfirmedAudioSafetyTimer);
+      playSynthesizedClaimBell(!!forceRestart);
     }
   }
 
@@ -2745,19 +2969,31 @@
     var hostWho = d.hostName || 'Đại diện';
     var payerWho = d.payerName || 'Thành viên';
     var amtTxt = Number(d.amount) > 0 ? (' (' + fmt(d.amount) + ')') : '';
-    var titleStr = '💸 ' + hostWho + ' đã xác nhận ' + payerWho + amtTxt + '!';
+    var itemTxt = payerWho + amtTxt;
+    if (recentConfirmedPayers.indexOf(itemTxt) === -1) {
+      recentConfirmedPayers.push(itemTxt);
+    }
+    clearTimeout(recentConfirmedBatchTimer);
+    recentConfirmedBatchTimer = setTimeout(function () {
+      recentConfirmedPayers = [];
+    }, 6500);
+
+    var prefixStr = d.viaSePay ? '⚡ SePay tự động xác nhận ' : ('💸 ' + hostWho + ' đã xác nhận ');
+    var titleStr = recentConfirmedPayers.length > 1
+      ? (prefixStr + recentConfirmedPayers.length + ' bạn: ' + recentConfirmedPayers.join(', ') + '!')
+      : (prefixStr + itemTxt + '!');
     var bodyStr = d.text || PAY_CONFIRMED_TEXT;
     showUrgentBanner({
       variant: 'is-pay-confirmed',
       title: titleStr,
       sub: bodyStr,
-      replay: playPayConfirmedSound,
+      replay: function () { playPayConfirmedSound(null, true); },
       durationMs: 11000
     });
     sendSystemNotification({
       title: titleStr + ' (#' + orderCode + ')',
       body: bodyStr,
-      tag: 'uu-pconf-' + (d.confirmId || Date.now())
+      tag: 'uu-pconf-' + orderCode + '-' + Math.floor(Date.now() / 5000)
     });
   }
 
@@ -3106,7 +3342,10 @@
     if (modal) modal.hidden = true;
   }
 
-  function playPayUrgeSound(voiceId) {
+  function playPayUrgeSound(voiceId, forceRestart) {
+    if (!forceRestart && payUrgeAudioEl && !payUrgeAudioEl.paused && !payUrgeAudioEl.ended) {
+      return;
+    }
     stopPayPreviewAudio();
     stopPayUrgeAudio();
     var voice = getPayVoiceById(voiceId);
@@ -3128,6 +3367,7 @@
   }
 
   var activePayQrZoomData = null;
+  var activeQrZoomMember = null;
   var payReminderCollapsed = false;
   var selectedPayQrIdx = 0;
 
@@ -3177,8 +3417,8 @@
     if (subEl) {
       subEl.textContent = (baseOpts && baseOpts.sub) || 'Đưa camera app ngân hàng hoặc ví điện tử vào mã QR bên dưới';
     }
-    var resolvedNote = (slot.note && slot.note.trim()) ? slot.note.trim() : ((baseOpts && baseOpts.fallbackNote) || (baseOpts && baseOpts.note) || '');
-    var amtStr = (baseOpts && baseOpts.amount) || '';
+    var resolvedNote = (baseOpts && baseOpts.hideInfoCard) ? '' : ((slot.note && slot.note.trim()) ? slot.note.trim() : ((baseOpts && baseOpts.fallbackNote) || (baseOpts && baseOpts.note) || ''));
+    var amtStr = (baseOpts && baseOpts.hideInfoCard) ? '' : ((baseOpts && baseOpts.amount) || '');
     if (infoCard && amtEl && noteEl) {
       if (amtStr || resolvedNote) {
         amtEl.textContent = amtStr ? ('Số tiền: ' + amtStr) : '';
@@ -3196,12 +3436,16 @@
         renderPayReminderPanel(false);
       }
     });
-    syncClaimButtonElement($('btnQrZoomClaimPaid'));
+    syncClaimButtonElement($('btnQrZoomClaimPaid'), baseOpts && baseOpts.member);
   }
 
-  function syncClaimButtonElement(btnEl) {
+  function syncClaimButtonElement(btnEl, targetMember) {
     if (!btnEl) return;
     if (!isOrderSubmitted() || canActAsHostOrOpen() || !cart.length) {
+      btnEl.hidden = true;
+      return;
+    }
+    if (targetMember && !targetMember.isMe) {
       btnEl.hidden = true;
       return;
     }
@@ -3233,40 +3477,64 @@
     if (!slots.length) return;
     var modal = $('qrZoomModal');
     if (!modal) return;
+    activeQrZoomMember = d.member || null;
     applyQrZoomModalSlot(slots, Number(d.slotIdx) || 0, d);
     modal.hidden = false;
+  }
+
+  function openMemberPersonalQrModal(memberObj) {
+    var slots = getHostQrSlots();
+    if (!slots.length) {
+      showToast('Đại diện chưa thêm tài khoản / mã QR cho bill này.');
+      return;
+    }
+    var hostName = getHostName() || 'Đại diện';
+    var mInfo = getQrForMember(memberObj);
+    if (!mInfo.qr) {
+      showToast('Không thể tạo mã QR thanh toán.');
+      return;
+    }
+    var pName = (memberObj && memberObj.name) ? memberObj.name : 'Bạn';
+    openQrZoomModal({
+      slots: [{ id: 'qr_0', label: mInfo.label || 'QR', qr: mInfo.qr, note: mInfo.isSePay ? '' : (mInfo.note || '') }],
+      slotIdx: 0,
+      src: mInfo.qr,
+      member: memberObj || null,
+      hideInfoCard: !!mInfo.isSePay,
+      amount: mInfo.isSePay ? '' : (mInfo.amount > 0 ? fmt(mInfo.amount) : ''),
+      fallbackNote: mInfo.isSePay ? '' : ('Nội dung CK: ' + mInfo.memo),
+      baseTitle: 'QR thanh toán của ' + pName,
+      sub: mInfo.isSePay
+        ? ('Quét mã bằng app ngân hàng để chuyển cho ' + hostName + ' (đã khóa tự động số tiền & nội dung)')
+        : ('Mở app ngân hàng / ví điện tử và quét mã chuyển cho ' + hostName)
+    });
   }
 
   function openHostQrViewerForMember() {
     var slots = getHostQrSlots();
     if (!slots.length) {
-      showToast('Đại diện chưa thêm mã QR cho bill này.');
+      showToast('Đại diện chưa thêm tài khoản / mã QR cho bill này.');
       return;
     }
-    var hostName = getHostName() || 'Đại diện';
-    var myAmt = '';
+    var myMember = null;
     if (cart.length > 0 && typeof computeBillSplit === 'function') {
       var sp = computeBillSplit();
       var myRows = sp.people.filter(function (p) { return p.isMe && p.finalPay > 0; });
       if (myRows.length) {
-        var unpaidSum = myRows.filter(function (p) { return !p.paid; }).reduce(function (s, p) { return s + p.finalPay; }, 0);
-        var fullSum = myRows.reduce(function (s, p) { return s + p.finalPay; }, 0);
-        myAmt = fmt(unpaidSum > 0 ? unpaidSum : fullSum);
+        var unpaidRow = myRows.find(function (p) { return !p.paid; });
+        myMember = unpaidRow || myRows[0];
       }
     }
-    openQrZoomModal({
-      slots: slots,
-      slotIdx: Math.min(selectedPayQrIdx, slots.length - 1),
-      baseTitle: 'Quét QR chuyển cho ' + hostName,
-      sub: 'Mở app ngân hàng / ví điện tử và quét mã bên dưới',
-      amount: myAmt,
-      fallbackNote: 'Nội dung CK: ' + orderCode
-    });
+    if (!myMember) {
+      myMember = { uid: myUid, name: myUname || 'Bạn', finalPay: 0, isMe: true };
+    }
+    openMemberPersonalQrModal(myMember);
   }
 
   function closeQrZoomModal() {
     var modal = $('qrZoomModal');
     if (modal) modal.hidden = true;
+    activeQrZoomMember = null;
   }
 
   function renderPayReminderPanel(allowAutoPlay) {
@@ -3347,34 +3615,35 @@
       });
     }
 
-    // Hiện QR của đại diện (hỗ trợ nhiều slot QR)
+    // Hiện QR của đại diện (tự động khóa số tiền + nội dung của riêng thành viên đang mở nếu là SePay)
     var qrSlots = getHostQrSlots();
-    selectedPayQrIdx = qrSlots.length ? Math.max(0, Math.min(selectedPayQrIdx, qrSlots.length - 1)) : 0;
+    selectedPayQrIdx = 0;
     if (qrBox && qrImg) {
       if (qrSlots.length > 0) {
-        var curSlot = qrSlots[selectedPayQrIdx];
-        var resolvedNote = (curSlot.note && curSlot.note.trim()) ? curSlot.note.trim() : ('Nội dung CK: ' + orderCode);
-        qrImg.src = curSlot.qr;
+        var myTargetMember = myUnpaid[0] || { uid: myUid, name: myUname || 'Bạn', finalPay: myUnpaidTotal, isMe: true };
+        var personalQr = getQrForMember(myTargetMember, myUnpaidTotal);
+        qrImg.src = personalQr.qr;
         qrBox.hidden = false;
         if (qrHost) {
-          qrHost.textContent = qrSlots.length > 1
-            ? ('Quét QR (' + formatQrSlotDisplayName(curSlot, selectedPayQrIdx) + ') · ' + split.hostName)
-            : ('Quét QR chuyển cho ' + split.hostName);
+          qrHost.textContent = 'Quét QR chuyển cho ' + split.hostName;
         }
-        if (qrNote) qrNote.textContent = resolvedNote;
-        renderQrSlotSwitchTabs(qrTabs, qrSlots, selectedPayQrIdx, function (newIdx) {
-          selectedPayQrIdx = newIdx;
-          renderPayReminderPanel(false);
-        });
+        if (qrNote) {
+          qrNote.textContent = '';
+          qrNote.hidden = true;
+        }
+        if (qrTabs) { qrTabs.hidden = true; qrTabs.innerHTML = ''; }
         activePayQrZoomData = {
-          slots: qrSlots,
-          slotIdx: selectedPayQrIdx,
-          src: curSlot.qr,
-          baseTitle: 'Quét QR chuyển cho ' + split.hostName,
-          sub: 'Đưa camera app ngân hàng / ví điện tử vào mã QR bên dưới',
-          amount: fmt(myUnpaidTotal),
-          fallbackNote: 'Nội dung CK: ' + orderCode,
-          note: resolvedNote
+          slots: [{ id: 'qr_0', label: personalQr.label || 'QR', qr: personalQr.qr, note: personalQr.isSePay ? '' : (personalQr.note || '') }],
+          slotIdx: 0,
+          src: personalQr.qr,
+          member: myTargetMember,
+          hideInfoCard: !!personalQr.isSePay,
+          amount: personalQr.isSePay ? '' : fmt(myUnpaidTotal),
+          fallbackNote: personalQr.isSePay ? '' : ('Nội dung CK: ' + personalQr.memo),
+          baseTitle: 'QR thanh toán của ' + myTargetMember.name,
+          sub: personalQr.isSePay
+            ? ('Quét mã bằng app ngân hàng để chuyển cho ' + split.hostName + ' (đã khóa tự động số tiền & nội dung)')
+            : ('Đưa camera app ngân hàng / ví điện tử vào mã QR bên dưới')
         };
       } else {
         qrBox.hidden = true;
@@ -3650,10 +3919,13 @@
     txt.textContent = activeList.length + ' online';
   }
 
+  var sepaySheetSyncTimer = null;
+
   function onRemote(wrap, from, dev) {
     if (!wrap || from === clientId) return;
-    var authorName = (wrap && wrap.dev) || dev || 'Bạn bè';
-    if (from) {
+    var isSystemFrom = (from === 'server' || from === 'sepay');
+    var authorName = (from === 'sepay') ? 'SePay' : ((wrap && wrap.dev) || dev || 'Bạn bè');
+    if (from && !isSystemFrom) {
       if (!onlineUsers[from]) {
         onlineUsers[from] = {
           cid: from,
@@ -3681,11 +3953,17 @@
       } finally {
         applying = false;
       }
-      var sender = m.dev || dev || authorName || 'bạn bè';
+      var sender = (from === 'sepay') ? 'SePay tự động' : (m.dev || dev || authorName || 'bạn bè');
       setSyncSt('Cập nhật từ ' + sender);
+      if (from === 'sepay' && isCurrentHost()) {
+        clearTimeout(sepaySheetSyncTimer);
+        sepaySheetSyncTimer = setTimeout(function () {
+          syncBillServerStateToSheet(isOrderSubmitted());
+        }, 1200);
+      }
       if (m.needsPush) schedulePush();
     }
-    sendPresence({ active: true });
+    if (!isSystemFrom) sendPresence({ active: true });
   }
 
   function mergeWrap(wrap) {
@@ -4695,8 +4973,25 @@
     if ($('orderCode')) $('orderCode').textContent = orderCode;
 
     updateHostDropdownUI();
-    if ($('qrZoomModal') && !$('qrZoomModal').hidden && typeof syncClaimButtonElement === 'function') {
-      syncClaimButtonElement($('btnQrZoomClaimPaid'));
+    if ($('qrZoomModal') && !$('qrZoomModal').hidden) {
+      if (activeQrZoomMember && cart.length > 0 && typeof computeBillSplit === 'function') {
+        var spZoom = computeBillSplit();
+        var zoomKey = getMemberPayKey(activeQrZoomMember);
+        var freshZoomM = spZoom.people.find(function (x) { return getMemberPayKey(x) === zoomKey; });
+        if (freshZoomM && freshZoomM.paid && freshZoomM.isMe) {
+          closeQrZoomModal();
+          showToast('✓ Thanh toán của bạn đã được xác nhận thành công!');
+        } else if (freshZoomM) {
+          activeQrZoomMember = freshZoomM;
+          var freshQr = getQrForMember(freshZoomM);
+          if (freshQr.qr && $('qrZoomImg') && $('qrZoomImg').src !== freshQr.qr) {
+            $('qrZoomImg').src = freshQr.qr;
+          }
+        }
+      }
+      if (typeof syncClaimButtonElement === 'function') {
+        syncClaimButtonElement($('btnQrZoomClaimPaid'), activeQrZoomMember);
+      }
     }
     renderCartFocusIndicators();
     schedulePush();
@@ -5033,58 +5328,85 @@
     }
   }
 
-  /* ---- Host QR Code Modal (Multi-Slot) ---- */
+  /* ---- Host QR Code Modal (SePay Dynamic QR + Single Slot) ---- */
   var pendingHostQrData = '';
   var draftHostQrSlots = [];
   var draftHostQrIdx = 0;
 
+  function getSelectedBankCodeFromModal() {
+    var sel = $('qrBankSelect');
+    var customInput = $('qrBankCodeInput');
+    if (sel) {
+      if (sel.value === 'CUSTOM') {
+        return (customInput ? customInput.value.trim() : '').toUpperCase();
+      }
+      return (sel.value || '').trim().toUpperCase();
+    }
+    return (customInput ? customInput.value.trim() : '').toUpperCase();
+  }
+
+  function setSelectedBankCodeInModal(bankCode) {
+    var code = String(bankCode || '').trim().toUpperCase();
+    var sel = $('qrBankSelect');
+    var customInput = $('qrBankCodeInput');
+    if (!sel) {
+      if (customInput) customInput.value = code;
+      return;
+    }
+    if (!code) {
+      sel.value = 'MB';
+      if (customInput) { customInput.value = ''; customInput.hidden = true; }
+      return;
+    }
+    var foundOpt = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === code && code !== 'CUSTOM') {
+        foundOpt = true;
+        break;
+      }
+    }
+    if (foundOpt) {
+      sel.value = code;
+      if (customInput) { customInput.value = code; customInput.hidden = true; }
+    } else {
+      sel.value = 'CUSTOM';
+      if (customInput) { customInput.value = code; customInput.hidden = false; }
+    }
+  }
+
   function syncInputsToDraftSlot() {
-    if (!draftHostQrSlots.length) return;
-    var slot = draftHostQrSlots[draftHostQrIdx];
+    if (!draftHostQrSlots.length) {
+      draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '', bank: '', account: '', owner: '' }];
+    }
+    var slot = draftHostQrSlots[0];
     if (!slot) return;
-    slot.qr = pendingHostQrData || '';
-    if ($('hostQrLabelInput')) slot.label = $('hostQrLabelInput').value.trim();
-    if ($('hostQrNoteInput')) slot.note = $('hostQrNoteInput').value.trim();
+    var bank = getSelectedBankCodeFromModal();
+    var acc = ($('qrAccountNoInput') ? $('qrAccountNoInput').value.trim() : '').replace(/\s+/g, '');
+    var owner = toAsciiTransferName($('qrAccountNameInput') ? $('qrAccountNameInput').value.trim() : '');
+    if (bank && acc) {
+      slot.bank = bank;
+      slot.account = acc;
+      slot.owner = owner;
+      slot.label = bank;
+      slot.note = formatHostBankSummary({ bank: bank, account: acc, owner: owner });
+      if (!pendingHostQrData || pendingHostQrData.indexOf('https://qr.sepay.vn/img?') === 0) {
+        pendingHostQrData = buildSePayQrUrl(bank, acc, 0, orderCode);
+      }
+      slot.qr = pendingHostQrData;
+      if ($('hostQrLabelInput')) $('hostQrLabelInput').value = slot.label;
+      if ($('hostQrNoteInput')) $('hostQrNoteInput').value = slot.note;
+    } else {
+      slot.qr = pendingHostQrData || '';
+      if ($('hostQrLabelInput')) slot.label = $('hostQrLabelInput').value.trim();
+      if ($('hostQrNoteInput')) slot.note = $('hostQrNoteInput').value.trim();
+    }
   }
 
   function renderHostQrSlotsBar() {
     var bar = $('hostQrSlotsBar');
-    if (!bar) return;
-    bar.innerHTML = '';
-    draftHostQrSlots.forEach(function (slot, idx) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'qr-slot-tab' + (idx === draftHostQrIdx ? ' is-active' : '') + (slot.qr ? ' has-img' : '');
-      var lblTxt = (slot.label && slot.label.trim()) ? slot.label.trim() : ('QR #' + (idx + 1));
-      btn.title = lblTxt + (slot.note ? (' — ' + slot.note) : '');
-      btn.innerHTML = '<span class="qr-slot-dot"></span><span>' + esc(lblTxt) + '</span>';
-      btn.onclick = function () {
-        if (idx === draftHostQrIdx) return;
-        syncInputsToDraftSlot();
-        loadDraftSlotToEditor(idx);
-      };
-      bar.appendChild(btn);
-    });
-    if (draftHostQrSlots.length < MAX_HOST_QR_SLOTS) {
-      var addBtn = document.createElement('button');
-      addBtn.type = 'button';
-      addBtn.id = 'btnAddHostQrSlot';
-      addBtn.className = 'qr-slot-add-btn';
-      addBtn.title = 'Thêm slot mã QR ngân hàng / ví khác (tối đa ' + MAX_HOST_QR_SLOTS + ')';
-      addBtn.textContent = '+ Thêm QR';
-      addBtn.onclick = function () {
-        syncInputsToDraftSlot();
-        if (draftHostQrSlots.length >= MAX_HOST_QR_SLOTS) return;
-        draftHostQrSlots.push({
-          id: 'qr_' + Date.now() + '_' + draftHostQrSlots.length,
-          label: '',
-          qr: '',
-          note: ''
-        });
-        loadDraftSlotToEditor(draftHostQrSlots.length - 1);
-        if ($('hostQrLabelInput')) $('hostQrLabelInput').focus();
-      };
-      bar.appendChild(addBtn);
+    if (bar) {
+      bar.hidden = true;
+      bar.innerHTML = '';
     }
   }
 
@@ -5093,8 +5415,8 @@
     var hint = $('hostQrEmptyHint');
     var zoomBtn = $('btnZoomHostPreviewQr');
     pendingHostQrData = src || '';
-    if (draftHostQrSlots[draftHostQrIdx]) {
-      draftHostQrSlots[draftHostQrIdx].qr = pendingHostQrData;
+    if (draftHostQrSlots[0]) {
+      draftHostQrSlots[0].qr = pendingHostQrData;
     }
     if (img && hint) {
       if (pendingHostQrData) {
@@ -5109,22 +5431,27 @@
         if (zoomBtn) zoomBtn.hidden = true;
       }
     }
-    renderHostQrSlotsBar();
+    if ($('btnRemoveHostQr')) {
+      $('btnRemoveHostQr').hidden = !pendingHostQrData;
+    }
   }
 
   function loadDraftSlotToEditor(idx) {
     if (!draftHostQrSlots.length) {
-      draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '' }];
+      draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '', bank: '', account: '', owner: '' }];
     }
-    draftHostQrIdx = Math.max(0, Math.min(idx, draftHostQrSlots.length - 1));
-    var slot = draftHostQrSlots[draftHostQrIdx];
+    draftHostQrIdx = 0;
+    var slot = draftHostQrSlots[0];
+    setSelectedBankCodeInModal(slot.bank || 'MB');
+    if ($('qrAccountNoInput')) $('qrAccountNoInput').value = slot.account || '';
+    if ($('qrAccountNameInput')) $('qrAccountNameInput').value = slot.owner || '';
+    if (!slot.qr && slot.bank && slot.account) {
+      slot.qr = buildSePayQrUrl(slot.bank, slot.account, 0, orderCode);
+    }
     pendingHostQrData = slot.qr || '';
-    if ($('hostQrLabelInput')) $('hostQrLabelInput').value = slot.label || '';
-    if ($('hostQrNoteInput')) $('hostQrNoteInput').value = slot.note || '';
+    if ($('hostQrLabelInput')) $('hostQrLabelInput').value = slot.label || slot.bank || '';
+    if ($('hostQrNoteInput')) $('hostQrNoteInput').value = slot.note || formatHostBankSummary(slot) || '';
     updateHostQrPreview(pendingHostQrData);
-    if ($('btnRemoveHostQr')) {
-      $('btnRemoveHostQr').hidden = (!pendingHostQrData && draftHostQrSlots.length <= 1);
-    }
   }
 
   function openHostQrModal() {
@@ -5140,19 +5467,28 @@
       if (saved && Array.isArray(saved.slots) && saved.slots.length) {
         existing = normalizeQrSlotList(saved.slots, '', '');
       } else if (saved && saved.qr) {
-        existing = [{ id: 'qr_0', label: saved.label || '', qr: saved.qr, note: saved.note || '' }];
+        existing = [{
+          id: 'qr_0',
+          label: saved.label || '',
+          qr: saved.qr,
+          note: saved.note || '',
+          bank: saved.bank || '',
+          account: saved.account || '',
+          owner: saved.owner || ''
+        }];
       }
     }
-    draftHostQrSlots = existing.length
-      ? existing.map(function (s, i) {
-        return {
-          id: String(s.id || ('qr_' + i)),
-          label: String(s.label || ''),
-          qr: String(s.qr || ''),
-          note: String(s.note || '')
-        };
-      })
-      : [{ id: 'qr_0', label: '', qr: '', note: '' }];
+    var hb = getHostBankInfo();
+    var first = existing[0] || null;
+    draftHostQrSlots = [{
+      id: 'qr_0',
+      label: String((first && first.label) || hb.bank || ''),
+      qr: String((first && first.qr) || ''),
+      note: String((first && first.note) || formatHostBankSummary(hb) || ''),
+      bank: String((first && first.bank) || hb.bank || 'MB'),
+      account: String((first && first.account) || hb.account || ''),
+      owner: String((first && first.owner) || hb.owner || '')
+    }];
     loadDraftSlotToEditor(0);
     modal.hidden = false;
   }
@@ -5171,7 +5507,6 @@
         var w = img.naturalWidth || img.width || maxDim;
         var h = img.naturalHeight || img.height || maxDim;
         var isLosslessSource = (file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/svg+xml');
-        // Giữ nguyên file gốc không nén lại nếu ảnh đã rõ nét và dung lượng gọn
         if (isLosslessSource && rawDataUrl && rawDataUrl.length <= 130000 && Math.max(w, h) <= 1600) {
           cb(null, rawDataUrl);
           return;
@@ -5191,7 +5526,6 @@
         if (cx.imageSmoothingEnabled) cx.imageSmoothingQuality = 'high';
         cx.drawImage(img, 0, 0, tw, th);
 
-        // Ưu tiên PNG không mất nét cho ảnh QR; chỉ dùng WebP chất lượng cao nếu PNG quá nặng
         var out = c.toDataURL('image/png');
         if (out.length > 90000) {
           var webp95 = c.toDataURL('image/webp', 0.95);
@@ -5212,67 +5546,41 @@
   }
 
   function generateVietQrToDataUrl() {
-    var bank = ($('qrBankCodeInput') ? $('qrBankCodeInput').value.trim() : '').toUpperCase();
+    var bank = getSelectedBankCodeFromModal();
     var acc = ($('qrAccountNoInput') ? $('qrAccountNoInput').value.trim() : '').replace(/\s+/g, '');
-    var accName = ($('qrAccountNameInput') ? $('qrAccountNameInput').value.trim() : '');
+    var accName = toAsciiTransferName($('qrAccountNameInput') ? $('qrAccountNameInput').value.trim() : '');
     if (!bank || !acc) {
-      showToast('Nhập đủ Mã ngân hàng (VD: MB, VCB, TCB) và Số tài khoản!');
+      showToast('Vui lòng chọn Ngân hàng và nhập Số tài khoản nhận tiền!');
+      if ($('qrAccountNoInput')) $('qrAccountNoInput').focus();
       return;
     }
-    var btn = $('btnGenerateVietQr');
-    if (btn) { btn.disabled = true; btn.textContent = 'Đang tạo QR…'; }
-    var url = 'https://img.vietqr.io/image/' + encodeURIComponent(bank) + '-' + encodeURIComponent(acc) + '-compact2.png' +
-      (accName ? ('?accountName=' + encodeURIComponent(accName)) : '');
-    var img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = function () {
-      try {
-        var maxDim = 1080;
-        var ratio = Math.min(1, maxDim / Math.max(img.naturalWidth || 540, img.naturalHeight || 640));
-        var tw = Math.round((img.naturalWidth || 540) * ratio);
-        var th = Math.round((img.naturalHeight || 640) * ratio);
-        var c = document.createElement('canvas');
-        c.width = tw;
-        c.height = th;
-        var cx = c.getContext('2d');
-        cx.fillStyle = '#FFFFFF';
-        cx.fillRect(0, 0, tw, th);
-        cx.imageSmoothingEnabled = (ratio < 1);
-        if (cx.imageSmoothingEnabled) cx.imageSmoothingQuality = 'high';
-        cx.drawImage(img, 0, 0, tw, th);
-        var dataUrl = c.toDataURL('image/png');
-        updateHostQrPreview(dataUrl);
-        if ($('hostQrLabelInput') && !$('hostQrLabelInput').value.trim()) {
-          $('hostQrLabelInput').value = bank;
-        }
-        if ($('hostQrNoteInput') && !$('hostQrNoteInput').value.trim()) {
-          $('hostQrNoteInput').value = bank + ' - ' + acc + (accName ? (' - ' + accName) : '');
-        }
-        syncInputsToDraftSlot();
-        renderHostQrSlotsBar();
-        if ($('btnRemoveHostQr')) $('btnRemoveHostQr').hidden = false;
-        showToast('✓ Đã tạo ảnh VietQR thành công!');
-      } catch (err) {
-        showToast('Không thể chuyển ảnh VietQR (CORS), vui lòng tải ảnh QR từ máy!');
-      } finally {
-        if (btn) { btn.disabled = false; btn.textContent = '⚡ Tạo ảnh VietQR'; }
-      }
-    };
-    img.onerror = function () {
-      if (btn) { btn.disabled = false; btn.textContent = '⚡ Tạo ảnh VietQR'; }
-      showToast('Không tải được VietQR (kiểm tra mã ngân hàng / mạng), hãy tải ảnh QR trực tiếp!');
-    };
-    img.src = url;
+    var sepayUrl = buildSePayQrUrl(bank, acc, 0, orderCode);
+    if (!draftHostQrSlots.length) {
+      draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '', bank: '', account: '', owner: '' }];
+    }
+    draftHostQrSlots[0].bank = bank;
+    draftHostQrSlots[0].account = acc;
+    draftHostQrSlots[0].owner = accName;
+    draftHostQrSlots[0].label = bank;
+    draftHostQrSlots[0].note = formatHostBankSummary({ bank: bank, account: acc, owner: accName });
+    updateHostQrPreview(sepayUrl);
+    if ($('hostQrLabelInput')) $('hostQrLabelInput').value = bank;
+    if ($('hostQrNoteInput')) $('hostQrNoteInput').value = draftHostQrSlots[0].note;
+    showToast('✓ Đã tạo mã QR SePay cho tài khoản ' + bank + ' - ' + acc + '!');
   }
 
   function persistMyQrLocalStorage(cleanSlots) {
     try {
       if (cleanSlots && cleanSlots.length) {
+        var first = cleanSlots[0];
         localStorage.setItem(getMyQrStorageKey(), JSON.stringify({
-          qr: cleanSlots[0].qr,
-          note: cleanSlots[0].note || '',
-          label: cleanSlots[0].label || '',
-          slots: cleanSlots
+          qr: first.qr,
+          note: first.note || '',
+          label: first.label || '',
+          bank: first.bank || '',
+          account: first.account || '',
+          owner: first.owner || '',
+          slots: [first]
         }));
       } else {
         localStorage.removeItem(getMyQrStorageKey());
@@ -5300,35 +5608,48 @@
       showToast('🔒 Chỉ Đại diện hiện tại mới được lưu QR!');
       return;
     }
+    syncInputsToDraftSlot();
+    var slot = draftHostQrSlots[0];
+    if (!slot || !slot.qr) {
+      showToast('Vui lòng nhập Số tài khoản ngân hàng (hoặc chọn ảnh QR) trước khi lưu!');
+      if ($('qrAccountNoInput')) $('qrAccountNoInput').focus();
+      return;
+    }
     var clean = commitDraftHostQrSlots(true);
     showToast(clean.length
-      ? ('✓ Đã lưu ' + clean.length + ' mã QR của Đại diện vào bill!')
+      ? ('✓ Đã lưu tài khoản & mã QR SePay của Đại diện vào bill!')
       : 'Đã gỡ mã QR khỏi bill.');
   }
 
   function removeHostQr() {
-    if (draftHostQrSlots.length > 1) {
-      draftHostQrSlots.splice(draftHostQrIdx, 1);
-      var nextIdx = Math.max(0, Math.min(draftHostQrIdx, draftHostQrSlots.length - 1));
-      loadDraftSlotToEditor(nextIdx);
-      commitDraftHostQrSlots(false);
-      showToast('Đã xóa slot QR!');
-      return;
-    }
-    draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '' }];
+    draftHostQrSlots = [{ id: 'qr_0', label: '', qr: '', note: '', bank: '', account: '', owner: '' }];
     draftHostQrIdx = 0;
+    if ($('qrAccountNoInput')) $('qrAccountNoInput').value = '';
+    if ($('qrAccountNameInput')) $('qrAccountNameInput').value = '';
     updateHostQrPreview('');
     if ($('hostQrLabelInput')) $('hostQrLabelInput').value = '';
     if ($('hostQrNoteInput')) $('hostQrNoteInput').value = '';
     commitDraftHostQrSlots(true);
-    showToast('Đã xóa mã QR thanh toán.');
+    showToast('Đã xóa tài khoản & mã QR thanh toán.');
   }
 
   function loadQrImageForCanvas(src, cb) {
     if (!src) { cb(null); return; }
     var img = new Image();
+    if (/^https?:\/\//i.test(src)) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = function () { cb(img); };
-    img.onerror = function () { cb(null); };
+    img.onerror = function () {
+      if (img.crossOrigin) {
+        var fallbackImg = new Image();
+        fallbackImg.onload = function () { cb(fallbackImg); };
+        fallbackImg.onerror = function () { cb(null); };
+        fallbackImg.src = src;
+        return;
+      }
+      cb(null);
+    };
     img.src = src;
   }
 
@@ -5956,7 +6277,7 @@
           ctx.fillText(fitText(ctx, bankDetail, infoMaxW), infoX, infoTopY + 80);
         }
 
-        var memoLabel = 'Nội dung CK: #' + orderCode;
+        var memoLabel = 'Nội dung CK: ' + orderCode + ' [Tên bạn]';
         ctx.font = '700 12px ' + fontFam;
         var memoW = Math.min(infoMaxW, ctx.measureText(memoLabel).width + 22);
         var memoY = bankDetail ? (infoTopY + 100) : (infoTopY + 76);
@@ -6158,6 +6479,19 @@
       payDiv.innerHTML =
         '<span class="split-pay-lbl">Cần trả:</span>' +
         '<strong class="split-pay-amount">' + fmt(finalPay) + '</strong>';
+
+      if (getHostQrSlots().length > 0 && finalPay > 0 && !p.paid) {
+        var btnMemberQrRow = document.createElement('button');
+        btnMemberQrRow.type = 'button';
+        btnMemberQrRow.className = 'btn-person-qr';
+        btnMemberQrRow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg><span>QR</span>';
+        btnMemberQrRow.title = 'Mở mã QR thanh toán riêng của ' + p.name + ' (khóa sẵn số tiền & nội dung)';
+        btnMemberQrRow.onclick = function (e) {
+          e.stopPropagation();
+          openMemberPersonalQrModal(p);
+        };
+        payDiv.appendChild(btnMemberQrRow);
+      }
 
       if (amHost) {
         if (isClaimed) {
@@ -8361,11 +8695,42 @@
         showToast('Không đọc được file ảnh QR, hãy thử ảnh khác!');
         return;
       }
+      if (draftHostQrSlots[0]) {
+        draftHostQrSlots[0].bank = '';
+        draftHostQrSlots[0].account = '';
+        draftHostQrSlots[0].owner = '';
+      }
+      if ($('qrAccountNoInput')) $('qrAccountNoInput').value = '';
       updateHostQrPreview(dataUrl);
       if ($('btnRemoveHostQr')) $('btnRemoveHostQr').hidden = false;
-      showToast('Đã nạp ảnh QR! Bấm "Lưu mã QR" để gắn vào bill.');
+      showToast('Đã nạp ảnh QR tĩnh! Bấm "Lưu Tài Khoản & QR" để gắn vào bill.');
     });
   }
+
+  if ($('qrBankSelect')) {
+    $('qrBankSelect').onchange = function () {
+      var isCust = ($('qrBankSelect').value === 'CUSTOM');
+      if ($('qrBankCodeInput')) {
+        $('qrBankCodeInput').hidden = !isCust;
+        if (isCust) $('qrBankCodeInput').focus();
+      }
+      syncInputsToDraftSlot();
+      if (draftHostQrSlots[0] && draftHostQrSlots[0].qr) {
+        updateHostQrPreview(draftHostQrSlots[0].qr);
+      }
+    };
+  }
+  ['qrBankCodeInput', 'qrAccountNoInput', 'qrAccountNameInput'].forEach(function (inpId) {
+    if ($(inpId)) {
+      $(inpId).oninput = function () {
+        syncInputsToDraftSlot();
+        if (draftHostQrSlots[0] && draftHostQrSlots[0].bank && draftHostQrSlots[0].account) {
+          var liveUrl = buildSePayQrUrl(draftHostQrSlots[0].bank, draftHostQrSlots[0].account, 0, orderCode);
+          updateHostQrPreview(liveUrl);
+        }
+      };
+    }
+  });
 
   if ($('btnOpenHostQr')) $('btnOpenHostQr').onclick = openHostQrModal;
   if ($('btnQuickHostQr')) $('btnQuickHostQr').onclick = openHostQrModal;
@@ -8524,7 +8889,7 @@
     $('btnPlayPayReminderAudio').onclick = function (e) {
       e.stopPropagation();
       var vid = (activePayUrge && activePayUrge.voiceId) ? activePayUrge.voiceId : 'pay-1';
-      playPayUrgeSound(vid);
+      playPayUrgeSound(vid, true);
     };
   }
 

@@ -1023,59 +1023,96 @@ Tóp mỡ thêm 5k"></textarea>
       <div>
         <h3>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0A7259" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
-          Mã QR Nhận Tiền (Đại diện)
+          Tài Khoản Nhận Tiền &amp; SePay QR (Đại diện)
         </h3>
-        <p class="modal-sub">Hiển thị kèm bảng chia tiền khi xuất ảnh hóa đơn</p>
+        <p class="modal-sub">Chỉ cần điền STK — SePay tự sinh QR khóa sẵn số tiền &amp; nội dung CK cho từng thành viên</p>
       </div>
       <button class="btn-close" id="btnCloseHostQrModal" type="button" aria-label="Đóng">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
     <div class="modal-body">
-      <div class="qr-slots-bar" id="hostQrSlotsBar"></div>
-      <div class="qr-upload-preview qr-dropzone" id="hostQrPreviewWrap" title="Kéo thả ảnh QR vào đây, dán (Ctrl+V) hoặc bấm để chọn từ máy">
+      <div class="qr-slots-bar" id="hostQrSlotsBar" hidden></div>
+
+      <!-- Khung cấu hình Tài khoản SePay (Chính) -->
+      <div class="sepay-account-card">
+        <div class="sepay-card-badge">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>SePay Dynamic QR · Tự động khóa số tiền &amp; nội dung CK</span>
+        </div>
+        <div class="qr-vietqr-form">
+          <div class="cust-section" style="margin:0;">
+            <label class="cust-label" for="qrBankSelect">Ngân hàng nhận tiền (SePay hỗ trợ)</label>
+            <select class="cust-input" id="qrBankSelect">
+              <option value="MB">MBBank (Quân Đội - MB)</option>
+              <option value="VCB">Vietcombank (VCB)</option>
+              <option value="BIDV">BIDV</option>
+              <option value="ICB">VietinBank (ICB)</option>
+              <option value="ACB">ACB (Á Châu)</option>
+              <option value="TCB">Techcombank (TCB)</option>
+              <option value="VPB">VPBank (VPB)</option>
+              <option value="TPB">TPBank (TPB)</option>
+              <option value="VIB">VIB (Quốc Tế)</option>
+              <option value="STB">Sacombank (STB)</option>
+              <option value="HDB">HDBank (HDB)</option>
+              <option value="OCB">OCB (Phương Đông)</option>
+              <option value="MSB">MSB (Hàng Hải)</option>
+              <option value="SHB">SHB</option>
+              <option value="EIB">Eximbank (EIB)</option>
+              <option value="VBA">Agribank (VBA)</option>
+              <option value="KLB">KienlongBank (KLB)</option>
+              <option value="LPB">LPBank (LPB)</option>
+              <option value="SEAB">SeABank (SEAB)</option>
+              <option value="CUSTOM">-- Nhập mã ngân hàng khác --</option>
+            </select>
+            <input type="text" class="cust-input" id="qrBankCodeInput" placeholder="Nhập mã ngân hàng (VD: MB, VCB, TCB, ACB...)" style="margin-top:6px;" hidden>
+          </div>
+          <div class="cust-section" style="margin:6px 0 0;">
+            <label class="cust-label" for="qrAccountNoInput">Số tài khoản / Tài khoản VA SePay</label>
+            <input type="text" class="cust-input" id="qrAccountNoInput" placeholder="Nhập số tài khoản nhận tiền..." autocomplete="off">
+          </div>
+          <div class="cust-section" style="margin:6px 0 0;">
+            <label class="cust-label" for="qrAccountNameInput">Tên chủ tài khoản (tùy chọn)</label>
+            <input type="text" class="cust-input" id="qrAccountNameInput" placeholder="VD: TUAN TEN TUAN" autocomplete="off">
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" id="btnGenerateVietQr" style="margin-top:6px;">
+            ⚡ Tạo &amp; Xem trước mã QR SePay
+          </button>
+        </div>
+      </div>
+
+      <!-- Khung Xem trước QR -->
+      <div class="qr-upload-preview qr-dropzone" id="hostQrPreviewWrap" title="Xem trước mã QR">
         <img id="hostQrPreviewImg" src="" alt="Preview QR" hidden>
         <button type="button" class="qr-preview-zoom-btn" id="btnZoomHostPreviewQr" hidden title="Phóng to xem &amp; quét thử mã QR">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
           <span>Phóng to</span>
         </button>
         <div class="qr-empty-placeholder" id="hostQrEmptyHint">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
-          <strong>Kéo thả ảnh QR vào đây</strong>
-          <span>Hoặc dán (Ctrl+V) · bấm để chọn ảnh từ máy</span>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
+          <strong>Điền Ngân hàng &amp; Số tài khoản ở trên</strong>
+          <span>Mã QR SePay sẽ tự động hiển thị tại đây</span>
         </div>
       </div>
 
-      <div class="qr-upload-actions">
-        <input type="file" id="hostQrFileInput" accept="image/*" hidden>
-        <button type="button" class="btn btn-primary" id="btnPickQrFile" style="width:100%">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Chọn ảnh QR từ máy (Bank / Momo / ZaloPay)
-        </button>
-      </div>
-
-      <details class="qr-vietqr-details">
-        <summary>Hoặc tạo nhanh mã VietQR từ số tài khoản</summary>
-        <div class="qr-vietqr-form">
-          <input type="text" class="cust-input" id="qrBankCodeInput" placeholder="Mã ngân hàng (VD: MB, VCB, TCB, ACB, TPB...)">
-          <input type="text" class="cust-input" id="qrAccountNoInput" placeholder="Số tài khoản">
-          <input type="text" class="cust-input" id="qrAccountNameInput" placeholder="Tên chủ tài khoản (không bắt buộc)">
-          <button type="button" class="btn btn-sm btn-ghost-primary" id="btnGenerateVietQr">Tạo ảnh VietQR nhanh</button>
+      <!-- Tùy chọn phụ: tải ảnh QR tĩnh từ máy -->
+      <details class="qr-vietqr-details" style="margin-top:8px;">
+        <summary>Hoặc tải ảnh QR tĩnh từ máy (Momo / ZaloPay / ảnh chụp)</summary>
+        <div class="qr-upload-actions" style="margin-top:8px;">
+          <input type="file" id="hostQrFileInput" accept="image/*" hidden>
+          <button type="button" class="btn btn-sm btn-ghost-primary" id="btnPickQrFile" style="width:100%">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Chọn ảnh QR tĩnh từ máy
+          </button>
         </div>
       </details>
 
-      <div class="cust-section" style="margin-top:12px;margin-bottom:8px;">
-        <label class="cust-label" for="hostQrLabelInput">Tên ngân hàng / Ví (nhãn tab QR)</label>
-        <input type="text" class="cust-input" id="hostQrLabelInput" placeholder="VD: MB Bank, MoMo, Techcombank..." maxlength="32">
-      </div>
-      <div class="cust-section" style="margin-top:8px;margin-bottom:0;">
-        <label class="cust-label" for="hostQrNoteInput">Thông tin STK / Ghi chú kèm QR (tùy chọn)</label>
-        <input type="text" class="cust-input" id="hostQrNoteInput" placeholder="VD: MB Bank - 0987654321 - Nguyễn Thành" maxlength="80">
-      </div>
+      <input type="hidden" id="hostQrLabelInput" value="">
+      <input type="hidden" id="hostQrNoteInput" value="">
     </div>
     <div class="modal-footer urge-modal-footer">
-      <button class="btn ghost" id="btnRemoveHostQr" type="button" style="color:#DC2626;">Xóa QR này</button>
-      <button class="btn btn-primary" id="btnSaveHostQr" type="button">Lưu mã QR</button>
+      <button class="btn ghost" id="btnRemoveHostQr" type="button" style="color:#DC2626;">Xóa TK / QR</button>
+      <button class="btn btn-primary" id="btnSaveHostQr" type="button">Lưu Tài Khoản &amp; QR</button>
     </div>
   </div>
 </div>
