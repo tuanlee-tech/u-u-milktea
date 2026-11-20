@@ -4105,6 +4105,19 @@ body {
   cursor: not-allowed;
   opacity: 0.85;
 }
+.btn-save-sheet.is-dirty-update {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  border-color: #B45309;
+  color: #FFFFFF;
+  cursor: pointer;
+  opacity: 1;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.28);
+}
+.btn-save-sheet.is-dirty-update:hover {
+  background: linear-gradient(135deg, #D97706 0%, #B45309 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(180, 83, 9, 0.35);
+}
 .btn-urge-top:disabled,
 .mob-urge-btn:disabled {
   background: #E2E8F0 !important;

@@ -1325,6 +1325,8 @@
       hostQrNote: '',
       hostQrs: [],
       orderSubmitted: false,
+      savedDisc: null,
+      savedShip: null,
       paidMap: {},
       payClaimMap: {}
     };
@@ -1430,6 +1432,16 @@
     return !!(F.orderSubmitted && F.orderSubmitted.v === true);
   }
 
+  function hasPendingHostFeeChanges() {
+    if (!isOrderSubmitted()) return false;
+    var curDisc = Math.max(0, Number(F.disc && F.disc.v !== undefined ? F.disc.v : ($('discount') ? parseMoney($('discount').value) : 0)) || 0);
+    var curShip = Math.max(0, Number(F.ship && F.ship.v !== undefined ? F.ship.v : ($('shipFee') ? parseMoney($('shipFee').value) : 0)) || 0);
+    var sDisc = (F.savedDisc && F.savedDisc.v !== null && F.savedDisc.v !== undefined) ? Math.max(0, Number(F.savedDisc.v) || 0) : null;
+    var sShip = (F.savedShip && F.savedShip.v !== null && F.savedShip.v !== undefined) ? Math.max(0, Number(F.savedShip.v) || 0) : null;
+    if (sDisc === null && sShip === null) return false;
+    return (sDisc !== null && curDisc !== sDisc) || (sShip !== null && curShip !== sShip);
+  }
+
   function buildSheetQrPayloadString(slots) {
     if (!slots || !slots.length) return '';
     if (slots.length === 1 && !slots[0].label) {
@@ -1490,6 +1502,8 @@
         hostQrChunks: chunkCount,
         paidMap: (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object') ? F.paidMap.v : {},
         payClaimMap: (F.payClaimMap && F.payClaimMap.v && typeof F.payClaimMap.v === 'object') ? F.payClaimMap.v : {},
+        savedDisc: (F.savedDisc && F.savedDisc.v !== null && F.savedDisc.v !== undefined) ? Number(F.savedDisc.v) : null,
+        savedShip: (F.savedShip && F.savedShip.v !== null && F.savedShip.v !== undefined) ? Number(F.savedShip.v) : null,
         updatedAt: Date.now()
       };
       if (useChunks) {
@@ -1547,6 +1561,20 @@
             by: 'sheet'
           };
           changed = true;
+        }
+        if (s.savedDisc !== undefined && s.savedDisc !== null && (!F.savedDisc || F.savedDisc.v === null || F.savedDisc.v === undefined)) {
+          F.savedDisc = { v: Number(s.savedDisc) || 0, rev: Math.max(1, (F.savedDisc && F.savedDisc.rev) || 0), by: 'sheet' };
+          changed = true;
+        } else if (isOrderSubmitted() && (!F.savedDisc || F.savedDisc.v === null || F.savedDisc.v === undefined)) {
+          var initD = Math.max(0, Number(F.disc && F.disc.v !== undefined ? F.disc.v : ($('discount') ? parseMoney($('discount').value) : 0)) || 0);
+          F.savedDisc = { v: initD, rev: 1, by: 'sheet' };
+        }
+        if (s.savedShip !== undefined && s.savedShip !== null && (!F.savedShip || F.savedShip.v === null || F.savedShip.v === undefined)) {
+          F.savedShip = { v: Number(s.savedShip) || 0, rev: Math.max(1, (F.savedShip && F.savedShip.rev) || 0), by: 'sheet' };
+          changed = true;
+        } else if (isOrderSubmitted() && (!F.savedShip || F.savedShip.v === null || F.savedShip.v === undefined)) {
+          var initS = Math.max(0, Number(F.ship && F.ship.v !== undefined ? F.ship.v : ($('shipFee') ? parseMoney($('shipFee').value) : 0)) || 0);
+          F.savedShip = { v: initS, rev: 1, by: 'sheet' };
         }
         if (s.hostUid && (!F.hostUid || !F.hostUid.v)) {
           F.hostUid = { v: s.hostUid, rev: Math.max(1, (F.hostUid && F.hostUid.rev) || 0), by: 'sheet' };
@@ -1927,21 +1955,28 @@
       btnModalPay.title = allDebtorsPaid ? 'Tất cả thành viên đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
     }
 
-    // Khóa nút Chốt & Lưu Sheet khi non-host HOẶC đơn đã chốt xong
+    // Khóa nút Chốt & Lưu Sheet khi non-host HOẶC đơn đã chốt xong (trừ khi Đại diện vừa sửa Giảm giá / Phí ship cần cập nhật lại)
+    var canHostUpdateFees = !!(submitted && assigned && amHost && hasPendingHostFeeChanges());
     if (btnSave) {
       var lockNonHost = assigned && !amHost;
-      btnSave.disabled = lockNonHost || submitted;
+      var disableSaveBtn = lockNonHost || (submitted && !canHostUpdateFees);
+      btnSave.disabled = disableSaveBtn;
       btnSave.classList.toggle('is-host-locked', lockNonHost);
       btnSave.classList.toggle('is-locked-member', lockNonHost);
-      btnSave.classList.toggle('is-submitted-done', submitted);
+      btnSave.classList.toggle('is-submitted-done', submitted && !canHostUpdateFees);
+      btnSave.classList.toggle('is-dirty-update', canHostUpdateFees);
       if (btnSaveTxt) {
-        btnSaveTxt.textContent = submitted ? 'Đã chốt & lưu Sheet' : 'Chốt & Lưu Sheet';
+        btnSaveTxt.textContent = canHostUpdateFees
+          ? 'Cập nhật lại vào Sheet'
+          : (submitted ? 'Đã chốt & lưu Sheet' : 'Chốt & Lưu Sheet');
       }
-      btnSave.title = submitted
-        ? 'Đơn đã chốt & lưu lên Google Sheet'
-        : (lockNonHost
-          ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
-          : 'Chốt đơn hiện tại & lưu vào Google Sheet');
+      btnSave.title = canHostUpdateFees
+        ? 'Giảm giá / Phí ship vừa thay đổi — bấm để cập nhật lại lên Google Sheet'
+        : (submitted
+          ? 'Đơn đã chốt & lưu lên Google Sheet'
+          : (lockNonHost
+            ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
+            : 'Chốt đơn hiện tại & lưu vào Google Sheet'));
     }
 
     // Vô hiệu hóa nút Hối đặt hàng sau khi đơn đã Chốt & Lưu Sheet
@@ -1953,12 +1988,21 @@
       $('mobileUrgeBtn').disabled = submitted;
     }
 
-    // Khóa UI chỉnh sửa giỏ hàng và ô điều chỉnh khi đơn đã chốt
+    // Khóa UI chỉnh sửa giỏ hàng và ô điều chỉnh khi đơn đã chốt (Đại diện vẫn được sửa Giảm giá & Phí ship)
     var cartSec = $('cartSection');
     if (cartSec) {
       cartSec.classList.toggle('is-order-submitted', submitted);
     }
-    ['discount', 'shipFee', 'channel', 'payMethod', 'orderNote'].forEach(function (fid) {
+    ['discount', 'shipFee'].forEach(function (fid) {
+      var el = $(fid);
+      if (!el) return;
+      var lockFee = (assigned && !amHost) || (submitted && !amHost);
+      el.disabled = lockFee;
+      el.title = lockFee
+        ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới chỉnh được Giảm giá / Phí ship')
+        : (submitted ? 'Đại diện có thể chỉnh sửa Giảm giá / Phí ship rồi bấm Cập nhật lại vào Sheet' : '');
+    });
+    ['channel', 'payMethod', 'orderNote'].forEach(function (fid) {
       var el = $(fid);
       if (el) el.disabled = submitted;
     });
@@ -3436,10 +3480,25 @@
     var v = $(inputId) ? $(inputId).value : '';
     if (k === 'disc' || k === 'ship') {
       v = parseMoney(v);
+      if (isOrderSubmitted()) {
+        if (!F.savedDisc || F.savedDisc.v === null || F.savedDisc.v === undefined) {
+          var prevD = (k === 'disc' && F.disc && F.disc.v !== undefined) ? Number(F.disc.v) : Number((F.disc && F.disc.v) || 0);
+          F.savedDisc = { v: Math.max(0, prevD || 0), rev: 1, by: clientId };
+        }
+        if (!F.savedShip || F.savedShip.v === null || F.savedShip.v === undefined) {
+          var prevS = (k === 'ship' && F.ship && F.ship.v !== undefined) ? Number(F.ship.v) : Number((F.ship && F.ship.v) || 0);
+          F.savedShip = { v: Math.max(0, prevS || 0), rev: 1, by: clientId };
+        }
+      }
     }
-    if (F[k] && F[k].v === v) return;
+    if (F[k] && F[k].v === v) {
+      updateHostDropdownUI();
+      return;
+    }
     F[k] = { v: v, rev: (F[k] ? F[k].rev + 1 : 1), by: clientId };
     renderCart();
+    if (typeof renderSplitBillIfOpen === 'function') renderSplitBillIfOpen();
+    if (typeof renderPayReminderPanel === 'function') renderPayReminderPanel(false);
     schedulePush();
   }
 
@@ -3694,6 +3753,17 @@
         needsPush = true;
       }
     });
+
+    if (isOrderSubmitted()) {
+      if (!F.savedDisc || F.savedDisc.v === null || F.savedDisc.v === undefined) {
+        var baseD = Math.max(0, Number(F.disc && F.disc.v !== undefined ? F.disc.v : 0) || 0);
+        F.savedDisc = { v: baseD, rev: 1, by: 'sync' };
+      }
+      if (!F.savedShip || F.savedShip.v === null || F.savedShip.v === undefined) {
+        var baseS = Math.max(0, Number(F.ship && F.ship.v !== undefined ? F.ship.v : 0) || 0);
+        F.savedShip = { v: baseS, rev: 1, by: 'sync' };
+      }
+    }
 
     var remoteIds = {};
     lines.forEach(function (rc) { remoteIds[rc.lid] = true; });
@@ -6277,6 +6347,7 @@
       showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được Chốt & Lưu Sheet!');
       return;
     }
+    var wasAlreadySubmitted = isOrderSubmitted();
     var order = buildOrder();
     var url = api();
 
@@ -6291,7 +6362,7 @@
     });
     localStorage.setItem('pos_hist', JSON.stringify(hist.slice(0, 200)));
 
-    if ($('saveMsg')) $('saveMsg').textContent = 'Đang lưu vào Sheet…';
+    if ($('saveMsg')) $('saveMsg').textContent = wasAlreadySubmitted ? 'Đang cập nhật lại vào Sheet…' : 'Đang lưu vào Sheet…';
     fetch(url, { method: 'POST', body: JSON.stringify({ action: 'save', order: order }) })
       .then(function (r) { return r.json(); })
       .then(function (j) {
@@ -6305,6 +6376,8 @@
             tryRestoreMyHostQr(false);
           }
           setSyncedField('orderSubmitted', true);
+          setSyncedField('savedDisc', Math.max(0, Number(order.giam_gia) || 0));
+          setSyncedField('savedShip', Math.max(0, Number(order.ship) || 0));
           var curPm = (F.paidMap && F.paidMap.v && typeof F.paidMap.v === 'object')
             ? Object.assign({}, F.paidMap.v)
             : {};
@@ -6321,8 +6394,14 @@
           rtSend();
           syncBillServerStateToSheet(true);
 
-          if ($('saveMsg')) $('saveMsg').textContent = '✓ Đã chốt ' + order.ma_don + ' vào Sheet lúc ' + new Date().toLocaleTimeString('vi-VN');
-          showToast('Đã chốt & lưu Sheet! Đã mở khóa đánh dấu Đã trả & Hối trả tiền.');
+          if ($('saveMsg')) {
+            $('saveMsg').textContent = wasAlreadySubmitted
+              ? ('✓ Đã cập nhật ' + order.ma_don + ' vào Sheet lúc ' + new Date().toLocaleTimeString('vi-VN'))
+              : ('✓ Đã chốt ' + order.ma_don + ' vào Sheet lúc ' + new Date().toLocaleTimeString('vi-VN'));
+          }
+          showToast(wasAlreadySubmitted
+            ? '✓ Đã cập nhật lại Giảm giá & Phí ship vào Google Sheet!'
+            : 'Đã chốt & lưu Sheet! Đã mở khóa đánh dấu Đã trả & Hối trả tiền.');
         } else throw 0;
       })
       .catch(function () {
@@ -7317,9 +7396,15 @@
       }
       fieldChanged(id);
     });
+    el.addEventListener('change', function () {
+      var num = parseMoney(el.value);
+      el.value = num > 0 ? num.toLocaleString('vi-VN') : '0';
+      fieldChanged(id);
+    });
     el.addEventListener('blur', function () {
       var num = parseMoney(el.value);
       el.value = num > 0 ? num.toLocaleString('vi-VN') : '0';
+      fieldChanged(id);
     });
   });
   if ($('orderNote')) {

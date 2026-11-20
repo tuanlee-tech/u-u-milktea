@@ -484,14 +484,48 @@ function ctRow_(ma_don, it) {
     it.chu_ly||'', it.topping||'', it.duong||'', it.da||'', it.ghi_chu||''];
 }
 
-function saveOrder(order) {
-  ensure_();
-  var s = ensure_();
-  s.don.appendRow([order.ma_don, new Date(order.thoi_gian), order.ten_khach||'', order.kenh||'', order.thanh_toan||'',
-    Number(order.tam_tinh)||0, Number(order.giam_gia)||0, Number(order.ship)||0, Number(order.tong_cong)||0, order.ghi_chu||'']);
+function upsertOrderRows_(s, order) {
+  var maDon = String(order.ma_don || '').trim();
+  var donRow = [
+    order.ma_don, new Date(order.thoi_gian), order.ten_khach||'', order.kenh||'', order.thanh_toan||'',
+    Number(order.tam_tinh)||0, Number(order.giam_gia)||0, Number(order.ship)||0, Number(order.tong_cong)||0, order.ghi_chu||''
+  ];
+  var updatedDon = false;
+  if (maDon) {
+    var dn = s.don.getLastRow();
+    if (dn > 1) {
+      var dIds = s.don.getRange(2, 1, dn - 1, 1).getValues();
+      for (var i = dIds.length - 1; i >= 0; i--) {
+        if (String(dIds[i][0] || '').trim() === maDon) {
+          s.don.getRange(i + 2, 1, 1, donRow.length).setValues([donRow]);
+          updatedDon = true;
+          break;
+        }
+      }
+    }
+  }
+  if (!updatedDon) {
+    s.don.appendRow(donRow);
+  }
+  if (updatedDon && maDon) {
+    var cn = s.ct.getLastRow();
+    if (cn > 1) {
+      var cIds = s.ct.getRange(2, 1, cn - 1, 1).getValues();
+      for (var j = cIds.length - 1; j >= 0; j--) {
+        if (String(cIds[j][0] || '').trim() === maDon) {
+          s.ct.deleteRow(j + 2);
+        }
+      }
+    }
+  }
   (order.items||[]).forEach(function(it){
     s.ct.appendRow(ctRow_(order.ma_don, it));
   });
+}
+
+function saveOrder(order) {
+  var s = ensure_();
+  upsertOrderRows_(s, order);
   return {ok:true, ma_don: order.ma_don};
 }
 
@@ -506,20 +540,27 @@ function getRecentOrders(limit) {
 }
 function saveOrder_(o) {
   var s = ensure_();
-  s.don.appendRow([o.ma_don, new Date(o.thoi_gian), o.ten_khach||'', o.kenh||'', o.thanh_toan||'',
-    Number(o.tam_tinh)||0, Number(o.giam_gia)||0, Number(o.ship)||0, Number(o.tong_cong)||0, o.ghi_chu||'']);
-  (o.items||[]).forEach(function(it){
-    s.ct.appendRow(ctRow_(o.ma_don, it));
-  });
+  upsertOrderRows_(s, o);
   try {
     if (o.ma_don) {
       var billKey = 'BILL_' + String(o.ma_don);
       var prev = getState_(billKey);
-      var merged = { bill: String(o.ma_don), submitted: true, updatedAt: new Date().getTime() };
+      var merged = {
+        bill: String(o.ma_don),
+        submitted: true,
+        savedDisc: Number(o.giam_gia) || 0,
+        savedShip: Number(o.ship) || 0,
+        updatedAt: new Date().getTime()
+      };
       if (prev && prev.value) {
         try {
           var pObj = JSON.parse(prev.value);
-          merged = Object.assign({}, pObj, { submitted: true, updatedAt: merged.updatedAt });
+          merged = Object.assign({}, pObj, {
+            submitted: true,
+            savedDisc: Number(o.giam_gia) || 0,
+            savedShip: Number(o.ship) || 0,
+            updatedAt: merged.updatedAt
+          });
         } catch (err) {}
       }
       setState_(billKey, JSON.stringify(merged));
