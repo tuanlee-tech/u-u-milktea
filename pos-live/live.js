@@ -5696,6 +5696,41 @@
       return;
     }
 
+    var hb = getHostBankInfo();
+    if (hb.bank && hb.account) {
+      var splitNow = computeBillSplit();
+      var unpaidList = splitNow.people.filter(function (p) { return !p.paid && p.finalPay > 0; });
+      if (!unpaidList.length) {
+        renderCanvasBillWithQr({ mode: 'sepay-grid', bankInfo: hb, items: [] });
+        return;
+      }
+      var loadedGrid = new Array(unpaidList.length);
+      var remGrid = unpaidList.length;
+      unpaidList.forEach(function (p, idx) {
+        var mQr = getQrForMember(p);
+        loadQrImageForCanvas(mQr.qr, function (img) {
+          if (img) {
+            loadedGrid[idx] = {
+              name: p.name,
+              ucolor: p.ucolor || '#0A7259',
+              amount: p.finalPay,
+              isHost: !!p.isHost,
+              img: img
+            };
+          }
+          remGrid--;
+          if (remGrid <= 0) {
+            renderCanvasBillWithQr({
+              mode: 'sepay-grid',
+              bankInfo: hb,
+              items: loadedGrid.filter(Boolean)
+            });
+          }
+        });
+      });
+      return;
+    }
+
     var qrSlots = getHostQrSlots();
     if (!qrSlots.length) {
       renderCanvasBillWithQr([]);
@@ -5813,11 +5848,18 @@
     var fontFam = window.getComputedStyle(document.body).fontFamily;
     var cUnit = (currentStore && currentStore.itemUnit) || 'món';
     var includeSplit = ($('chkIncludeSplitInCanvas') ? $('chkIncludeSplitInCanvas').checked : true);
-    var qrItems = Array.isArray(qrInput)
-      ? qrInput.filter(function (x) { return x && x.img; })
-      : (qrInput ? [{ label: 'QR #1', hasCustomLabel: false, note: qrNote, img: qrInput }] : []);
-    // Chỉ hiển thị QR khi checkbox "Kèm bảng chia tiền vào ảnh" được check VÀ Đại diện có QR
-    var hasQrBlock = !!(includeSplit && qrItems.length > 0);
+    var isSepayGrid = !!(qrInput && !Array.isArray(qrInput) && qrInput.mode === 'sepay-grid');
+    var sepayGridItems = isSepayGrid
+      ? (qrInput.items || []).filter(function (x) { return x && x.img; })
+      : [];
+    var sepayBankInfo = isSepayGrid ? (qrInput.bankInfo || getHostBankInfo()) : null;
+    var qrItems = isSepayGrid
+      ? []
+      : (Array.isArray(qrInput)
+        ? qrInput.filter(function (x) { return x && x.img; })
+        : (qrInput ? [{ label: 'QR #1', hasCustomLabel: false, note: qrNote, img: qrInput }] : []));
+    // Chỉ hiển thị QR khi checkbox "Kèm bảng chia tiền vào ảnh" được check VÀ có QR cần quét
+    var hasQrBlock = !!(includeSplit && (isSepayGrid ? sepayGridItems.length > 0 : qrItems.length > 0));
     var submitted = isOrderSubmitted();
 
     // Layout Dimensions (Modern 700px wide card)
@@ -5860,8 +5902,24 @@
     var qrCardGap = 14;
     var qrBoxH = 0;
 
+    // Layout cho Grid Card QR cá nhân hóa SePay (mỗi thành viên chưa trả 1 thẻ QR lớn đủ to để quét)
+    var sepayGridCols = 2;
+    var sepayGridGap = 14;
+    var sepayGridHeadH = 60;
+    var sepayGridCardW = 301;
+    var sepayGridCardHeadH = 48;
+    var sepayGridQrSize = 258;
+    var sepayGridCardH = 324;
+
     if (hasQrBlock) {
-      if (qrItems.length === 1) {
+      if (isSepayGrid) {
+        sepayGridCols = sepayGridItems.length === 1 ? 1 : 2;
+        sepayGridCardW = sepayGridCols === 1 ? 320 : Math.floor((qrInnerW - sepayGridGap) / 2);
+        sepayGridQrSize = sepayGridCols === 1 ? 272 : 258;
+        sepayGridCardH = sepayGridCardHeadH + sepayGridQrSize + 18;
+        var gridRows = Math.ceil(sepayGridItems.length / sepayGridCols);
+        qrBoxH = sepayGridHeadH + gridRows * sepayGridCardH + Math.max(0, gridRows - 1) * sepayGridGap + 16;
+      } else if (qrItems.length === 1) {
         var singleImg = qrItems[0].img;
         var sNatW = (singleImg && (singleImg.naturalWidth || singleImg.width)) || 300;
         var sNatH = (singleImg && (singleImg.naturalHeight || singleImg.height)) || 300;
@@ -6256,7 +6314,105 @@
         ctx.restore();
       }
 
-      if (qrItems.length === 1) {
+      if (isSepayGrid) {
+        var gLeft = pad + qrOuterPad;
+        ctx.fillStyle = '#0A7259';
+        drawRoundedRect(ctx, gLeft, curY + 14, 198, 22, 11, true, false);
+        drawCanvasVectorIcon(ctx, 'qr', gLeft + 9, curY + 18, 14, '#FFFFFF');
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '800 10.5px ' + fontFam;
+        ctx.fillText('QUÉT MÃ QR CỦA RIÊNG BẠN', gLeft + 28, curY + 29);
+
+        var bankTag = (sepayBankInfo && sepayBankInfo.bank) ? (' (' + sepayBankInfo.bank + ')') : '';
+        ctx.fillStyle = '#132B22';
+        ctx.font = '800 13.5px ' + fontFam;
+        ctx.textAlign = 'right';
+        ctx.fillText(fitText(ctx, 'Đại diện: ' + hostName + bankTag, qrInnerW - 210), gLeft + qrInnerW, curY + 29);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#047857';
+        ctx.font = '700 11.5px ' + fontFam;
+        ctx.fillText(
+          fitText(ctx, 'Mỗi mã đã khóa sẵn số tiền & nội dung CK — quét đúng ô có tên bạn để hệ thống tự xác nhận', qrInnerW),
+          gLeft,
+          curY + 49
+        );
+
+        var totalGridRows = Math.ceil(sepayGridItems.length / sepayGridCols);
+        for (var rIdx = 0; rIdx < totalGridRows; rIdx++) {
+          var rowStart = rIdx * sepayGridCols;
+          var rowItems = sepayGridItems.slice(rowStart, rowStart + sepayGridCols);
+          var rowTotalW = rowItems.length * sepayGridCardW + Math.max(0, rowItems.length - 1) * sepayGridGap;
+          var rowStartX = gLeft + Math.round((qrInnerW - rowTotalW) / 2);
+          var rowY = curY + sepayGridHeadH + rIdx * (sepayGridCardH + sepayGridGap);
+
+          rowItems.forEach(function (gItem, cIdx) {
+            var cx = rowStartX + cIdx * (sepayGridCardW + sepayGridGap);
+            var cy = rowY;
+
+            // Card container
+            ctx.fillStyle = '#FFFFFF';
+            drawRoundedRect(ctx, cx, cy, sepayGridCardW, sepayGridCardH, 12, true, false);
+            ctx.strokeStyle = '#A7F3D0';
+            ctx.lineWidth = 1.4;
+            drawRoundedRect(ctx, cx, cy, sepayGridCardW, sepayGridCardH, 12, false, true);
+
+            // Subtle colored top accent bar
+            ctx.save();
+            ctx.fillStyle = gItem.ucolor || '#0A7259';
+            drawRoundedRect(ctx, cx + 1, cy + 1, sepayGridCardW - 2, 4, 2, true, false);
+            ctx.restore();
+
+            // Avatar circle
+            var avR = 12;
+            var avX = cx + 12 + avR;
+            var avY = cy + 27;
+            ctx.fillStyle = gItem.ucolor || '#0A7259';
+            ctx.beginPath();
+            ctx.arc(avX, avY, avR, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '800 10.5px ' + fontFam;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(userInitial(gItem.name), avX, avY + 0.5);
+            ctx.textBaseline = 'alphabetic';
+
+            // Amount right-aligned
+            var amtTxt = fmt(gItem.amount);
+            ctx.font = '800 14px ' + fontFam;
+            var amtW = ctx.measureText(amtTxt).width;
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#0A7259';
+            ctx.fillText(amtTxt, cx + sepayGridCardW - 12, cy + 31);
+
+            // Member name
+            var nameMaxW = Math.max(60, sepayGridCardW - 12 - (avR * 2 + 12) - 8 - amtW - 16);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#0F172A';
+            ctx.font = '800 13px ' + fontFam;
+            ctx.fillText(fitText(ctx, gItem.name, nameMaxW), cx + 12 + avR * 2 + 8, cy + 31);
+
+            // Divider line
+            ctx.strokeStyle = '#F1F5F9';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx + 10, cy + sepayGridCardHeadH - 2);
+            ctx.lineTo(cx + sepayGridCardW - 10, cy + sepayGridCardHeadH - 2);
+            ctx.stroke();
+
+            // Large Crisp SePay QR
+            var qx = cx + Math.round((sepayGridCardW - sepayGridQrSize) / 2);
+            var qy = cy + sepayGridCardHeadH + 6;
+            ctx.save();
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(gItem.img, qx, qy, sepayGridQrSize, sepayGridQrSize);
+            ctx.restore();
+          });
+        }
+      } else if (qrItems.length === 1) {
         var single = qrItems[0];
         var sDims = qrSingleLayout;
         var frameX = pad + 14;
