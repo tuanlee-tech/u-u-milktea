@@ -1021,8 +1021,51 @@
     'vt01': 'assets/img/vua-tron/mi-quang.webp',
     'vt02': 'assets/img/vua-tron/bun-nuoc-tuong.webp',
     'vt03': 'assets/img/vua-tron/bun-mam-nem.webp',
-    'vt04': 'assets/img/vua-tron/banh-uot.webp'
+    'vt04': 'assets/img/vua-tron/banh-uot.webp',
+    'item_mwvu29ew_1': 'assets/img/banh-trang-34/banh-trang-tron.webp',
+    'item_mwvu29ew_2': 'assets/img/banh-trang-34/banh-trang-cham.webp',
+    'item_mwvu29ew_3': 'assets/img/banh-trang-34/banh-trang-mo-hanh.webp',
+    'item_mwvu29ew_4': 'assets/img/banh-trang-34/banh-trang-cuon.webp',
+    'item_mwvu29ew_5': 'assets/img/banh-trang-34/banh-trang-deo-tron.webp',
+    'item_mwvu29ew_6': 'assets/img/banh-trang-34/banh-trang-deo-cuon-lac-kho-bo.webp',
+    'item_mwvu29ew_7': 'assets/img/banh-trang-34/banh-trang-deo-mo-hanh-sate-top-mo.webp',
+    'item_mwvu29ew_8': 'assets/img/banh-trang-34/tra-tac.webp',
+    'item_mwvu29ew_9': 'assets/img/banh-trang-34/tra-chanh.webp',
+    'item_mwvu29ew_10': 'assets/img/banh-trang-34/cam-vat.webp',
+    'item_mwvu29ew_11': 'assets/img/banh-trang-34/da-me.webp',
+    'item_mwvu29ew_12': 'assets/img/banh-trang-34/sting.webp'
   };
+
+  var PRODUCT_NAME_IMGS = {
+    'banh trang tron': 'assets/img/banh-trang-34/banh-trang-tron.webp',
+    'banh trang cham': 'assets/img/banh-trang-34/banh-trang-cham.webp',
+    'banh trang mo hanh': 'assets/img/banh-trang-34/banh-trang-mo-hanh.webp',
+    'banh trang cuon': 'assets/img/banh-trang-34/banh-trang-cuon.webp',
+    'banh trang deo tron': 'assets/img/banh-trang-34/banh-trang-deo-tron.webp',
+    'banh trang deo cuon lac kho bo': 'assets/img/banh-trang-34/banh-trang-deo-cuon-lac-kho-bo.webp',
+    'banh trang deo mo hanh sate top mo': 'assets/img/banh-trang-34/banh-trang-deo-mo-hanh-sate-top-mo.webp',
+    'tra tac': 'assets/img/banh-trang-34/tra-tac.webp',
+    'tra chanh': 'assets/img/banh-trang-34/tra-chanh.webp',
+    'cam vat': 'assets/img/banh-trang-34/cam-vat.webp',
+    'da me': 'assets/img/banh-trang-34/da-me.webp',
+    'sting': 'assets/img/banh-trang-34/sting.webp'
+  };
+
+  function normalizeImgKey(s) {
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
+
+  function resolveItemImg(m, isTopping) {
+    if (!m) return '';
+    if (isTopping) return TOPPING_IMGS[m.id] || m.img || '';
+    return PRODUCT_IMGS[m.id] || m.img || PRODUCT_NAME_IMGS[normalizeImgKey(m.ten)] || '';
+  }
 
   // Quản lý Identity người dùng: Bền vững qua localStorage để tắt tab mở lại vẫn sửa được món của mình
   var tabSessionId = '';
@@ -4366,7 +4409,7 @@
       }
       var btnLabel = isTopping ? '+ Thêm món' : '+ Chọn món';
 
-      var itemImg = isTopping ? (TOPPING_IMGS[m.id] || m.img) : (PRODUCT_IMGS[m.id] || m.img);
+      var itemImg = resolveItemImg(m, isTopping);
       var imgHtml = '';
       if (itemImg) {
         imgHtml =
