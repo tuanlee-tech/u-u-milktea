@@ -285,7 +285,7 @@ wss.on('connection', function (s) {
       return;
     }
 
-    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel') {
+    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel' || d.type === 'urge_finalize') {
       var claimOut = JSON.stringify(d);
       wss.clients.forEach(function (c) {
         if (c !== s && c.readyState === 1 && c.bill === d.bill && isHostPeer(c, d, rooms[d.bill].last)) {

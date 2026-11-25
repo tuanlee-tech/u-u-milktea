@@ -772,7 +772,7 @@ export class LiveRoom {
       return;
     }
 
-    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel') {
+    if (d.type === 'pay_claim' || d.type === 'pay_claim_cancel' || d.type === 'urge_finalize') {
       const out = JSON.stringify(d);
       for (const s of this.state.getWebSockets()) {
         if (s !== ws && isHostPeer(s, d, this.last)) {

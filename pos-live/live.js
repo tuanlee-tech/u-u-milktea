@@ -2131,6 +2131,17 @@
         btnMemberQrLbl.textContent = (hbActive.bank && hbActive.account) ? 'Quét QR trả tiền' : 'Xem QR đại diện';
       }
     }
+    var btnUrgeFin = $('btnUrgeFinalize');
+    if (btnUrgeFin) {
+      var showUrgeFin = !!(assigned && !amHost && !submitted && cart.length > 0);
+      btnUrgeFin.hidden = !showUrgeFin;
+      if (showUrgeFin && typeof updateUrgeFinalizeCooldownUI === 'function') {
+        updateUrgeFinalizeCooldownUI();
+      }
+    }
+    if (submitted && typeof hideHostFinalizeBanner === 'function') {
+      hideHostFinalizeBanner();
+    }
     if (btnQrLbl) {
       btnQrLbl.textContent = hasQr
         ? ((hbActive.bank && hbActive.account) ? ('SePay ' + hbActive.bank + ' ✓') : 'Đã có QR ✓')
@@ -3073,6 +3084,7 @@
     }
     playSynthesizedClaimBell();
     var payerName = d.uname || d.name || 'Thành viên';
+    var donorName = d.donatedBy ? String(d.donatedBy).trim() : '';
     activeHostClaimTarget = {
       uid: d.uid || '',
       name: payerName,
@@ -3080,13 +3092,17 @@
     };
     var amtStr = Number(d.amount) > 0 ? (' ' + fmt(d.amount)) : '';
     var detailParts = ['Vui lòng mở app ngân hàng kiểm tra tiền vào rồi bấm xác nhận'];
+    if (donorName) detailParts.unshift('Thanh toán hộ (Donate) bởi ' + donorName);
     if (d.qrLabel) detailParts.push('QR: ' + d.qrLabel);
     var detailTxt = detailParts.join(' · ');
 
     var banner = $('hostClaimBanner');
     var titleEl = $('hostClaimTitle');
     var subEl = $('hostClaimSub');
-    if (titleEl) titleEl.textContent = '🔔 ' + payerName + ' báo đã chuyển khoản' + amtStr + '!';
+    var claimHeadline = donorName
+      ? ('🎁 ' + donorName + ' báo đã CK hộ ' + payerName + amtStr + '!')
+      : ('🔔 ' + payerName + ' báo đã chuyển khoản' + amtStr + '!');
+    if (titleEl) titleEl.textContent = claimHeadline;
     if (subEl) subEl.textContent = detailTxt;
     if (banner) {
       banner.hidden = false;
@@ -3096,9 +3112,170 @@
       }, 25000);
     }
     sendSystemNotification({
-      title: '🔔 ' + payerName + ' báo đã CK' + amtStr + ' · #' + orderCode,
+      title: claimHeadline + ' · #' + orderCode,
       body: detailTxt,
       tag: 'uu-claim-' + (d.claimId || Date.now())
+    });
+  }
+
+  /* ================= HỐI CHỐT ĐƠN TÍNH TIỀN (MEMBER → ĐẠI DIỆN) ================= */
+  var URGE_FINALIZE_COOLDOWN_MS = 15000;
+  var urgeFinalizeCooldownUntil = 0;
+  var urgeFinalizeCooldownTimer = null;
+  var seenUrgeFinalizeIds = {};
+
+  function urgeFinalizeStorageKey() {
+    return 'uu_urge_fin_until_' + (orderCode || 'default');
+  }
+
+  function getUrgeFinalizeRemainingSec() {
+    var rem = urgeFinalizeCooldownUntil - Date.now();
+    return rem > 0 ? Math.ceil(rem / 1000) : 0;
+  }
+
+  function updateUrgeFinalizeCooldownUI() {
+    var btn = $('btnUrgeFinalize');
+    var lbl = $('btnUrgeFinalizeLabel');
+    var remSec = getUrgeFinalizeRemainingSec();
+    if (btn) {
+      btn.disabled = remSec > 0;
+      btn.classList.toggle('is-cooldown', remSec > 0);
+    }
+    if (lbl) {
+      lbl.textContent = remSec > 0 ? ('Đợi ' + remSec + 's') : 'Hối chốt đơn';
+    }
+  }
+
+  function startUrgeFinalizeCooldown(ms) {
+    var dur = Number(ms) || URGE_FINALIZE_COOLDOWN_MS;
+    var nextUntil = Date.now() + dur;
+    if (nextUntil > urgeFinalizeCooldownUntil) {
+      urgeFinalizeCooldownUntil = nextUntil;
+      try { localStorage.setItem(urgeFinalizeStorageKey(), String(urgeFinalizeCooldownUntil)); } catch (e) {}
+    }
+    updateUrgeFinalizeCooldownUI();
+    if (!urgeFinalizeCooldownTimer) {
+      urgeFinalizeCooldownTimer = setInterval(function () {
+        if (getUrgeFinalizeRemainingSec() <= 0) {
+          urgeFinalizeCooldownUntil = 0;
+          clearInterval(urgeFinalizeCooldownTimer);
+          urgeFinalizeCooldownTimer = null;
+          try { localStorage.removeItem(urgeFinalizeStorageKey()); } catch (e) {}
+        }
+        updateUrgeFinalizeCooldownUI();
+      }, 500);
+    }
+  }
+
+  function syncUrgeFinalizeCooldownFromStorage() {
+    urgeFinalizeCooldownUntil = 0;
+    try {
+      var stored = Number(localStorage.getItem(urgeFinalizeStorageKey()) || 0);
+      if (stored > Date.now()) {
+        urgeFinalizeCooldownUntil = stored;
+        startUrgeFinalizeCooldown(stored - Date.now());
+      } else {
+        localStorage.removeItem(urgeFinalizeStorageKey());
+      }
+    } catch (e) {}
+    updateUrgeFinalizeCooldownUI();
+  }
+
+  function hideHostFinalizeBanner() {
+    var b = $('hostFinalizeBanner');
+    if (b) {
+      b.hidden = true;
+      clearTimeout(b._hideTimer);
+    }
+  }
+
+  function sendUrgeFinalizeOrder() {
+    if (!hasHostAssigned()) {
+      showToast('Chưa chọn người đại diện cho đơn này.');
+      return;
+    }
+    if (isCurrentHost()) {
+      showToast('Bạn đang là Đại diện — bấm "Chốt & Lưu Sheet" ở cuối giỏ hàng nhé!');
+      return;
+    }
+    if (isOrderSubmitted()) {
+      showToast('✓ Đơn này đã được chốt & lưu Sheet rồi!');
+      return;
+    }
+    if (!cart.length) {
+      showToast('Giỏ hàng chưa có món nào để chốt đơn.');
+      return;
+    }
+    var remSec = getUrgeFinalizeRemainingSec();
+    if (remSec > 0) {
+      updateUrgeFinalizeCooldownUI();
+      showToast('⏳ Vui lòng đợi ' + remSec + 's nữa mới hối đại diện tiếp được!');
+      return;
+    }
+
+    var now = Date.now();
+    var t = totals();
+    var unitStr = (currentStore && currentStore.itemUnit) || 'món';
+    var senderName = myUname || 'Thành viên';
+    var hostName = getHostName() || 'Đại diện';
+    sendRoomEvent({
+      type: 'urge_finalize',
+      urgeFinId: 'ufin_' + clientId + '_' + now,
+      uid: myUid || '',
+      uname: senderName,
+      hostUid: getHostUid() || '',
+      hostName: hostName,
+      totalCups: t.totalCups,
+      unit: unitStr,
+      grandTotal: t.grand,
+      ts: now
+    });
+    startUrgeFinalizeCooldown(URGE_FINALIZE_COOLDOWN_MS);
+    maybePromptNotificationOnAction();
+    showToast('📣 Đã hối Đại diện (' + hostName + ') chốt đơn & lưu Sheet tính tiền!');
+  }
+
+  function triggerHostFinalizeAlert(d) {
+    if (!d || !canActAsHostOrOpen() || isOrderSubmitted()) return;
+    if (d.urgeFinId) {
+      if (seenUrgeFinalizeIds[d.urgeFinId]) return;
+      seenUrgeFinalizeIds[d.urgeFinId] = Date.now();
+    }
+    playSynthesizedUrgeBell();
+    var sender = d.uname || 'Thành viên';
+    var t = totals();
+    var cups = Number(d.totalCups) || t.totalCups || cart.length;
+    var unitStr = d.unit || (currentStore && currentStore.itemUnit) || 'món';
+    var grand = Number(d.grandTotal) || t.grand || 0;
+    var titleTxt = '⏰ ' + sender + ' hối chốt đơn tính tiền!';
+    var subTxt = 'Đơn hiện có ' + cups + ' ' + unitStr + (grand > 0 ? (' · Tổng ' + fmt(grand)) : '') +
+      ' — Bấm "Chốt & Lưu Sheet" để mọi người thanh toán nhé!';
+
+    var banner = $('hostFinalizeBanner');
+    var titleEl = $('hostFinalizeTitle');
+    var subEl = $('hostFinalizeSub');
+    if (titleEl) titleEl.textContent = titleTxt;
+    if (subEl) subEl.textContent = subTxt;
+    if (banner) {
+      banner.hidden = false;
+      clearTimeout(banner._hideTimer);
+      banner._hideTimer = setTimeout(function () {
+        if (banner) banner.hidden = true;
+      }, 22000);
+    }
+
+    var btnSave = $('btnSave');
+    if (btnSave) {
+      btnSave.classList.remove('is-finalize-urged');
+      void btnSave.offsetWidth;
+      btnSave.classList.add('is-finalize-urged');
+      setTimeout(function () { btnSave.classList.remove('is-finalize-urged'); }, 3200);
+    }
+
+    sendSystemNotification({
+      title: titleTxt + ' · #' + orderCode,
+      body: subTxt,
+      tag: 'uu-ufin-' + (d.urgeFinId || Date.now())
     });
   }
 
@@ -3495,36 +3672,167 @@
         renderPayReminderPanel(false);
       }
     });
-    syncClaimButtonElement($('btnQrZoomClaimPaid'), baseOpts && baseOpts.member);
+    syncClaimButtonElement($('btnQrZoomClaimPaid'), baseOpts && baseOpts.member, !!(baseOpts && baseOpts.isDonate));
   }
 
-  function syncClaimButtonElement(btnEl, targetMember) {
+  var activeQrZoomIsDonate = false;
+  var pendingDonateMember = null;
+
+  function getMemberSplitByTarget(targetObj) {
+    if (!targetObj || !cart.length || typeof computeBillSplit !== 'function') return null;
+    var sp = computeBillSplit();
+    var targetKey = getMemberPayKey(targetObj);
+    var targetNameLow = String(targetObj.name || '').trim().toLowerCase();
+    for (var i = 0; i < sp.people.length; i++) {
+      var p = sp.people[i];
+      if (targetKey && getMemberPayKey(p) === targetKey) return p;
+      if (targetNameLow && String(p.name || '').trim().toLowerCase() === targetNameLow) return p;
+    }
+    return null;
+  }
+
+  function openDonateConfirmModal(memberTarget) {
+    if (!isOrderSubmitted()) {
+      showToast('⏳ Cần đợi Đại diện chốt đơn & lưu Sheet trước khi Donate!');
+      return;
+    }
+    if (!getHostQrSlots().length) {
+      showToast('Đại diện chưa thêm tài khoản / mã QR cho bill này.');
+      return;
+    }
+    var spMember = getMemberSplitByTarget(memberTarget) || memberTarget;
+    if (!spMember) return;
+    if (spMember.isMe) {
+      openMemberPersonalQrModal(spMember);
+      return;
+    }
+    if (spMember.paid || isMemberPaid(spMember)) {
+      showToast('✓ ' + spMember.name + ' đã thanh toán xong rồi!');
+      return;
+    }
+    var finalPay = Number(spMember.finalPay) || 0;
+    if (finalPay <= 0) {
+      showToast('Thành viên này không còn số tiền cần thanh toán.');
+      return;
+    }
+
+    pendingDonateMember = spMember;
+    var modal = $('donateConfirmModal');
+    if (!modal) {
+      openMemberPersonalQrModal(spMember, { isDonate: true });
+      return;
+    }
+
+    var targetKey = getMemberPayKey(spMember);
+    var targetNameLow = String(spMember.name || '').trim().toLowerCase();
+    var memberLines = cart.filter(function (c) {
+      var rk = getMemberPayKey({ uid: c.uid || '', name: c.uname || c.owner || '' });
+      if (targetKey && rk === targetKey) return true;
+      return targetNameLow && String(c.uname || c.owner || '').trim().toLowerCase() === targetNameLow;
+    });
+
+    var avEl = $('donateTargetAvatar');
+    var nameEl = $('donateTargetName');
+    var amtEl = $('donateTargetAmount');
+    var itemsEl = $('donateTargetItems');
+    var memoEl = $('donateTargetMemo');
+    var warnEl = $('donateWarningText');
+
+    if (avEl) {
+      avEl.textContent = userInitial(spMember.name);
+      avEl.style.backgroundColor = spMember.ucolor || '#0A7259';
+    }
+    if (nameEl) nameEl.textContent = spMember.name;
+    if (amtEl) amtEl.textContent = fmt(finalPay);
+
+    if (itemsEl) {
+      if (memberLines.length) {
+        itemsEl.innerHTML = memberLines.map(function (c) {
+          var sz = formatSizeLabel(c.size);
+          return '<div class="donate-item-line">' +
+            '<span class="donate-item-name">' + esc(c.qty + 'x ' + c.name + (sz ? ' (' + sz + ')' : '')) + '</span>' +
+            '<span class="donate-item-price">' + fmt(lineTotal(c)) + '</span>' +
+          '</div>';
+        }).join('');
+      } else {
+        itemsEl.innerHTML = '<div class="donate-item-line"><span class="donate-item-name">Phần đơn của ' + esc(spMember.name) + '</span><span class="donate-item-price">' + fmt(finalPay) + '</span></div>';
+      }
+    }
+
+    var qrPreview = getQrForMember(spMember, finalPay);
+    if (memoEl) {
+      if (qrPreview && qrPreview.memo) {
+        memoEl.textContent = 'Nội dung CK tự động: ' + qrPreview.memo;
+        memoEl.hidden = false;
+      } else {
+        memoEl.hidden = true;
+      }
+    }
+
+    if (warnEl) {
+      warnEl.innerHTML = 'Vui lòng kiểm tra đúng tên <strong>' + esc(spMember.name) + '</strong> (' + fmt(finalPay) + ') trước khi quét QR. Tiền chuyển từ mã QR tiếp theo sẽ tự động gạch nợ cho phần của <strong>' + esc(spMember.name) + '</strong>.';
+    }
+
+    modal.hidden = false;
+  }
+
+  function closeDonateConfirmModal() {
+    var modal = $('donateConfirmModal');
+    if (modal) modal.hidden = true;
+    pendingDonateMember = null;
+  }
+
+  function confirmDonateAndOpenQr() {
+    var target = pendingDonateMember;
+    closeDonateConfirmModal();
+    if (!target) return;
+    openMemberPersonalQrModal(target, { isDonate: true });
+  }
+
+  function syncClaimButtonElement(btnEl, targetMember, isDonate) {
     if (!btnEl) return;
     if (!isOrderSubmitted() || canActAsHostOrOpen() || !cart.length) {
       btnEl.hidden = true;
       return;
     }
-    if (targetMember && !targetMember.isMe) {
+    var donateMode = !!isDonate;
+    if (targetMember && !targetMember.isMe && !donateMode) {
       btnEl.hidden = true;
       return;
     }
     var split = computeBillSplit();
-    var myUnpaid = split.people.filter(function (p) { return p.isMe && !p.paid && p.finalPay > 0; });
-    if (!myUnpaid.length) {
+    var targetEntry = null;
+    if (donateMode && targetMember) {
+      var tKey = getMemberPayKey(targetMember);
+      targetEntry = split.people.find(function (p) { return getMemberPayKey(p) === tKey && !p.paid && p.finalPay > 0; }) || null;
+    } else {
+      var myUnpaid = split.people.filter(function (p) { return p.isMe && !p.paid && p.finalPay > 0; });
+      targetEntry = myUnpaid[0] || null;
+    }
+    if (!targetEntry) {
       btnEl.hidden = true;
       return;
     }
-    var myEntry = myUnpaid[0];
-    var isClaimed = !!myEntry.claimed;
+    var isClaimed = !!targetEntry.claimed;
     btnEl.hidden = false;
     btnEl.classList.toggle('is-claimed', isClaimed);
-    btnEl.textContent = isClaimed
-      ? '⏳ Đã báo CK (Chờ ĐD duyệt · Bấm hủy)'
-      : '✓ Tôi đã chuyển khoản xong';
-    btnEl.onclick = function (e) {
-      e.stopPropagation();
-      toggleMyPayClaim(myEntry);
-    };
+    if (donateMode && !targetEntry.isMe) {
+      btnEl.textContent = isClaimed
+        ? ('⏳ Đã báo CK hộ ' + targetEntry.name + ' (Bấm hủy)')
+        : ('🎁 Tôi đã CK hộ ' + targetEntry.name);
+      btnEl.onclick = function (e) {
+        e.stopPropagation();
+        toggleMyPayClaim(targetEntry, { donatedBy: myUname || 'Thành viên' });
+      };
+    } else {
+      btnEl.textContent = isClaimed
+        ? '⏳ Đã báo CK (Chờ ĐD duyệt · Bấm hủy)'
+        : '✓ Tôi đã chuyển khoản xong';
+      btnEl.onclick = function (e) {
+        e.stopPropagation();
+        toggleMyPayClaim(targetEntry);
+      };
+    }
   }
 
   function openQrZoomModal(opts) {
@@ -3537,11 +3845,12 @@
     var modal = $('qrZoomModal');
     if (!modal) return;
     activeQrZoomMember = d.member || null;
+    activeQrZoomIsDonate = !!d.isDonate;
     applyQrZoomModalSlot(slots, Number(d.slotIdx) || 0, d);
     modal.hidden = false;
   }
 
-  function openMemberPersonalQrModal(memberObj) {
+  function openMemberPersonalQrModal(memberObj, extraOpts) {
     var slots = getHostQrSlots();
     if (!slots.length) {
       showToast('Đại diện chưa thêm tài khoản / mã QR cho bill này.');
@@ -3553,19 +3862,24 @@
       showToast('Không thể tạo mã QR thanh toán.');
       return;
     }
+    var isDonate = !!(extraOpts && extraOpts.isDonate && memberObj && !memberObj.isMe);
     var pName = (memberObj && memberObj.name) ? memberObj.name : 'Bạn';
+    var amtLabel = mInfo.amount > 0 ? (' (' + fmt(mInfo.amount) + ')') : '';
     openQrZoomModal({
       slots: [{ id: 'qr_0', label: mInfo.label || 'QR', qr: mInfo.qr, note: mInfo.isSePay ? '' : (mInfo.note || '') }],
       slotIdx: 0,
       src: mInfo.qr,
       member: memberObj || null,
+      isDonate: isDonate,
       hideInfoCard: !!mInfo.isSePay,
       amount: mInfo.isSePay ? '' : (mInfo.amount > 0 ? fmt(mInfo.amount) : ''),
       fallbackNote: mInfo.isSePay ? '' : ('Nội dung CK: ' + mInfo.memo),
-      baseTitle: 'QR thanh toán của ' + pName,
-      sub: mInfo.isSePay
-        ? ('Quét mã bằng app ngân hàng để chuyển cho ' + hostName + ' (đã khóa tự động số tiền & nội dung)')
-        : ('Mở app ngân hàng / ví điện tử và quét mã chuyển cho ' + hostName)
+      baseTitle: isDonate ? ('🎁 QR Donate cho ' + pName) : ('QR thanh toán của ' + pName),
+      sub: isDonate
+        ? ('Bạn đang thanh toán hộ ' + pName + amtLabel + ' cho ' + hostName + (mInfo.isSePay ? ' (đã khóa sẵn số tiền & nội dung)' : ''))
+        : (mInfo.isSePay
+          ? ('Quét mã bằng app ngân hàng để chuyển cho ' + hostName + ' (đã khóa tự động số tiền & nội dung)')
+          : ('Mở app ngân hàng / ví điện tử và quét mã chuyển cho ' + hostName))
     });
   }
 
@@ -3594,6 +3908,7 @@
     var modal = $('qrZoomModal');
     if (modal) modal.hidden = true;
     activeQrZoomMember = null;
+    activeQrZoomIsDonate = false;
   }
 
   function renderPayReminderPanel(allowAutoPlay) {
@@ -4219,6 +4534,8 @@
         updatePayUrgeCooldownUI();
       } else if (d.type === 'pay_claim') {
         triggerHostClaimAlert(d);
+      } else if (d.type === 'urge_finalize') {
+        triggerHostFinalizeAlert(d);
       } else if (d.type === 'pay_claim_cancel') {
         handleRemoteClaimCancel(d);
       } else if (d.type === 'pay_claim_rejected') {
@@ -4231,6 +4548,7 @@
         F = {};
         activePayUrge = null;
         hideHostClaimBanner();
+        hideHostFinalizeBanner();
         stopPayUrgeAudio();
         if ($('customer')) $('customer').value = '';
         if ($('orderNote')) $('orderNote').value = '';
@@ -4288,6 +4606,8 @@
             triggerUrgePayAlert(d);
           } else if (d.kind === 'pay_claim') {
             triggerHostClaimAlert(d);
+          } else if (d.kind === 'urge_finalize') {
+            triggerHostFinalizeAlert(d);
           } else if (d.kind === 'pay_claim_cancel') {
             handleRemoteClaimCancel(d);
           } else if (d.kind === 'pay_claim_rejected') {
@@ -4800,6 +5120,11 @@
     ul.innerHTML = '';
 
     var submitted = isOrderSubmitted();
+    var hasDonateQr = submitted && getHostQrSlots().length > 0;
+    var cartVp = ul.closest('.cart-viewport');
+    if (cartVp) {
+      cartVp.classList.toggle('is-submitted', submitted);
+    }
     if ($('cartTableActHead')) {
       $('cartTableActHead').textContent = submitted ? 'TRẢ' : 'SỬA';
     }
@@ -4954,6 +5279,17 @@
           claimLbl.onclick = function (e) { e.stopPropagation(); };
           claimLbl.appendChild(claimChk);
           actCol.appendChild(claimLbl);
+        } else if (!isMine && !rowPaid && !rowClaimed && hasDonateQr) {
+          var donateBtn = document.createElement('button');
+          donateBtn.type = 'button';
+          donateBtn.className = 'c-donate-btn';
+          donateBtn.title = 'Thanh toán hộ (Donate) cho ' + rowPayTarget.name;
+          donateBtn.innerHTML = '🎁<span>Donate</span>';
+          donateBtn.onclick = function (e) {
+            e.stopPropagation();
+            openDonateConfirmModal(rowPayTarget);
+          };
+          actCol.appendChild(donateBtn);
         } else {
           var statusPill = document.createElement('span');
           statusPill.className = 'c-row-paid-pill ' + (rowPaid ? 'is-paid' : (rowClaimed ? 'is-claimed' : 'is-unpaid'));
@@ -5037,9 +5373,13 @@
         var spZoom = computeBillSplit();
         var zoomKey = getMemberPayKey(activeQrZoomMember);
         var freshZoomM = spZoom.people.find(function (x) { return getMemberPayKey(x) === zoomKey; });
-        if (freshZoomM && freshZoomM.paid && freshZoomM.isMe) {
+        if (freshZoomM && freshZoomM.paid && (freshZoomM.isMe || activeQrZoomIsDonate)) {
+          var paidWasDonate = activeQrZoomIsDonate && !freshZoomM.isMe;
+          var paidWhoName = freshZoomM.name || 'thành viên';
           closeQrZoomModal();
-          showToast('✓ Thanh toán của bạn đã được xác nhận thành công!');
+          showToast(paidWasDonate
+            ? ('🎉 Thanh toán hộ (Donate) cho ' + paidWhoName + ' đã được xác nhận!')
+            : '✓ Thanh toán của bạn đã được xác nhận thành công!');
         } else if (freshZoomM) {
           activeQrZoomMember = freshZoomM;
           var freshQr = getQrForMember(freshZoomM);
@@ -5049,7 +5389,7 @@
         }
       }
       if (typeof syncClaimButtonElement === 'function') {
-        syncClaimButtonElement($('btnQrZoomClaimPaid'), activeQrZoomMember);
+        syncClaimButtonElement($('btnQrZoomClaimPaid'), activeQrZoomMember, activeQrZoomIsDonate);
       }
     }
     renderCartFocusIndicators();
@@ -5206,25 +5546,34 @@
     setMemberPaidState(p, !isMemberPaid(p));
   }
 
-  function toggleMyPayClaim(targetObj) {
+  function toggleMyPayClaim(targetObj, claimOpts) {
     if (!isOrderSubmitted()) {
       showToast('⏳ Cần bấm "Chốt & Lưu Sheet" trước khi báo chuyển khoản!');
       return;
     }
+    var donatedBy = (claimOpts && claimOpts.donatedBy) ? String(claimOpts.donatedBy).trim() : '';
     var p = targetObj || { uid: myUid, name: myUname || 'Bạn' };
     var pIsMe = isMyUid(p.uid) || (!p.uid && myUname && String(p.name || '').trim().toLowerCase() === myUname.trim().toLowerCase());
-    if (!pIsMe && hasHostAssigned()) {
+    if (!pIsMe && !donatedBy && hasHostAssigned()) {
       showToast('🔒 Bạn chỉ có thể tự đánh dấu phần thanh toán của chính mình!');
       return;
     }
     if (isMemberPaid(p)) {
-      showToast('✓ Đại diện đã xác nhận bạn đã trả tiền rồi!');
+      showToast(pIsMe ? '✓ Đại diện đã xác nhận bạn đã trả tiền rồi!' : ('✓ ' + p.name + ' đã được xác nhận trả tiền rồi!'));
       return;
     }
     var sp = (cart.length > 0) ? computeBillSplit() : null;
-    var myEntry = sp ? sp.people.find(function (x) { return x.isMe; }) : null;
-    var claimSubject = myEntry || p;
-    var claimAmt = myEntry ? myEntry.finalPay : (Number(p.finalPay) || 0);
+    var targetEntry = null;
+    if (sp) {
+      if (pIsMe) {
+        targetEntry = sp.people.find(function (x) { return x.isMe; }) || null;
+      } else {
+        var tKey = getMemberPayKey(p);
+        targetEntry = sp.people.find(function (x) { return getMemberPayKey(x) === tKey; }) || null;
+      }
+    }
+    var claimSubject = targetEntry || p;
+    var claimAmt = targetEntry ? targetEntry.finalPay : (Number(p.finalPay) || 0);
 
     var curClaims = (F.payClaimMap && F.payClaimMap.v && typeof F.payClaimMap.v === 'object')
       ? Object.assign({}, F.payClaimMap.v)
@@ -5243,12 +5592,12 @@
       syncBillServerStateToSheet(true);
       sendRoomEvent({
         type: 'pay_claim_cancel',
-        uid: myUid || claimSubject.uid || '',
+        uid: claimSubject.uid || (pIsMe ? myUid : '') || '',
         uname: claimSubject.name || myUname || 'Thành viên',
         hostUid: getHostUid(),
         hostName: getHostName()
       });
-      showToast('↩ Đã hủy báo chuyển khoản.');
+      showToast(donatedBy ? ('↩ Đã hủy báo chuyển khoản hộ ' + claimSubject.name + '.') : '↩ Đã hủy báo chuyển khoản.');
       return;
     }
 
@@ -5257,10 +5606,11 @@
     var activeSlotLabel = activeSlot ? formatQrSlotDisplayName(activeSlot, Math.min(selectedPayQrIdx, qrSlots.length - 1)) : '';
     var now = Date.now();
     curClaims[key] = {
-      uid: myUid || claimSubject.uid || '',
+      uid: claimSubject.uid || (pIsMe ? myUid : '') || '',
       name: claimSubject.name || myUname || 'Thành viên',
       amount: claimAmt,
       qrLabel: activeSlotLabel,
+      donatedBy: donatedBy || '',
       ts: now
     };
     setSyncedField('payClaimMap', curClaims);
@@ -5274,15 +5624,18 @@
     sendRoomEvent({
       type: 'pay_claim',
       claimId: 'claim_' + clientId + '_' + now,
-      uid: myUid || claimSubject.uid || '',
+      uid: claimSubject.uid || (pIsMe ? myUid : '') || '',
       uname: claimSubject.name || myUname || 'Thành viên',
+      donatedBy: donatedBy || '',
       amount: claimAmt,
       qrLabel: activeSlotLabel,
       hostUid: getHostUid(),
       hostName: getHostName()
     });
     maybePromptNotificationOnAction();
-    showToast('🔔 Đã báo chuyển khoản! Chờ Đại diện check bank xác nhận.');
+    showToast(donatedBy
+      ? ('🎁 Đã báo chuyển khoản hộ ' + claimSubject.name + '! Chờ Đại diện check bank xác nhận.')
+      : '🔔 Đã báo chuyển khoản! Chờ Đại diện check bank xác nhận.');
   }
 
   function rejectMemberPayClaim(p) {
@@ -6698,16 +7051,29 @@
         '<strong class="split-pay-amount">' + fmt(finalPay) + '</strong>';
 
       if (getHostQrSlots().length > 0 && finalPay > 0 && !p.paid) {
-        var btnMemberQrRow = document.createElement('button');
-        btnMemberQrRow.type = 'button';
-        btnMemberQrRow.className = 'btn-person-qr';
-        btnMemberQrRow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg><span>QR</span>';
-        btnMemberQrRow.title = 'Mở mã QR thanh toán riêng của ' + p.name + ' (khóa sẵn số tiền & nội dung)';
-        btnMemberQrRow.onclick = function (e) {
-          e.stopPropagation();
-          openMemberPersonalQrModal(p);
-        };
-        payDiv.appendChild(btnMemberQrRow);
+        if (!amHost && !p.isMe && submitted && !isClaimed) {
+          var btnDonateRow = document.createElement('button');
+          btnDonateRow.type = 'button';
+          btnDonateRow.className = 'btn-person-qr btn-person-donate';
+          btnDonateRow.innerHTML = '<span>🎁 Donate</span>';
+          btnDonateRow.title = 'Thanh toán hộ (Donate) cho ' + p.name + ' (có bước xác nhận chống nhầm người)';
+          btnDonateRow.onclick = function (e) {
+            e.stopPropagation();
+            openDonateConfirmModal(p);
+          };
+          payDiv.appendChild(btnDonateRow);
+        } else if (amHost || p.isMe) {
+          var btnMemberQrRow = document.createElement('button');
+          btnMemberQrRow.type = 'button';
+          btnMemberQrRow.className = 'btn-person-qr';
+          btnMemberQrRow.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg><span>QR</span>';
+          btnMemberQrRow.title = 'Mở mã QR thanh toán riêng của ' + p.name + ' (khóa sẵn số tiền & nội dung)';
+          btnMemberQrRow.onclick = function (e) {
+            e.stopPropagation();
+            openMemberPersonalQrModal(p);
+          };
+          payDiv.appendChild(btnMemberQrRow);
+        }
       }
 
       if (amHost) {
@@ -9062,10 +9428,40 @@
     };
   }
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && $('qrZoomModal') && !$('qrZoomModal').hidden) {
-      closeQrZoomModal();
+    if (e.key === 'Escape') {
+      if ($('donateConfirmModal') && !$('donateConfirmModal').hidden) {
+        closeDonateConfirmModal();
+      } else if ($('qrZoomModal') && !$('qrZoomModal').hidden) {
+        closeQrZoomModal();
+      }
     }
   });
+
+  // Hối chốt đơn tính tiền (Member → Đại diện)
+  if ($('btnUrgeFinalize')) $('btnUrgeFinalize').onclick = sendUrgeFinalizeOrder;
+  if ($('btnHostFinalizeNow')) {
+    $('btnHostFinalizeNow').onclick = function () {
+      hideHostFinalizeBanner();
+      if ($('btnSave') && !$('btnSave').disabled) {
+        $('btnSave').click();
+      } else if (typeof saveOrder === 'function') {
+        saveOrder();
+      }
+    };
+  }
+  if ($('btnHostFinalizeLater')) $('btnHostFinalizeLater').onclick = hideHostFinalizeBanner;
+  if ($('btnCloseHostFinalizeBanner')) $('btnCloseHostFinalizeBanner').onclick = hideHostFinalizeBanner;
+
+  // Modal xác nhận thanh toán hộ (Donate)
+  if ($('btnCloseDonateModal')) $('btnCloseDonateModal').onclick = closeDonateConfirmModal;
+  if ($('btnCancelDonate')) $('btnCancelDonate').onclick = closeDonateConfirmModal;
+  if ($('btnConfirmDonate')) $('btnConfirmDonate').onclick = confirmDonateAndOpenQr;
+  if ($('donateConfirmModal')) {
+    $('donateConfirmModal').onclick = function (e) {
+      if (e.target === $('donateConfirmModal')) closeDonateConfirmModal();
+    };
+  }
+  syncUrgeFinalizeCooldownFromStorage();
 
   // Modal Hối trả tiền (chỉ Đại diện sau khi Chốt & Lưu Sheet)
   if ($('btnOpenUrgePay')) $('btnOpenUrgePay').onclick = openUrgePayModal;
