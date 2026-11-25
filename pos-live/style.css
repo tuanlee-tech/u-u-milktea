@@ -5598,6 +5598,112 @@ body {
   filter: brightness(1.06);
 }
 
+/* ================= UPLOAD ẢNH MÓN TRONG STORE BUILDER ================= */
+.cat-item-row {
+  gap: 8px;
+}
+.cat-item-thumb-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  border: 1.5px dashed #CBD5E1;
+  background: #FFFFFF;
+  color: #64748B;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  overflow: visible;
+  transition: all 0.16s ease;
+}
+.cat-item-thumb-wrap:hover {
+  border-color: #0A7259;
+  color: #0A7259;
+  background: #ECFDF5;
+}
+.cat-item-thumb-wrap.has-img {
+  border-style: solid;
+  border-color: #D1D5DB;
+  background: #F4F1EA;
+}
+.cat-item-thumb-wrap.is-dragover {
+  border-color: #0A7259;
+  background: #D1FAE5;
+  transform: scale(1.06);
+  box-shadow: 0 0 0 3px rgba(10, 114, 89, 0.22);
+}
+.cat-item-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+  display: block;
+}
+.cat-item-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.56);
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.cat-item-thumb-wrap.has-img:hover .cat-item-thumb-overlay {
+  opacity: 1;
+}
+.cat-item-thumb-rm {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid #FFFFFF;
+  background: #EF4444;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.cat-item-thumb-rm:hover {
+  background: #DC2626;
+  transform: scale(1.1);
+}
+@keyframes thumbSpin {
+  to { transform: rotate(360deg); }
+}
+.cat-item-thumb-wrap.is-uploading {
+  pointer-events: none;
+  opacity: 0.78;
+}
+.cat-item-thumb-wrap.is-uploading::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(10, 114, 89, 0.25);
+  border-top-color: #0A7259;
+  animation: thumbSpin 0.65s linear infinite;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+
 
 
 

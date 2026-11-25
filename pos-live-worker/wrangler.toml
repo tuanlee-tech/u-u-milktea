@@ -9,3 +9,7 @@ class_name = "LiveRoom"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LiveRoom"]
+
+[[kv_namespaces]]
+binding = "MENU_IMAGES"
+id = "ad5af982c8ac44e7be57cb534f415765"

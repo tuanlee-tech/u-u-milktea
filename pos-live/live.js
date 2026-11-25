@@ -1063,8 +1063,110 @@
 
   function resolveItemImg(m, isTopping) {
     if (!m) return '';
-    if (isTopping) return TOPPING_IMGS[m.id] || m.img || '';
-    return PRODUCT_IMGS[m.id] || m.img || PRODUCT_NAME_IMGS[normalizeImgKey(m.ten)] || '';
+    if (isTopping) return m.img || TOPPING_IMGS[m.id] || '';
+    return m.img || PRODUCT_IMGS[m.id] || PRODUCT_NAME_IMGS[normalizeImgKey(m.ten)] || '';
+  }
+
+  /* ================= CLIENT IMAGE UPLOAD (CLOUDFLARE WORKER + KV) ================= */
+  function getWorkerHttpOrigin() {
+    var wsUrl = (typeof FORCE_WS !== 'undefined' && FORCE_WS) ? FORCE_WS : 'wss://uu-pos-live.tuanlee-tech.workers.dev';
+    return String(wsUrl).replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:').replace(/\/+$/, '');
+  }
+
+  function isUploadedWorkerImgUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    return /\/img\/m_[a-z0-9_]+\.(?:webp|jpg|png)(?:\?.*)?$/i.test(url.trim());
+  }
+
+  function deleteUploadedImagesFromWorker(urls) {
+    var list = (Array.isArray(urls) ? urls : [urls]).filter(isUploadedWorkerImgUrl);
+    if (!list.length) return;
+    try {
+      fetch(getWorkerHttpOrigin() + '/api/delete-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: list })
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function compressAndCropSquareWebp(file, targetSize) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !file.type || file.type.indexOf('image/') !== 0) {
+        reject(new Error('Vui lòng chọn file ảnh (JPG, PNG, WebP).'));
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        reject(new Error('Ảnh gốc quá lớn (tối đa 5MB).'));
+        return;
+      }
+      var size = Number(targetSize) || 800;
+      var objUrl = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        try {
+          URL.revokeObjectURL(objUrl);
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if (!w || !h) {
+            reject(new Error('Không đọc được kích thước ảnh.'));
+            return;
+          }
+          var side = Math.min(w, h);
+          var sx = Math.floor((w - side) / 2);
+          var sy = Math.floor((h - side) / 2);
+          var outSize = Math.min(size, side);
+          var canvas = document.createElement('canvas');
+          canvas.width = outSize;
+          canvas.height = outSize;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, outSize, outSize);
+          ctx.drawImage(img, sx, sy, side, side, 0, 0, outSize, outSize);
+
+          canvas.toBlob(function (blob) {
+            if (blob && blob.size > 0 && blob.type === 'image/webp') {
+              resolve({ blob: blob, contentType: 'image/webp' });
+              return;
+            }
+            canvas.toBlob(function (jpgBlob) {
+              if (!jpgBlob || !jpgBlob.size) {
+                reject(new Error('Trình duyệt không thể nén ảnh này.'));
+                return;
+              }
+              resolve({ blob: jpgBlob, contentType: 'image/jpeg' });
+            }, 'image/jpeg', 0.85);
+          }, 'image/webp', 0.82);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(objUrl);
+        reject(new Error('Không thể đọc file ảnh này.'));
+      };
+      img.src = objUrl;
+    });
+  }
+
+  function uploadMenuItemImage(file, itemObj) {
+    return compressAndCropSquareWebp(file, 800).then(function (compressed) {
+      var storeId = ($('editStoreId') && $('editStoreId').value) ? $('editStoreId').value : 'new';
+      var oldUrl = (itemObj && isUploadedWorkerImgUrl(itemObj.img)) ? itemObj.img : '';
+      var qs = '?store=' + encodeURIComponent(storeId) + (oldUrl ? '&old=' + encodeURIComponent(oldUrl) : '');
+      return fetch(getWorkerHttpOrigin() + '/api/upload-image' + qs, {
+        method: 'POST',
+        headers: { 'Content-Type': compressed.contentType },
+        body: compressed.blob
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (!res || !res.ok || !res.url) {
+            throw new Error((res && res.error) || 'Upload ảnh thất bại.');
+          }
+          return res;
+        });
+    });
   }
 
   // Quản lý Identity người dùng: Bền vững qua localStorage để tắt tab mở lại vẫn sửa được món của mình
@@ -7760,6 +7862,8 @@
         btnDel.onclick = function (e) {
           e.stopPropagation();
           if (!confirm('Bạn có chắc muốn xóa quán "' + st.name + '" khỏi danh sách yêu thích và Google Sheet?')) return;
+          var imgUrlsToDelete = (st.items || []).map(function (it) { return it && it.img; }).filter(Boolean);
+          deleteUploadedImagesFromWorker(imgUrlsToDelete);
           var customs = getCustomStores().filter(function (x) { return x.id !== st.id; });
           saveCustomStores(customs);
           deleteStoreFromSheet(st.id);
@@ -7977,6 +8081,10 @@
 
       cardHeader.querySelector('.btn-del-cat').onclick = function () {
         if (!confirm('Bạn có chắc muốn xóa phân loại "' + catName + '" và toàn bộ ' + catItems.length + ' món trong nhóm này?')) return;
+        var removedImgs = parsedStoreItems
+          .filter(function (x) { return x.nhom === catName && x.img; })
+          .map(function (x) { return x.img; });
+        deleteUploadedImagesFromWorker(removedImgs);
         parsedStoreItems = parsedStoreItems.filter(function (x) { return x.nhom !== catName; });
         parsedStoreCategories = parsedStoreCategories.filter(function (c) { return c !== catName; });
         renderStoreMenuBuilder();
@@ -7999,18 +8107,117 @@
             pStr = fmt(it.giaM);
           }
 
-          row.innerHTML =
-            '<span class="cat-item-name">' + esc(it.ten) + '</span>' +
-            '<span class="cat-item-price">' + pStr + '</span>' +
-            '<button type="button" class="btn-del-item" title="Xóa món này"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
+          var resolvedImg = resolveItemImg(it, false);
+          var hasCustomImg = !!(it.img && String(it.img).trim());
 
-          row.querySelector('.btn-del-item').onclick = function () {
+          // Ô thumbnail upload/kéo thả ảnh cho từng món
+          var thumbWrap = document.createElement('div');
+          thumbWrap.className = 'cat-item-thumb-wrap' + (resolvedImg ? ' has-img' : '');
+          thumbWrap.title = resolvedImg
+            ? 'Bấm hoặc kéo thả ảnh mới để đổi ảnh món này'
+            : 'Bấm hoặc kéo thả ảnh từ máy để tải ảnh món lên (tự nén WebP 1:1)';
+
+          var fileInp = document.createElement('input');
+          fileInp.type = 'file';
+          fileInp.accept = 'image/png,image/jpeg,image/webp';
+          fileInp.className = 'cat-item-file-input';
+          fileInp.hidden = true;
+
+          if (resolvedImg) {
+            thumbWrap.innerHTML =
+              '<img src="' + esc(resolvedImg) + '" alt="' + esc(it.ten) + '" class="cat-item-thumb-img">' +
+              '<span class="cat-item-thumb-overlay">Đổi</span>';
+            if (hasCustomImg) {
+              var btnRmImg = document.createElement('button');
+              btnRmImg.type = 'button';
+              btnRmImg.className = 'cat-item-thumb-rm';
+              btnRmImg.title = 'Gỡ ảnh món này';
+              btnRmImg.textContent = '×';
+              btnRmImg.onclick = function (e) {
+                e.stopPropagation();
+                if (isUploadedWorkerImgUrl(it.img)) {
+                  deleteUploadedImagesFromWorker([it.img]);
+                }
+                delete it.img;
+                renderStoreMenuBuilder();
+                showToast('Đã gỡ ảnh của món "' + it.ten + '"');
+              };
+              thumbWrap.appendChild(btnRmImg);
+            }
+          } else {
+            thumbWrap.innerHTML =
+              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+          }
+
+          function handleItemImageFile(file) {
+            if (!file) return;
+            thumbWrap.classList.add('is-uploading');
+            uploadMenuItemImage(file, it)
+              .then(function (res) {
+                it.img = res.url;
+                thumbWrap.classList.remove('is-uploading');
+                renderStoreMenuBuilder();
+                showToast('✓ Đã tải ảnh cho "' + it.ten + '" (' + Math.max(1, Math.round((res.size || 0) / 1024)) + 'KB)');
+              })
+              .catch(function (err) {
+                thumbWrap.classList.remove('is-uploading');
+                showToast('⚠️ ' + (err && err.message ? err.message : 'Lỗi tải ảnh lên'));
+              });
+          }
+
+          thumbWrap.onclick = function (e) {
+            if (e.target.closest('.cat-item-thumb-rm')) return;
+            fileInp.value = '';
+            fileInp.click();
+          };
+          fileInp.onchange = function () {
+            if (fileInp.files && fileInp.files[0]) {
+              handleItemImageFile(fileInp.files[0]);
+            }
+          };
+          thumbWrap.ondragover = function (e) {
+            e.preventDefault();
+            thumbWrap.classList.add('is-dragover');
+          };
+          thumbWrap.ondragleave = function () {
+            thumbWrap.classList.remove('is-dragover');
+          };
+          thumbWrap.ondrop = function (e) {
+            e.preventDefault();
+            thumbWrap.classList.remove('is-dragover');
+            var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f) handleItemImageFile(f);
+          };
+
+          var nameEl = document.createElement('span');
+          nameEl.className = 'cat-item-name';
+          nameEl.textContent = it.ten;
+
+          var priceEl = document.createElement('span');
+          priceEl.className = 'cat-item-price';
+          priceEl.textContent = pStr;
+
+          var btnDelItem = document.createElement('button');
+          btnDelItem.type = 'button';
+          btnDelItem.className = 'btn-del-item';
+          btnDelItem.title = 'Xóa món này';
+          btnDelItem.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+          btnDelItem.onclick = function () {
             var iIdx = parsedStoreItems.indexOf(it);
             if (iIdx !== -1) {
+              if (it.img && isUploadedWorkerImgUrl(it.img)) {
+                deleteUploadedImagesFromWorker([it.img]);
+              }
               parsedStoreItems.splice(iIdx, 1);
               renderStoreMenuBuilder();
             }
           };
+
+          row.appendChild(fileInp);
+          row.appendChild(thumbWrap);
+          row.appendChild(nameEl);
+          row.appendChild(priceEl);
+          row.appendChild(btnDelItem);
           itemsList.appendChild(row);
         });
       }

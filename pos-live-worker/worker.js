@@ -73,7 +73,7 @@ async function loadLastWrap(storage) {
 }
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, X-SePay-Signature, X-SePay-Timestamp'
 };
 
@@ -1092,6 +1092,117 @@ async function handleIncomingSePayWebhookRequest(request, env) {
   });
 }
 
+const IMG_KEY_RE = /^m_[a-z0-9_]+\.(webp|jpg|png)$/i;
+const MAX_UPLOAD_BYTES = 512 * 1024; // 512 KB (client compresses to 800x800 WebP ~30-90KB)
+
+function extractImageKey(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (IMG_KEY_RE.test(s)) return s;
+  const m = s.match(/\/img\/(m_[a-z0-9_]+\.(?:webp|jpg|png))(?:\?.*)?$/i);
+  return m ? m[1] : '';
+}
+
+async function handleImageUpload(request, env, u) {
+  if (request.method !== 'POST') return jsonCors({ ok: false, error: 'Method not allowed' }, 405);
+  if (!env.MENU_IMAGES) return jsonCors({ ok: false, error: 'KV MENU_IMAGES chưa được cấu hình' }, 500);
+
+  const rawCt = String(request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  const extMap = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png' };
+  const ext = extMap[rawCt];
+  if (!ext) {
+    return jsonCors({ ok: false, error: 'Chỉ hỗ trợ ảnh WebP / JPG / PNG' }, 415);
+  }
+
+  let buf;
+  try {
+    buf = await request.arrayBuffer();
+  } catch (e) {
+    return jsonCors({ ok: false, error: 'Không đọc được dữ liệu ảnh' }, 400);
+  }
+  if (!buf || buf.byteLength === 0) {
+    return jsonCors({ ok: false, error: 'File ảnh rỗng' }, 400);
+  }
+  if (buf.byteLength > MAX_UPLOAD_BYTES) {
+    return jsonCors({ ok: false, error: 'Ảnh sau nén vượt quá 512KB' }, 413);
+  }
+
+  const rand = Math.random().toString(36).slice(2, 8);
+  const key = 'm_' + Date.now().toString(36) + '_' + rand + '.' + ext;
+  const storeId = String(u.searchParams.get('store') || '').slice(0, 64);
+  const oldKey = extractImageKey(u.searchParams.get('old') || '');
+
+  try {
+    await env.MENU_IMAGES.put(key, buf, {
+      metadata: { contentType: rawCt === 'image/jpg' ? 'image/jpeg' : rawCt, storeId, uploadedAt: Date.now() }
+    });
+    if (oldKey && oldKey !== key) {
+      await env.MENU_IMAGES.delete(oldKey).catch(() => {});
+    }
+  } catch (e) {
+    return jsonCors({ ok: false, error: 'Lỗi lưu ảnh lên KV: ' + (e && e.message ? e.message : 'unknown') }, 500);
+  }
+
+  return jsonCors({
+    ok: true,
+    key,
+    url: u.origin + '/img/' + key,
+    size: buf.byteLength
+  });
+}
+
+async function handleImageGet(env, key) {
+  if (!env.MENU_IMAGES || !IMG_KEY_RE.test(key)) {
+    return new Response('Not found', { status: 404, headers: CORS_HEADERS });
+  }
+  try {
+    const res = await env.MENU_IMAGES.getWithMetadata(key, { type: 'arrayBuffer' });
+    if (!res || !res.value) {
+      return new Response('Not found', { status: 404, headers: CORS_HEADERS });
+    }
+    const ext = key.split('.').pop().toLowerCase();
+    const fallbackCt = ext === 'png' ? 'image/png' : (ext === 'jpg' ? 'image/jpeg' : 'image/webp');
+    const ct = (res.metadata && res.metadata.contentType) || fallbackCt;
+    return new Response(res.value, {
+      status: 200,
+      headers: Object.assign({
+        'Content-Type': ct,
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }, CORS_HEADERS)
+    });
+  } catch (e) {
+    return new Response('Error reading image', { status: 500, headers: CORS_HEADERS });
+  }
+}
+
+async function handleImageDelete(request, env) {
+  if (request.method !== 'POST' && request.method !== 'DELETE') {
+    return jsonCors({ ok: false, error: 'Method not allowed' }, 405);
+  }
+  if (!env.MENU_IMAGES) return jsonCors({ ok: false, error: 'KV MENU_IMAGES chưa được cấu hình' }, 500);
+  let body = {};
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonCors({ ok: false, error: 'JSON không hợp lệ' }, 400);
+  }
+  const rawList = []
+    .concat(Array.isArray(body.keys) ? body.keys : [])
+    .concat(Array.isArray(body.urls) ? body.urls : [])
+    .concat(body.key ? [body.key] : [])
+    .concat(body.url ? [body.url] : []);
+
+  const uniqueKeys = Array.from(new Set(rawList.map(extractImageKey).filter(Boolean))).slice(0, 60);
+  let deleted = 0;
+  for (const k of uniqueKeys) {
+    try {
+      await env.MENU_IMAGES.delete(k);
+      deleted++;
+    } catch (e) {}
+  }
+  return jsonCors({ ok: true, deleted });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -1100,6 +1211,16 @@ export default {
     const u = new URL(request.url);
     if (u.pathname === '/webhook/sepay' || u.pathname === '/webhook/sepay/') {
       return handleIncomingSePayWebhookRequest(request, env);
+    }
+    if (u.pathname === '/api/upload-image') {
+      return handleImageUpload(request, env, u);
+    }
+    if (u.pathname === '/api/delete-image') {
+      return handleImageDelete(request, env);
+    }
+    const imgMatch = u.pathname.match(/^\/img\/([^/]+)$/);
+    if (imgMatch && request.method === 'GET') {
+      return handleImageGet(env, decodeURIComponent(imgMatch[1]));
     }
     if (u.pathname === '/bills') {
       const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');
