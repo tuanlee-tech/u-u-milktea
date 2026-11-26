@@ -13,3 +13,7 @@ new_sqlite_classes = ["LiveRoom"]
 [[kv_namespaces]]
 binding = "MENU_IMAGES"
 id = "ad5af982c8ac44e7be57cb534f415765"
+
+[vars]
+VAPID_PUBLIC_KEY = "BPIDflz3lBmVoaVwwYkyO3RneVJLpG2APu-fHl-KokqtI_XIhfrhbi3WdFlezF5IzBv8NOPItVQLiDobUpbAgUo"
+VAPID_SUBJECT = "mailto:admin@office-order.pages.dev"

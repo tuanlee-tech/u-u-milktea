@@ -1,6 +1,8 @@
 /* POS Live relay — chay tren Cloudflare Workers + Durable Objects.
  * Moi bill (?bill=MÃ) la 1 phong, tu gop o client, server chi chuyen tiep. */
 
+import { sendWebPush } from './webpush.js';
+
 const URGE_COOLDOWN_MS = 10000;
 const DO_QR_CHUNK_SIZE = 96000;
 
@@ -453,6 +455,50 @@ export class LiveRoom {
         return jsonCors({ ok: true, bills: [] });
       }
     }
+    if (url.pathname.endsWith('/push/subscribe') && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        const sub = body && body.subscription;
+        if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+          return jsonCors({ ok: false, error: 'Subscription không hợp lệ' }, 400);
+        }
+        const m = url.pathname.match(/^\/bill\/([^/]+)\/push\/subscribe$/);
+        if (m && !this.bill) this.bill = decodeURIComponent(m[1]);
+        const subs = await this.loadPushSubs();
+        subs[sub.endpoint] = {
+          sub,
+          uid: String(body.uid || '').trim(),
+          uname: String(body.uname || '').trim(),
+          updatedAt: Date.now()
+        };
+        // Keep max 40 subscriptions per bill (prune oldest)
+        const entries = Object.entries(subs).sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0)).slice(0, 40);
+        const trimmed = {};
+        for (const [k, v] of entries) trimmed[k] = v;
+        this.pushSubs = trimmed;
+        await this.state.storage.put('pushSubs', trimmed);
+        return jsonCors({ ok: true, count: entries.length });
+      } catch (e) {
+        return jsonCors({ ok: false, error: String(e && e.message || e) }, 400);
+      }
+    }
+    if (url.pathname.endsWith('/push/unsubscribe') && request.method === 'POST') {
+      try {
+        const body = await request.json();
+        const ep = body && body.endpoint ? String(body.endpoint) : '';
+        if (ep) {
+          const subs = await this.loadPushSubs();
+          if (subs[ep]) {
+            delete subs[ep];
+            this.pushSubs = subs;
+            await this.state.storage.put('pushSubs', subs);
+          }
+        }
+        return jsonCors({ ok: true });
+      } catch (e) {
+        return jsonCors({ ok: false }, 400);
+      }
+    }
     if (request.headers.get('Upgrade') !== 'websocket') {
       if (url.searchParams.get('info') === '1') {
         if (!this.last) {
@@ -742,6 +788,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
+      this.dispatchRoomWebPush('urge_pay', outObj).catch(() => {});
       return;
     }
 
@@ -769,6 +816,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
+      this.dispatchRoomWebPush('urge', d).catch(() => {});
       return;
     }
 
@@ -778,6 +826,9 @@ export class LiveRoom {
         if (s !== ws && isHostPeer(s, d, this.last)) {
           try { s.send(out); } catch (e) {}
         }
+      }
+      if (d.type === 'pay_claim' || d.type === 'urge_finalize') {
+        this.dispatchRoomWebPush(d.type, d).catch(() => {});
       }
       return;
     }
@@ -799,6 +850,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
+      this.dispatchRoomWebPush('pay_confirmed', d).catch(() => {});
       return;
     }
   }
@@ -932,7 +984,7 @@ export class LiveRoom {
     const hostUid = (fields.hostUid && fields.hostUid.v) ? String(fields.hostUid.v) : '';
     const hostName = (fields.customer && fields.customer.v) ? String(fields.customer.v) : 'Đại diện';
     const stateMsg = JSON.stringify({ type: 'state', bill: this.bill, wrap: this.last, from: 'sepay' });
-    const confirmMsg = JSON.stringify({
+    const confirmObj = {
       type: 'pay_confirmed',
       bill: this.bill,
       from: 'sepay',
@@ -946,12 +998,14 @@ export class LiveRoom {
       text: PAY_CONFIRMED_TEXT,
       audio: PAY_CONFIRMED_AUDIO,
       ts: Date.now()
-    });
+    };
+    const confirmMsg = JSON.stringify(confirmObj);
 
     for (const s of this.state.getWebSockets()) {
       try { s.send(stateMsg); } catch (e) {}
       try { s.send(confirmMsg); } catch (e) {}
     }
+    this.dispatchRoomWebPush('pay_confirmed', confirmObj).catch(() => {});
 
     return {
       ok: true,
@@ -961,6 +1015,132 @@ export class LiveRoom {
       amount: transferAmount,
       txId: txKey
     };
+  }
+
+  async loadPushSubs() {
+    if (!this.pushSubs) {
+      try {
+        this.pushSubs = (await this.state.storage.get('pushSubs')) || {};
+      } catch (e) {
+        this.pushSubs = {};
+      }
+    }
+    return this.pushSubs;
+  }
+
+  async dispatchRoomWebPush(eventType, d) {
+    if (!this.env || !this.env.VAPID_PUBLIC_KEY || !this.env.VAPID_PRIVATE_JWK) return;
+    const subsMap = await this.loadPushSubs();
+    const entries = Object.entries(subsMap);
+    if (!entries.length) return;
+
+    const billCode = this.bill || (d && d.bill) || '';
+    const billUrl = 'https://office-order.pages.dev/' + (billCode ? ('?bill=' + encodeURIComponent(billCode)) : '');
+    const hostUid = (d && d.hostUid) || (this.last && this.last.fields && this.last.fields.hostUid && this.last.fields.hostUid.v) || '';
+    const hostName = (d && d.hostName) || (this.last && this.last.fields && this.last.fields.customer && this.last.fields.customer.v) || '';
+    const hostNameLow = String(hostName || '').trim().toLowerCase();
+
+    function isSubHost(rec) {
+      const suid = String(rec.uid || '').trim();
+      const sname = String(rec.uname || '').trim().toLowerCase();
+      if (hostUid && suid && suid === String(hostUid).trim()) return true;
+      if (hostNameLow && sname && sname === hostNameLow) return true;
+      return false;
+    }
+
+    const fmtVnd = (n) => {
+      const v = Math.round(Number(n) || 0);
+      return v > 0 ? (v.toLocaleString('vi-VN') + 'đ') : '';
+    };
+
+    let title = 'Office Order · #' + billCode;
+    let body = 'Có cập nhật mới trong bill của bạn.';
+    let tag = 'uu-' + eventType + '-' + billCode;
+
+    if (eventType === 'urge') {
+      const who = (d && d.uname) || 'Đồng nghiệp';
+      title = '📣 ' + who + ' hối chốt đơn! (#' + billCode + ')';
+      body = (d && d.urgeText) || 'Nhanh tay đặt món để đại diện chốt đơn nhé!';
+      tag = 'uu-urge-' + ((d && d.urgeId) || Date.now());
+    } else if (eventType === 'urge_finalize') {
+      const who = (d && d.uname) || 'Thành viên';
+      const amt = fmtVnd(d && d.grandTotal);
+      title = '⏰ ' + who + ' hối chốt đơn tính tiền! (#' + billCode + ')';
+      body = 'Đơn hiện có ' + ((d && d.totalCups) || '') + ' ' + ((d && d.unit) || 'món') + (amt ? (' · Tổng ' + amt) : '') + ' — Bấm Chốt & Lưu Sheet nhé!';
+      tag = 'uu-ufin-' + ((d && d.urgeFinId) || Date.now());
+    } else if (eventType === 'urge_pay') {
+      const who = (d && d.uname) || hostName || 'Đại diện';
+      title = '💸 ' + who + ' nhắc thanh toán! (#' + billCode + ')';
+      body = (d && (d.urgePayText || d.urgeText)) || 'Vui lòng mở bill và quét mã QR thanh toán nhé!';
+      tag = 'uu-urgepay-' + ((d && (d.urgePayId || d.urgeId)) || Date.now());
+    } else if (eventType === 'pay_claim') {
+      const payer = (d && (d.uname || d.name)) || 'Thành viên';
+      const donor = d && d.donatedBy ? String(d.donatedBy).trim() : '';
+      const amt = fmtVnd(d && d.amount);
+      title = donor
+        ? ('🎁 ' + donor + ' báo CK hộ ' + payer + (amt ? (' ' + amt) : '') + ' · #' + billCode)
+        : ('🔔 ' + payer + ' báo đã CK' + (amt ? (' ' + amt) : '') + ' · #' + billCode);
+      body = 'Mở app ngân hàng kiểm tra tiền vào rồi bấm xác nhận trên bill.';
+      tag = 'uu-claim-' + ((d && d.claimId) || Date.now());
+    } else if (eventType === 'pay_confirmed') {
+      const payer = (d && d.payerName) || 'Thành viên';
+      const amt = fmtVnd(d && d.amount);
+      title = (d && d.viaSePay ? '⚡ SePay tự động xác nhận ' : '💸 Đã xác nhận ') + payer + (amt ? (' (' + amt + ')') : '') + ' · #' + billCode;
+      body = (d && d.text) || PAY_CONFIRMED_TEXT;
+      tag = 'uu-pconf-' + billCode + '-' + Math.floor(Date.now() / 5000);
+    }
+
+    const targets = entries.filter(([, rec]) => {
+      if (!rec || !rec.sub || !rec.sub.endpoint) return false;
+      const suid = String(rec.uid || '').trim();
+      const sname = String(rec.uname || '').trim().toLowerCase();
+      if (eventType === 'urge') {
+        if (d && d.uid && suid && suid === String(d.uid).trim()) return false;
+        return true;
+      }
+      if (eventType === 'urge_finalize' || eventType === 'pay_claim') {
+        return isSubHost(rec);
+      }
+      if (eventType === 'urge_pay') {
+        if (isSubHost(rec)) return false;
+        const tUids = Array.isArray(d && d.targetUids) ? d.targetUids : null;
+        const tNames = Array.isArray(d && d.targetNames) ? d.targetNames : null;
+        if (tUids || tNames) {
+          const hitUid = !!(suid && tUids && tUids.includes(suid));
+          const hitName = !!(sname && tNames && tNames.includes(sname));
+          return hitUid || hitName;
+        }
+        return true;
+      }
+      if (eventType === 'pay_confirmed') {
+        if (d && !d.viaSePay && isSubHost(rec)) return false;
+        return true;
+      }
+      return false;
+    });
+
+    if (!targets.length) return;
+    const vapidConfig = {
+      publicKey: this.env.VAPID_PUBLIC_KEY,
+      privateJwk: this.env.VAPID_PRIVATE_JWK,
+      subject: this.env.VAPID_SUBJECT || 'mailto:admin@office-order.pages.dev'
+    };
+    const payloadObj = { title, body, url: billUrl, bill: billCode, tag, eventType };
+
+    let mutated = false;
+    await Promise.allSettled(targets.map(async ([ep, rec]) => {
+      try {
+        const r = await sendWebPush(rec.sub, payloadObj, vapidConfig);
+        if (r && r.gone) {
+          delete subsMap[ep];
+          mutated = true;
+        }
+      } catch (e) {}
+    }));
+    if (mutated) {
+      this.pushSubs = subsMap;
+      try { await this.state.storage.put('pushSubs', subsMap); } catch (e) {}
+    }
   }
 
   async webSocketClose(ws) {
@@ -1221,6 +1401,14 @@ export default {
     const imgMatch = u.pathname.match(/^\/img\/([^/]+)$/);
     if (imgMatch && request.method === 'GET') {
       return handleImageGet(env, decodeURIComponent(imgMatch[1]));
+    }
+    if (u.pathname === '/api/push/vapid-public-key' && request.method === 'GET') {
+      return jsonCors({ ok: true, publicKey: env.VAPID_PUBLIC_KEY || '' });
+    }
+    const pushMatch = u.pathname.match(/^\/bill\/([^/]+)\/push\/(subscribe|unsubscribe)$/);
+    if (pushMatch) {
+      const id = env.LIVE_ROOM.idFromName(decodeURIComponent(pushMatch[1]));
+      return env.LIVE_ROOM.get(id).fetch(request);
     }
     if (u.pathname === '/bills') {
       const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');

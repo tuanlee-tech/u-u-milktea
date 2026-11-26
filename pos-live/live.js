@@ -3023,6 +3023,94 @@
     }
   }
 
+  var cachedVapidPublicKey = '';
+  var lastSyncedPushKey = '';
+
+  function isChromeExtensionActive() {
+    try {
+      return !!(document.documentElement && document.documentElement.dataset && document.documentElement.dataset.uuExtActive === '1');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = window.atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  function fetchVapidPublicKey() {
+    if (cachedVapidPublicKey) return Promise.resolve(cachedVapidPublicKey);
+    return fetch(getWorkerHttpOrigin() + '/api/push/vapid-public-key')
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.ok && j.publicKey) {
+          cachedVapidPublicKey = j.publicKey;
+          return cachedVapidPublicKey;
+        }
+        return '';
+      })
+      .catch(function () { return ''; });
+  }
+
+  function syncWebPushSubscription(forceSync) {
+    if (!orderCode || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (getNotificationPermission() !== 'granted') return;
+
+    var extActive = isChromeExtensionActive();
+    var syncSig = orderCode + '|' + (myUid || '') + '|' + (myUname || '') + '|' + (extActive ? 'ext' : 'web');
+    if (!forceSync && lastSyncedPushKey === syncSig) return;
+    lastSyncedPushKey = syncSig;
+
+    navigator.serviceWorker.ready.then(function (reg) {
+      if (!reg || !reg.pushManager) return;
+      return reg.pushManager.getSubscription().then(function (existingSub) {
+        if (extActive) {
+          // Đã cài Chrome Extension -> hủy Web Push cho bill này để Extension tự xử lý notify + loa thoại (chống trùng)
+          if (existingSub && existingSub.endpoint) {
+            fetch(getWorkerHttpOrigin() + '/bill/' + encodeURIComponent(orderCode) + '/push/unsubscribe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ endpoint: existingSub.endpoint })
+            }).catch(function () {});
+          }
+          return;
+        }
+        var subPromise = existingSub
+          ? Promise.resolve(existingSub)
+          : fetchVapidPublicKey().then(function (pubKey) {
+              if (!pubKey) return null;
+              return reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(pubKey)
+              });
+            });
+        return subPromise.then(function (sub) {
+          if (!sub) return;
+          return fetch(getWorkerHttpOrigin() + '/bill/' + encodeURIComponent(orderCode) + '/push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              subscription: sub.toJSON ? sub.toJSON() : sub,
+              uid: myUid || '',
+              uname: myUname || ''
+            })
+          });
+        });
+      });
+    }).catch(function () {});
+  }
+
+  window.addEventListener('uu-ext-ready', function () {
+    syncWebPushSubscription(true);
+  });
+
   function requestBrowserNotificationPermission(isInteractiveClick) {
     var perm = getNotificationPermission();
     if (perm === 'unsupported') {
@@ -3036,14 +3124,15 @@
     }
     if (perm === 'granted') {
       updateNotificationButtonUI();
+      syncWebPushSubscription(true);
       if (isInteractiveClick) {
         sendSystemNotification({
           title: '✓ Thông báo Office Order đang hoạt động!',
-          body: 'Khi có hối đơn, báo chuyển khoản hoặc xác nhận tiền, bạn sẽ nhận được ngay cả khi thu nhỏ app.',
+          body: 'Kể cả khi tắt tab, bạn vẫn nhận được Web Push khi có hối đơn, báo chuyển khoản hoặc xác nhận tiền.',
           tag: 'uu-test-' + Date.now(),
           force: true
         });
-        showToast('🔔 Đã gửi thông báo thử! Thu nhỏ / chuyển app vẫn nhận bình thường.');
+        showToast('🔔 Đã bật Web Push & gửi thông báo thử! Tắt tab vẫn nhận bình thường.');
       }
       return;
     }
@@ -3051,13 +3140,14 @@
     function onPermResult(res) {
       updateNotificationButtonUI();
       if (res === 'granted') {
+        syncWebPushSubscription(true);
         sendSystemNotification({
           title: '✓ Đã bật thông báo Ú Ụ / Office Order!',
-          body: 'Bạn sẽ nhận thông báo khi nhóm hối đơn hoặc xác nhận thanh toán.',
+          body: 'Bạn sẽ nhận Web Push kể cả khi tắt tab mỗi khi nhóm hối đơn hoặc xác nhận thanh toán.',
           tag: 'uu-welcome-' + Date.now(),
           force: true
         });
-        if (isInteractiveClick) showToast('🔔 Đã bật thông báo nền thành công!');
+        if (isInteractiveClick) showToast('🔔 Đã bật Web Push thành công! Tắt tab vẫn nhận được thông báo.');
       } else if (isInteractiveClick && res === 'denied') {
         showToast('Bạn đã tắt quyền thông báo cho trang này.');
       }
@@ -4677,6 +4767,9 @@
   }
 
   function setupLive() {
+    if (typeof syncWebPushSubscription === 'function') {
+      setTimeout(function () { syncWebPushSubscription(false); }, 600);
+    }
     if ('BroadcastChannel' in window) {
       try {
         bc = new BroadcastChannel(BC_ROOM);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'office-order-pwa-v1';
+const CACHE_NAME = 'office-order-pwa-v2';
 const CORE_SHELL = [
   './',
   './index.html',
@@ -112,6 +112,41 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => cached);
       return cached || networkFetch;
+    })
+  );
+});
+
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'Office Order', body: event.data ? event.data.text() : 'Có thông báo mới!' };
+  }
+  const bill = data.bill || '';
+  const title = data.title || ('Office Order' + (bill ? (' · #' + bill) : ''));
+  const body = data.body || 'Mở bill để xem chi tiết.';
+  const targetUrl = data.url || (bill ? ('./?bill=' + encodeURIComponent(bill)) : './');
+  const tag = data.tag || ('uu-push-' + (bill || 'default'));
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Nếu tab của đúng bill đang mở và đang focus thì trang web tự phát loa & banner -> bỏ qua để tránh trùng
+      for (let i = 0; i < clientList.length; i++) {
+        const c = clientList[i];
+        const matchesBill = !bill || (c.url && c.url.indexOf(bill) !== -1);
+        if (matchesBill && (c.focused || c.visibilityState === 'visible')) {
+          return;
+        }
+      }
+      return self.registration.showNotification(title, {
+        body,
+        icon: './assets/icons/icon-192.png',
+        badge: './assets/icons/icon-192.png',
+        tag,
+        renotify: true,
+        data: { bill, url: targetUrl }
+      });
     })
   );
 });

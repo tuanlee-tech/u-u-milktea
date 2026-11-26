@@ -1,0 +1,90 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  width: 340px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #F6F4EE;
+  color: #162B22;
+  font-size: 13px;
+}
+.app { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+
+.head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: #FFFFFF; border: 1px solid #E2E8E4; border-radius: 14px; padding: 10px 12px;
+}
+.brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.brand-logo { width: 32px; height: 32px; border-radius: 9px; object-fit: cover; flex-shrink: 0; }
+.brand-title { font-weight: 800; font-size: 14px; color: #0A4D3C; line-height: 1.2; }
+.brand-sub { font-size: 11.5px; color: #64748B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 165px; }
+.live-pill {
+  font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+  background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; white-space: nowrap;
+}
+.live-pill.is-muted { background: #F1F5F9; color: #64748B; border-color: #CBD5E1; }
+
+.controls {
+  background: #FFFFFF; border: 1px solid #E2E8E4; border-radius: 14px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between; cursor: pointer;
+  font-weight: 700; font-size: 12.5px; color: #1E293B;
+}
+.toggle-row input { width: 17px; height: 17px; accent-color: #0A7259; cursor: pointer; }
+
+.mute-bar {
+  display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed #E2E8E4;
+}
+.mute-lbl { font-size: 11.5px; color: #475569; font-weight: 600; }
+.mute-lbl.is-muted { color: #C2410C; }
+.mute-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn-chip {
+  flex: 1; padding: 5px 8px; border-radius: 999px; border: 1px solid #D1DDD6;
+  background: #F8FAF9; color: #334155; font: inherit; font-size: 11.5px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-chip:hover { background: #E2ECE6; border-color: #0A7259; color: #0A4D3C; }
+.btn-chip.is-unmute { background: #0A7259; color: #FFFFFF; border-color: #0A7259; }
+.btn-chip[hidden] { display: none; }
+
+.bills-sec {
+  background: #FFFFFF; border: 1px solid #E2E8E4; border-radius: 14px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sec-head { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; font-weight: 800; color: #64748B; text-transform: uppercase; letter-spacing: 0.03em; }
+.sec-cnt { background: #ECFDF5; color: #0A7259; padding: 1px 7px; border-radius: 999px; font-size: 11px; }
+
+.bills-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.bill-empty {
+  text-align: center; padding: 16px 8px; color: #64748B; font-size: 12px; line-height: 1.45;
+  background: #FAF8F4; border-radius: 10px; border: 1px dashed #CBD5E1;
+}
+.bill-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-radius: 10px; background: #FAF8F4; border: 1px solid #E7E3DA;
+  cursor: pointer; transition: all 0.15s;
+}
+.bill-card:hover { background: #ECFDF5; border-color: #6EE7B7; }
+.bill-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bill-top { display: flex; align-items: center; gap: 5px; }
+.bill-store { font-weight: 800; font-size: 12.5px; color: #0F172A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bill-code { font-size: 10.5px; font-weight: 700; color: #0A7259; background: #D1FAE5; padding: 1px 5px; border-radius: 5px; flex-shrink: 0; }
+.bill-meta { font-size: 11px; color: #64748B; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.bill-unpaid { color: #BE185D; font-weight: 800; }
+.bill-ws-dot { width: 7px; height: 7px; border-radius: 50%; background: #10B981; display: inline-block; flex-shrink: 0; }
+.bill-ws-dot.off { background: #CBD5E1; }
+.btn-rm-bill {
+  width: 22px; height: 22px; border-radius: 50%; border: none; background: transparent;
+  color: #94A3B8; font-size: 15px; line-height: 1; cursor: pointer; flex-shrink: 0;
+}
+.btn-rm-bill:hover { background: #FEE2E2; color: #DC2626; }
+
+.foot { display: flex; gap: 8px; }
+.btn-foot {
+  flex: 1; padding: 8px 10px; border-radius: 10px; font: inherit; font-size: 12px; font-weight: 800;
+  cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
+}
+.btn-foot.ghost { background: #FFFFFF; color: #334155; border-color: #D1DDD6; }
+.btn-foot.ghost:hover { background: #F1F5F9; }
+.btn-foot.primary { background: #0A7259; color: #FFFFFF; }
+.btn-foot.primary:hover { background: #085C47; }

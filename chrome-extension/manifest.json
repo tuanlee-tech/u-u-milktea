@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Office Order — Thông Báo & Loa Thoại Nền",
+  "short_name": "Office Order",
+  "version": "1.0.0",
+  "description": "Nhận thông báo và phát loa thoại đặt đơn / chốt đơn / chuyển khoản từ Office Order ngay cả khi đã tắt tab web.",
+  "icons": {
+    "48": "icons/icon-192.png",
+    "128": "icons/icon-192.png",
+    "192": "icons/icon-192.png"
+  },
+  "action": {
+    "default_title": "Office Order — Bill đang theo dõi",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon-192.png",
+      "128": "icons/icon-192.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "notifications",
+    "offscreen",
+    "alarms",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://office-order.pages.dev/*",
+    "https://uu-pos-live.tuanlee-tech.workers.dev/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://office-order.pages.dev/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

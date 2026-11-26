@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Office Order</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app">
+    <header class="head">
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="Logo" class="brand-logo">
+        <div>
+          <div class="brand-title">Office Order</div>
+          <div class="brand-sub" id="userLabel">Đang đồng bộ...</div>
+        </div>
+      </div>
+      <span class="live-pill" id="livePill">● Sẵn sàng</span>
+    </header>
+
+    <section class="controls">
+      <label class="toggle-row">
+        <span>🔊 Loa thoại (.mp3) khi tắt tab</span>
+        <input type="checkbox" id="chkAudio" checked>
+      </label>
+
+      <div class="mute-bar">
+        <span class="mute-lbl" id="muteStatus">Thông báo đang BẬT</span>
+        <div class="mute-btns">
+          <button type="button" class="btn-chip" id="btnMute1h">Im lặng 1h</button>
+          <button type="button" class="btn-chip" id="btnMuteDay">Hết hôm nay</button>
+          <button type="button" class="btn-chip is-unmute" id="btnUnmute" hidden>Bật lại</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="bills-sec">
+      <div class="sec-head">
+        <span>Bill đang theo dõi trong ngày</span>
+        <span class="sec-cnt" id="billCount">0</span>
+      </div>
+      <div class="bills-list" id="billsList"></div>
+    </section>
+
+    <footer class="foot">
+      <button type="button" class="btn-foot ghost" id="btnTestAlert">🔔 Thử loa &amp; TB</button>
+      <button type="button" class="btn-foot primary" id="btnOpenWeb">Mở Office Order →</button>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
