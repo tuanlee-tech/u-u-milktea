@@ -251,7 +251,7 @@ async function handleSocketMessage(billCode, rawData) {
   const myUid = String(stateCache.user.uid || '').trim();
   const myNameLow = String(stateCache.user.uname || '').trim().toLowerCase();
 
-  if (d.type === 'urge') {
+  if (d.type === 'urge' || (d.type === 'presence' && d.urge)) {
     if (isEventSeen(d.urgeId)) return;
     if (myUid && d.uid && String(d.uid) === myUid) return;
     const voiceId = String(d.urgeVoiceId || '1');
@@ -274,7 +274,7 @@ async function handleSocketMessage(billCode, rawData) {
     return;
   }
 
-  if (d.type === 'urge_pay') {
+  if (d.type === 'urge_pay' || (d.type === 'presence' && d.urgePay)) {
     const id = d.urgePayId || d.urgeId;
     if (isEventSeen(id)) return;
     if (Array.isArray(d.targetUids) || Array.isArray(d.targetNames)) {

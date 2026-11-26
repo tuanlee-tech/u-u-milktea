@@ -685,6 +685,7 @@ export class LiveRoom {
         };
       }
       let outObj = d;
+      let urgeAllowed = false;
       if (d.urge) {
         const now = Date.now();
         if (!this.lastUrgeAt) {
@@ -704,6 +705,7 @@ export class LiveRoom {
           delete outObj.urgeAudio;
         } else {
           this.lastUrgeAt = now;
+          urgeAllowed = true;
           try { await this.state.storage.put('lastUrgeAt', now); } catch (e) {}
           outObj = Object.assign({}, d, { urgeCooldownMs: URGE_COOLDOWN_MS });
         }
@@ -730,6 +732,12 @@ export class LiveRoom {
             : basePresenceStr;
           try { s.send(payload); } catch (e) {}
         }
+      }
+      if (urgeAllowed) {
+        await this.dispatchRoomWebPush('urge', outObj).catch(() => {});
+      }
+      if (payUrgeAllowed) {
+        await this.dispatchRoomWebPush('urge_pay', outObj).catch(() => {});
       }
       return;
     }
@@ -788,7 +796,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
-      this.dispatchRoomWebPush('urge_pay', outObj).catch(() => {});
+      await this.dispatchRoomWebPush('urge_pay', outObj).catch(() => {});
       return;
     }
 
@@ -816,7 +824,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
-      this.dispatchRoomWebPush('urge', d).catch(() => {});
+      await this.dispatchRoomWebPush('urge', d).catch(() => {});
       return;
     }
 
@@ -828,7 +836,7 @@ export class LiveRoom {
         }
       }
       if (d.type === 'pay_claim' || d.type === 'urge_finalize') {
-        this.dispatchRoomWebPush(d.type, d).catch(() => {});
+        await this.dispatchRoomWebPush(d.type, d).catch(() => {});
       }
       return;
     }
@@ -850,7 +858,7 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
-      this.dispatchRoomWebPush('pay_confirmed', d).catch(() => {});
+      await this.dispatchRoomWebPush('pay_confirmed', d).catch(() => {});
       return;
     }
   }
@@ -1005,7 +1013,7 @@ export class LiveRoom {
       try { s.send(stateMsg); } catch (e) {}
       try { s.send(confirmMsg); } catch (e) {}
     }
-    this.dispatchRoomWebPush('pay_confirmed', confirmObj).catch(() => {});
+    await this.dispatchRoomWebPush('pay_confirmed', confirmObj).catch(() => {});
 
     return {
       ok: true,

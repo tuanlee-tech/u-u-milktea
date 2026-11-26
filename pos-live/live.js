@@ -8756,6 +8756,7 @@
         localStorage.setItem('uu_pos_ucolor', myUcolor);
       } catch (e) {}
       updateMyProfileUI();
+      if (typeof syncWebPushSubscription === 'function') syncWebPushSubscription(false);
 
       // Nếu bản thân đang được chọn làm người đại diện dưới tên cũ thì cập nhật theo tên mới
       if ($('customer')) {
@@ -9386,6 +9387,7 @@
           sessionStorage.setItem(tabSessionId + '_uname', myUname);
         } catch (e) {}
         updateMyProfileUI();
+        if (typeof syncWebPushSubscription === 'function') syncWebPushSubscription(false);
       }
       var noteVal = ($('custItemNote') ? $('custItemNote').value.trim() : '');
 
