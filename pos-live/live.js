@@ -9103,10 +9103,46 @@
       .sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
   }
 
+  var HIDDEN_BILLS_KEY = 'uu_hidden_bills_v1';
+  var remoteHiddenBills = {};
+  var lastSearchSubmittedBills = [];
+
+  function getHiddenBillsSet() {
+    var set = {};
+    Object.keys(remoteHiddenBills).forEach(function (k) { if (remoteHiddenBills[k]) set[k] = true; });
+    try {
+      var arr = JSON.parse(localStorage.getItem(HIDDEN_BILLS_KEY) || '[]');
+      if (Array.isArray(arr)) {
+        arr.forEach(function (c) {
+          var u = String(c || '').trim().toUpperCase();
+          if (u) set[u] = true;
+        });
+      }
+    } catch (e) {}
+    return set;
+  }
+
+  function addHiddenBillsLocal(codes) {
+    if (!Array.isArray(codes) || !codes.length) return;
+    var map = {};
+    try {
+      var prev = JSON.parse(localStorage.getItem(HIDDEN_BILLS_KEY) || '[]');
+      if (Array.isArray(prev)) prev.forEach(function (c) { var u = String(c || '').trim().toUpperCase(); if (u) map[u] = true; });
+    } catch (e) {}
+    codes.forEach(function (c) {
+      var u = String(c || '').trim().toUpperCase();
+      if (u) { map[u] = true; remoteHiddenBills[u] = true; }
+    });
+    try { localStorage.setItem(HIDDEN_BILLS_KEY, JSON.stringify(Object.keys(map).slice(-300))); } catch (e) {}
+  }
+
   function renderBillSearchResults(results, rawQuery, searchingRemote) {
     var wrap = $('billSearchResults');
     var stEl = $('billSearchStatus');
     if (!wrap) return;
+    lastSearchSubmittedBills = (results || [])
+      .filter(function (r) { return r && r.submitted && r.ma_don; })
+      .map(function (r) { return String(r.ma_don).trim(); });
 
     var qClean = String(rawQuery || '').trim();
     if (stEl) {
@@ -9231,7 +9267,16 @@
     }
 
     function currentFilteredList() {
+      var hiddenSet = getHiddenBillsSet();
       var arr = Object.keys(mergedMap).map(function (k) { return mergedMap[k]; });
+      arr = arr.filter(function (it) {
+        var codeUp = String(it.ma_don || '').trim().toUpperCase();
+        // Hide dismissed finalized bills unless user explicitly typed that exact bill code
+        if (it.submitted && hiddenSet[codeUp] && qLower !== codeUp.toLowerCase()) {
+          return false;
+        }
+        return true;
+      });
       if (qLower) {
         arr = arr.filter(function (it) {
           return String(it.ma_don || '').toLowerCase().indexOf(qLower) !== -1 ||
@@ -9258,6 +9303,12 @@
         fetch(origin + '/bills?q=' + encodeURIComponent(q))
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (j) {
+            if (j && j.ok && Array.isArray(j.hiddenBills)) {
+              j.hiddenBills.forEach(function (hc) {
+                var u = String(hc || '').trim().toUpperCase();
+                if (u) remoteHiddenBills[u] = true;
+              });
+            }
             if (j && j.ok && Array.isArray(j.bills)) {
               j.bills.forEach(function (b) {
                 mergeEntry({
@@ -9408,6 +9459,8 @@
           showToast('⚠ ' + (j.error || 'Chỉ được xóa bill đã chốt!'));
           return;
         }
+        addHiddenBillsLocal([target]);
+        if (j && Array.isArray(j.hiddenBills)) addHiddenBillsLocal(j.hiddenBills);
         try {
           var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
             .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
@@ -9434,22 +9487,31 @@
     var btn = $('btnClearBillHistory');
     var prevTxt = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang dọn...'; }
+    var extraCodes = lastSearchSubmittedBills.slice();
     try {
-      var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
-        .filter(function (x) { return x && !x.submitted; });
-      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recent));
+      var recentAll = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]');
+      recentAll.forEach(function (x) {
+        if (x && x.submitted && x.ma_don) extraCodes.push(String(x.ma_don).trim());
+      });
+      var recentKept = recentAll.filter(function (x) { return x && !x.submitted; });
+      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recentKept));
     } catch (e) {}
     try {
-      // pos_hist only stores finalized bills saved to sheet
+      var histAll = JSON.parse(localStorage.getItem('pos_hist') || '[]');
+      histAll.forEach(function (x) {
+        if (x && x.ma_don) extraCodes.push(String(x.ma_don).trim());
+      });
       localStorage.removeItem('pos_hist');
     } catch (e) {}
+    if (extraCodes.length) addHiddenBillsLocal(extraCodes);
     fetch(getWorkerHttpOrigin() + '/bills/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ all: true })
+      body: JSON.stringify({ all: true, extraBills: extraCodes })
     })
       .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
       .then(function (j) {
+        if (j && Array.isArray(j.hiddenBills)) addHiddenBillsLocal(j.hiddenBills);
         var del = (j && typeof j.deleted === 'number') ? j.deleted : 0;
         var kept = (j && typeof j.keptActive === 'number') ? j.keptActive : 0;
         if (del > 0 && kept > 0) {

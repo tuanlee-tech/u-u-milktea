@@ -388,9 +388,16 @@ export class LiveRoom {
         if (!this.billIndex) {
           this.billIndex = (await this.state.storage.get('billIndex')) || {};
         }
+        if (!this.hiddenBills) {
+          this.hiddenBills = (await this.state.storage.get('hiddenBills')) || {};
+        }
         if (entry && entry.bill) {
           const code = String(entry.bill).trim();
+          const upper = code.toUpperCase();
           if (entry.remove) {
+            delete this.billIndex[code];
+          } else if (entry.submitted && this.hiddenBills[upper]) {
+            // Already dismissed by user — do not re-surface submitted bill in index
             delete this.billIndex[code];
           } else {
             this.billIndex[code] = entry;
@@ -440,38 +447,63 @@ export class LiveRoom {
         if (!this.billIndex) {
           this.billIndex = (await this.state.storage.get('billIndex')) || {};
         }
+        if (!this.hiddenBills) {
+          this.hiddenBills = (await this.state.storage.get('hiddenBills')) || {};
+        }
+        const now = Date.now();
+        const hideCutoff = now - 30 * 86400000;
+        for (const hk of Object.keys(this.hiddenBills)) {
+          if ((this.hiddenBills[hk] || 0) < hideCutoff) delete this.hiddenBills[hk];
+        }
         if (body && body.bill && !body.all) {
           const rawCode = String(body.bill).trim();
+          const upper = rawCode.toUpperCase();
           let matchedKey = this.billIndex[rawCode] ? rawCode : null;
           if (!matchedKey) {
-            const upper = rawCode.toUpperCase();
             matchedKey = Object.keys(this.billIndex).find(k => String(k).trim().toUpperCase() === upper) || null;
           }
-          if (!matchedKey) {
-            return jsonCors({ ok: true, deleted: 0, remaining: Object.keys(this.billIndex).length });
+          if (matchedKey) {
+            const entry = this.billIndex[matchedKey];
+            if (!entry || !entry.submitted) {
+              return jsonCors({
+                ok: false,
+                error: 'Chỉ được xóa bill đã chốt! Bill đang đặt sẽ được giữ nguyên.',
+                remaining: Object.keys(this.billIndex).length
+              }, 403);
+            }
+            delete this.billIndex[matchedKey];
+            await this.state.storage.put('billIndex', this.billIndex);
           }
-          const entry = this.billIndex[matchedKey];
-          if (!entry || !entry.submitted) {
-            return jsonCors({
-              ok: false,
-              error: 'Chỉ được xóa bill đã chốt! Bill đang đặt sẽ được giữ nguyên.',
-              remaining: Object.keys(this.billIndex).length
-            }, 403);
-          }
-          delete this.billIndex[matchedKey];
-          await this.state.storage.put('billIndex', this.billIndex);
-          return jsonCors({ ok: true, deleted: 1, remaining: Object.keys(this.billIndex).length });
+          this.hiddenBills[upper] = now;
+          await this.state.storage.put('hiddenBills', this.hiddenBills);
+          return jsonCors({
+            ok: true,
+            deleted: 1,
+            remaining: Object.keys(this.billIndex).length,
+            hiddenBills: Object.keys(this.hiddenBills)
+          });
         }
         // Only clear submitted (finalized) bills; preserve all active/unsubmitted bills
         const nextMap = {};
+        const activeUpperSet = new Set();
         let deletedCount = 0;
         let keptActive = 0;
         for (const [k, it] of Object.entries(this.billIndex)) {
           if (it && it.submitted) {
             deletedCount++;
+            this.hiddenBills[String(it.bill || k).trim().toUpperCase()] = now;
           } else if (it && it.bill) {
             nextMap[k] = it;
+            activeUpperSet.add(String(it.bill).trim().toUpperCase());
             keptActive++;
+          }
+        }
+        if (Array.isArray(body && body.extraBills)) {
+          for (const raw of body.extraBills) {
+            const u = String(raw || '').trim().toUpperCase();
+            if (!u || activeUpperSet.has(u)) continue;
+            if (!this.hiddenBills[u]) deletedCount++;
+            this.hiddenBills[u] = now;
           }
         }
         this.billIndex = nextMap;
@@ -480,7 +512,14 @@ export class LiveRoom {
         } else {
           await this.state.storage.put('billIndex', nextMap);
         }
-        return jsonCors({ ok: true, deleted: deletedCount, keptActive, remaining: keptActive });
+        await this.state.storage.put('hiddenBills', this.hiddenBills);
+        return jsonCors({
+          ok: true,
+          deleted: deletedCount,
+          keptActive,
+          remaining: keptActive,
+          hiddenBills: Object.keys(this.hiddenBills)
+        });
       } catch (e) {
         return jsonCors({ ok: false, error: String(e && e.message || e) }, 500);
       }
@@ -490,10 +529,17 @@ export class LiveRoom {
         if (!this.billIndex) {
           this.billIndex = (await this.state.storage.get('billIndex')) || {};
         }
+        if (!this.hiddenBills) {
+          this.hiddenBills = (await this.state.storage.get('hiddenBills')) || {};
+        }
         const rawQ = (url.searchParams.get('q') || '').trim().toLowerCase();
         const cutoff = Date.now() - 14 * 86400000;
+        const hideCutoff = Date.now() - 30 * 86400000;
+        const hiddenKeys = Object.keys(this.hiddenBills).filter(k => (this.hiddenBills[k] || 0) >= hideCutoff);
+        const hiddenSet = new Set(hiddenKeys);
         let list = Object.values(this.billIndex)
-          .filter(it => it && it.bill && (it.updatedAt || 0) > cutoff && (it.itemCount > 0 || it.submitted || it.hostName));
+          .filter(it => it && it.bill && (it.updatedAt || 0) > cutoff && (it.itemCount > 0 || it.submitted || it.hostName))
+          .filter(it => !(it.submitted && hiddenSet.has(String(it.bill).trim().toUpperCase())));
         if (rawQ) {
           list = list.filter(it =>
             String(it.bill || '').toLowerCase().includes(rawQ) ||
@@ -502,9 +548,9 @@ export class LiveRoom {
           );
         }
         list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-        return jsonCors({ ok: true, bills: list.slice(0, 25) });
+        return jsonCors({ ok: true, bills: list.slice(0, 25), hiddenBills: hiddenKeys });
       } catch (e) {
-        return jsonCors({ ok: true, bills: [] });
+        return jsonCors({ ok: true, bills: [], hiddenBills: [] });
       }
     }
     if (url.pathname.endsWith('/push/subscribe') && request.method === 'POST') {
