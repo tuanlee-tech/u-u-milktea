@@ -5787,6 +5787,50 @@ body {
   background: #3730A3;
   border-color: #3730A3;
 }
+.bill-search-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.btn-clear-bill-hist {
+  color: #DC2626;
+  border-color: #FECACA;
+  background: #FEF2F2;
+  font-size: 12px;
+}
+.btn-clear-bill-hist:hover {
+  background: #FEE2E2;
+  border-color: #F87171;
+  color: #B91C1C;
+}
+.bill-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-del-bill-item {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #E2E8F0;
+  background: #FFFFFF;
+  color: #94A3B8;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s;
+}
+.btn-del-bill-item:hover {
+  background: #FEE2E2;
+  border-color: #FCA5A5;
+  color: #DC2626;
+}
 @media (max-width: 600px) {
   .order-steps-bar {
     gap: 3px;

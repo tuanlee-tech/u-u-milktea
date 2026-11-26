@@ -433,6 +433,28 @@ export class LiveRoom {
         return jsonCors({ ok: false, matched: false, error: String(e && e.message || e) }, 500);
       }
     }
+    if ((url.pathname === '/bills/clear' && request.method === 'POST') || (url.pathname === '/bills' && request.method === 'DELETE')) {
+      try {
+        let body = {};
+        try { body = await request.json(); } catch (e) {}
+        if (!this.billIndex) {
+          this.billIndex = (await this.state.storage.get('billIndex')) || {};
+        }
+        if (body && body.bill && !body.all) {
+          const code = String(body.bill).trim();
+          const existed = !!this.billIndex[code];
+          delete this.billIndex[code];
+          await this.state.storage.put('billIndex', this.billIndex);
+          return jsonCors({ ok: true, deleted: existed ? 1 : 0, remaining: Object.keys(this.billIndex).length });
+        }
+        const prevCount = Object.keys(this.billIndex).length;
+        this.billIndex = {};
+        await this.state.storage.delete('billIndex');
+        return jsonCors({ ok: true, deleted: prevCount, remaining: 0 });
+      } catch (e) {
+        return jsonCors({ ok: false, error: String(e && e.message || e) }, 500);
+      }
+    }
     if (url.pathname === '/bills' && request.method === 'GET') {
       try {
         if (!this.billIndex) {
@@ -1467,7 +1489,7 @@ export default {
       const id = env.LIVE_ROOM.idFromName(decodeURIComponent(pushMatch[1]));
       return env.LIVE_ROOM.get(id).fetch(request);
     }
-    if (u.pathname === '/bills') {
+    if (u.pathname === '/bills' || u.pathname === '/bills/clear') {
       const idxId = env.LIVE_ROOM.idFromName('__BILL_INDEX__');
       return env.LIVE_ROOM.get(idxId).fetch(request);
     }

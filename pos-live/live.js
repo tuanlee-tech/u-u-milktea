@@ -9154,15 +9154,32 @@
         '</div>' +
         '<div class="bill-result-meta">' + (metaParts.length ? esc(metaParts.join(' · ')) : 'Phòng bill sẵn sàng') + '</div>';
 
+      var actsDiv = document.createElement('div');
+      actsDiv.className = 'bill-result-actions';
+
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'btn-open-bill';
       btn.textContent = isCur ? 'Đang mở' : 'Mở bill';
       btn.disabled = isCur;
       btn.onclick = function () { switchToBill(item.ma_don); };
+      actsDiv.appendChild(btn);
+
+      if (!isCur) {
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn-del-bill-item';
+        delBtn.title = 'Xóa bill #' + item.ma_don + ' khỏi danh sách tìm kiếm';
+        delBtn.textContent = '×';
+        delBtn.onclick = function (e) {
+          e.stopPropagation();
+          removeBillFromSearchHistory(item.ma_don);
+        };
+        actsDiv.appendChild(delBtn);
+      }
 
       card.appendChild(mainDiv);
-      card.appendChild(btn);
+      card.appendChild(actsDiv);
       wrap.appendChild(card);
     });
 
@@ -9376,6 +9393,46 @@
   }
   if ($('btnCloseBillSearch')) $('btnCloseBillSearch').onclick = closeBillSearchModal;
   if ($('btnCloseBillSearchBtn')) $('btnCloseBillSearchBtn').onclick = closeBillSearchModal;
+  function removeBillFromSearchHistory(code) {
+    var target = String(code || '').trim().toUpperCase();
+    if (!target) return;
+    try {
+      var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
+        .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
+      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recent));
+    } catch (e) {}
+    try {
+      var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]')
+        .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
+      localStorage.setItem('pos_hist', JSON.stringify(hist));
+    } catch (e) {}
+    fetch(getWorkerHttpOrigin() + '/bills/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bill: code })
+    }).finally(function () {
+      var q = $('billSearchInput') ? $('billSearchInput').value : '';
+      runBillSearch(q);
+      showToast('✓ Đã xóa #' + code + ' khỏi danh sách bill');
+    });
+  }
+
+  function clearAllBillSearchHistory() {
+    if (!confirm('Xóa sạch toàn bộ danh sách bill cũ trên phòng Live (Cloudflare Worker) và bộ nhớ trình duyệt?')) return;
+    try { localStorage.removeItem(RECENT_BILLS_KEY); } catch (e) {}
+    try { localStorage.removeItem('pos_hist'); } catch (e) {}
+    fetch(getWorkerHttpOrigin() + '/bills/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true })
+    }).finally(function () {
+      if ($('billSearchInput')) $('billSearchInput').value = '';
+      runBillSearch('');
+      showToast('✓ Đã dọn sạch danh sách bill cũ!');
+    });
+  }
+
+  if ($('btnClearBillHistory')) $('btnClearBillHistory').onclick = clearAllBillSearchHistory;
   if ($('billSearchModal')) {
     $('billSearchModal').onclick = function (e) {
       if (e.target === $('billSearchModal')) closeBillSearchModal();
