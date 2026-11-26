@@ -2308,7 +2308,7 @@
     }
     var btnUrgeFin = $('btnUrgeFinalize');
     if (btnUrgeFin) {
-      var showUrgeFin = !!(assigned && !amHost && !submitted && cart.length > 0);
+      var showUrgeFin = !!(assigned && !amHost && placed && !submitted && cart.length > 0);
       btnUrgeFin.hidden = !showUrgeFin;
       if (showUrgeFin && typeof updateUrgeFinalizeCooldownUI === 'function') {
         updateUrgeFinalizeCooldownUI();
@@ -3497,6 +3497,10 @@
     }
     if (isOrderSubmitted()) {
       showToast('✓ Đơn này đã được chốt & lưu Sheet rồi!');
+      return;
+    }
+    if (!isOrderPlaced()) {
+      showToast('⏳ Hàng vẫn chưa được đặt — chỉ hối chốt đơn sau khi Đại diện đã bấm "Đã đặt hàng"!');
       return;
     }
     if (!cart.length) {
