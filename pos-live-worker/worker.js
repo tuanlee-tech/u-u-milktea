@@ -852,6 +852,17 @@ export class LiveRoom {
       return;
     }
 
+    if (d.type === 'order_placed') {
+      const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws && !isHostPeer(s, d, this.last)) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      await this.dispatchRoomWebPush('order_placed', d).catch(() => {});
+      return;
+    }
+
     if (d.type === 'order_finalized') {
       const out = JSON.stringify(d);
       for (const s of this.state.getWebSockets()) {
@@ -1107,6 +1118,11 @@ export class LiveRoom {
       title = '⚠️ ' + hostWho + ' chưa thấy tiền chuyển khoản · #' + billCode;
       body = 'Đại diện chưa thấy tiền bạn chuyển vào tài khoản, hãy kiểm tra lại giao dịch nhé!';
       tag = 'uu-prej-' + billCode + '-' + Date.now();
+    } else if (eventType === 'order_placed') {
+      const hostWho = (d && d.hostName) || hostName || 'Đại diện';
+      title = '🛵 ' + hostWho + ' đã đặt hàng! (#' + billCode + ')';
+      body = 'Đơn (' + ((d && d.totalCups) || '') + ' ' + ((d && d.unit) || 'món') + ') đã gửi tới quán — Chờ đại diện chốt tiền & mở thanh toán nhé!';
+      tag = 'uu-placed-' + billCode;
     } else if (eventType === 'order_finalized') {
       const hostWho = (d && d.hostName) || hostName || 'Đại diện';
       const amt = fmtVnd(d && d.grandTotal);
@@ -1132,7 +1148,7 @@ export class LiveRoom {
       if (eventType === 'urge_finalize' || eventType === 'pay_claim') {
         return isSubHost(rec);
       }
-      if (eventType === 'order_finalized') {
+      if (eventType === 'order_finalized' || eventType === 'order_placed') {
         return !isSubHost(rec);
       }
       if (eventType === 'pay_claim_rejected') {

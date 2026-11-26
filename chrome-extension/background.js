@@ -316,6 +316,17 @@ async function handleSocketMessage(billCode, rawData) {
     return;
   }
 
+  if (d.type === 'order_placed') {
+    if (isEventSeen(d.placedId)) return;
+    const hostWho = d.hostName || 'Đại diện';
+    await notifyAndSpeak(billCode, {
+      title: '🛵 ' + hostWho + ' đã đặt hàng! (#' + billCode + ')',
+      body: 'Đơn đã gửi tới quán (chưa chốt thanh toán). Đợi đại diện chốt bill để chuyển khoản nhé!',
+      audioUrl: ''
+    });
+    return;
+  }
+
   if (d.type === 'order_finalized') {
     if (isEventSeen(d.finalizeId)) return;
     const hostWho = d.hostName || 'Đại diện';

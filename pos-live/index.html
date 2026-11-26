@@ -289,20 +289,25 @@
           <input id="orderNote" type="text" placeholder="Ghi chú đơn (vd: lầu 3, giao lúc 14h30)…" autocomplete="off">
         </div>
 
-        <!-- Order Lifecycle Stepper (1. Đặt món -> 2. Chốt đơn -> 3. Thanh toán) -->
+        <!-- Order Lifecycle Stepper (1. Chọn món -> 2. Đã đặt hàng -> 3. Chốt đơn -> 4. Thanh toán) -->
         <div class="order-steps-bar" id="orderStepsBar" aria-label="Tiến trình đơn hàng">
           <div class="order-step is-active" id="orderStep1">
             <span class="order-step-num">1</span>
-            <span class="order-step-lbl">Đặt món</span>
+            <span class="order-step-lbl">Chọn món</span>
           </div>
           <span class="order-step-sep" aria-hidden="true">›</span>
           <div class="order-step" id="orderStep2">
             <span class="order-step-num">2</span>
-            <span class="order-step-lbl">Chốt đơn</span>
+            <span class="order-step-lbl">Đã đặt hàng</span>
           </div>
           <span class="order-step-sep" aria-hidden="true">›</span>
           <div class="order-step" id="orderStep3">
             <span class="order-step-num">3</span>
+            <span class="order-step-lbl">Chốt đơn</span>
+          </div>
+          <span class="order-step-sep" aria-hidden="true">›</span>
+          <div class="order-step" id="orderStep4">
+            <span class="order-step-num">4</span>
             <span class="order-step-lbl">Thanh toán</span>
           </div>
         </div>
@@ -311,9 +316,13 @@
         <div class="host-tools-bar" id="hostToolsBar" hidden>
           <span class="order-status-pill" id="orderSubmittedBadge">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <span id="orderSubmittedBadgeText">Đang đặt món</span>
+            <span id="orderSubmittedBadgeText">Đang chọn món</span>
           </span>
           <div class="host-tools-actions" id="hostOnlyActions" hidden>
+            <button type="button" class="btn-host-tool btn-host-placed" id="btnToggleOrderPlaced" hidden title="Đánh dấu đã gửi đơn đặt hàng sang quán (khóa chọn món, chưa mở thanh toán)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              <span id="btnOrderPlacedLabel">Đã đặt hàng</span>
+            </button>
             <button type="button" class="btn-host-tool" id="btnOpenHostQr" title="Thêm hoặc sửa mã QR thanh toán của đại diện">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="21" x2="21" y2="21"/></svg>
               <span id="btnHostQrLabel">Thêm QR</span>

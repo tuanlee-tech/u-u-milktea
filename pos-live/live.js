@@ -1470,6 +1470,7 @@
       hostQrNote: '',
       hostQrs: [],
       hostBank: { bank: '', account: '', owner: '' },
+      orderPlaced: false,
       orderSubmitted: false,
       savedDisc: null,
       savedShip: null,
@@ -1724,6 +1725,62 @@
 
   function isOrderSubmitted() {
     return !!(F.orderSubmitted && F.orderSubmitted.v === true);
+  }
+
+  function isOrderPlaced() {
+    return !!(F.orderPlaced && F.orderPlaced.v === true) || isOrderSubmitted();
+  }
+
+  function isCartLocked() {
+    return isOrderSubmitted() || isOrderPlaced();
+  }
+
+  function toggleOrderPlaced() {
+    if (isOrderSubmitted()) {
+      showToast('Đơn đã chốt & lưu Sheet rồi!');
+      return;
+    }
+    if (hasHostAssigned() && !isCurrentHost()) {
+      showToast('🔒 Chỉ Đại diện (' + (getHostName() || 'Host') + ') mới được đổi trạng thái Đã đặt hàng!');
+      return;
+    }
+    if (!cart.length) {
+      showToast('Giỏ hàng chưa có món nào để đặt hàng!');
+      return;
+    }
+    var curPlaced = isOrderPlaced();
+    if (curPlaced) {
+      if (!confirm('Mở lại trạng thái "Đang chọn món" để mọi người có thể thêm/sửa món?')) return;
+      setSyncedField('orderPlaced', false);
+      updateHostDropdownUI();
+      renderCart();
+      rtSend();
+      showToast('↩ Đã mở lại chọn món cho cả nhóm.');
+      return;
+    }
+    if (!hasHostAssigned()) {
+      setSyncedField('hostUid', myUid, { prevHostUid: '' });
+      setSyncedField('customer', myUname);
+      if ($('customer')) $('customer').value = myUname;
+      tryRestoreMyHostQr(false);
+    }
+    setSyncedField('orderPlaced', true);
+    updateHostDropdownUI();
+    renderCart();
+    rtSend();
+
+    var tPl = totals();
+    sendRoomEvent({
+      type: 'order_placed',
+      placedId: 'plc_' + clientId + '_' + Date.now(),
+      hostUid: getHostUid() || myUid,
+      hostName: getHostName() || myUname || 'Đại diện',
+      totalCups: tPl.totalCups,
+      unit: (currentStore && currentStore.itemUnit) || 'món',
+      grandTotal: tPl.grand,
+      storeName: (currentStore && currentStore.name) || 'Office Order'
+    });
+    showToast('🛵 Đã đánh dấu ĐÃ ĐẶT HÀNG! Đã khóa chọn món & báo cho cả nhóm (chưa mở thanh toán).');
   }
 
   function hasPendingHostFeeChanges() {
@@ -2166,6 +2223,7 @@
     var assigned = !!(hostUid || hostName);
     var amHost = isCurrentHost();
     var submitted = isOrderSubmitted();
+    var placed = isOrderPlaced();
     var qrSlots = getHostQrSlots();
     var hasQr = qrSlots.length > 0;
 
@@ -2214,17 +2272,32 @@
     }
 
     if (toolsBar) {
-      toolsBar.hidden = (!assigned && !submitted && !hasQr);
+      toolsBar.hidden = (!assigned && !submitted && !placed && !hasQr);
     }
     if (statusBadge) {
       statusBadge.classList.toggle('is-submitted', submitted);
+      statusBadge.classList.toggle('is-placed', placed && !submitted);
       var iconLockSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+      var iconSendSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
       var iconClockSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-      statusBadge.innerHTML = (submitted ? iconLockSvg : iconClockSvg) +
-        '<span id="orderSubmittedBadgeText">' + (submitted ? 'Đã chốt & lưu Sheet' : 'Đang đặt món') + '</span>';
+      statusBadge.innerHTML = (submitted ? iconLockSvg : (placed ? iconSendSvg : iconClockSvg)) +
+        '<span id="orderSubmittedBadgeText">' + (submitted ? 'Đã chốt & lưu Sheet' : (placed ? 'Đã đặt hàng · Chờ chốt tiền' : 'Đang chọn món')) + '</span>';
     }
     if (hostOnlyActions) {
       hostOnlyActions.hidden = !(assigned && amHost);
+    }
+    var btnPlaced = $('btnToggleOrderPlaced');
+    var btnPlacedLbl = $('btnOrderPlacedLabel');
+    if (btnPlaced) {
+      var showPlacedBtn = !!(assigned && amHost && !submitted && cart.length > 0);
+      btnPlaced.hidden = !showPlacedBtn;
+      btnPlaced.classList.toggle('is-placed-active', placed && !submitted);
+      btnPlaced.title = placed
+        ? 'Đã đánh dấu đặt hàng với quán — bấm nếu muốn mở lại cho mọi người chọn thêm món'
+        : 'Đánh dấu đã gửi đơn đặt hàng sang quán (khóa chọn món, chưa mở thanh toán)';
+      if (btnPlacedLbl) {
+        btnPlacedLbl.textContent = placed ? '✓ Đã đặt · Mở lại' : 'Đã đặt hàng';
+      }
     }
     var hbActive = getHostBankInfo();
     if (btnMemberQr) {
@@ -2294,18 +2367,21 @@
       btnModalPay.title = allDebtorsPaid ? 'Tất cả thành viên đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
     }
 
-    // Cập nhật thanh tiến trình 3 bước: 1. Đặt món -> 2. Chốt đơn -> 3. Thanh toán
+    // Cập nhật thanh tiến trình 4 bước: 1. Chọn món -> 2. Đã đặt hàng -> 3. Chốt đơn -> 4. Thanh toán
     var s1 = $('orderStep1');
     var s2 = $('orderStep2');
     var s3 = $('orderStep3');
+    var s4 = $('orderStep4');
     var hasItems = cart.length > 0;
-    if (s1 && s2 && s3) {
-      s1.classList.toggle('is-done', hasItems || submitted);
-      s1.classList.toggle('is-active', !hasItems && !submitted);
+    if (s1 && s2 && s3 && s4) {
+      s1.classList.toggle('is-done', placed || submitted);
+      s1.classList.toggle('is-active', !placed && !submitted);
       s2.classList.toggle('is-done', submitted);
-      s2.classList.toggle('is-active', hasItems && !submitted);
-      s3.classList.toggle('is-done', allDebtorsPaid);
-      s3.classList.toggle('is-active', submitted && !allDebtorsPaid);
+      s2.classList.toggle('is-active', placed && !submitted);
+      s3.classList.toggle('is-done', submitted);
+      s3.classList.toggle('is-active', false);
+      s4.classList.toggle('is-done', allDebtorsPaid);
+      s4.classList.toggle('is-active', submitted && !allDebtorsPaid);
     }
 
     // Khóa nút Chốt & Lưu Sheet khi chưa có món nào, khi non-host HOẶC đơn đã chốt xong (trừ khi Đại diện sửa Giảm giá / Phí ship)
@@ -2335,16 +2411,17 @@
               : 'Chốt đơn hiện tại & lưu vào Google Sheet')));
     }
 
-    // Khi đã Chốt & Lưu Sheet -> ẨN hẳn nút Hối đặt hàng trên cả desktop & mobile và đóng modal hối nếu đang mở
+    // Khi đã Đặt hàng HOẶC đã Chốt & Lưu Sheet -> ẨN hẳn nút Hối đặt hàng trên cả desktop & mobile và đóng modal hối nếu đang mở
+    var hideUrgeOrder = placed || submitted;
     if ($('btnUrgeTopbar')) {
-      $('btnUrgeTopbar').hidden = submitted;
-      $('btnUrgeTopbar').disabled = submitted;
+      $('btnUrgeTopbar').hidden = hideUrgeOrder;
+      $('btnUrgeTopbar').disabled = hideUrgeOrder;
     }
     if ($('mobileUrgeBtn')) {
-      $('mobileUrgeBtn').hidden = submitted;
-      $('mobileUrgeBtn').disabled = submitted;
+      $('mobileUrgeBtn').hidden = hideUrgeOrder;
+      $('mobileUrgeBtn').disabled = hideUrgeOrder;
     }
-    if (submitted && $('urgeModal') && !$('urgeModal').hidden) {
+    if (hideUrgeOrder && $('urgeModal') && !$('urgeModal').hidden) {
       closeUrgeModal();
     }
     if ($('mobileUrgeBtn')) {
@@ -2780,8 +2857,8 @@
   }
 
   function openUrgeModal() {
-    if (isOrderSubmitted()) {
-      showToast('Đơn đã chốt & lưu Sheet rồi!');
+    if (isOrderPlaced()) {
+      showToast(isOrderSubmitted() ? 'Đơn đã chốt & lưu Sheet rồi!' : '🛵 Đại diện đã đặt hàng với quán rồi!');
       return;
     }
     var modal = $('urgeModal');
@@ -3515,9 +3592,9 @@
   }
 
   function sendUrgeOrder() {
-    if (isOrderSubmitted()) {
+    if (isOrderPlaced()) {
       closeUrgeModal();
-      showToast('Đơn đã chốt & lưu Sheet rồi!');
+      showToast(isOrderSubmitted() ? 'Đơn đã chốt & lưu Sheet rồi!' : '🛵 Đại diện đã đặt hàng với quán rồi!');
       return;
     }
     var remSec = getUrgeRemainingSec();
@@ -4765,6 +4842,16 @@
         handleRemoteClaimCancel(d);
       } else if (d.type === 'pay_claim_rejected') {
         handleRemoteClaimRejected(d);
+      } else if (d.type === 'order_placed') {
+        if (!isCurrentHost()) {
+          var pHost = d.hostName || 'Đại diện';
+          showToast('🛵 ' + pHost + ' đã đặt hàng với quán! Chờ đại diện chốt đơn để thanh toán nhé.');
+          sendSystemNotification({
+            title: '🛵 ' + pHost + ' đã đặt hàng! (#' + orderCode + ')',
+            body: 'Đơn đã được gửi tới quán (chưa chốt thanh toán). Đợi đại diện chốt bill nhé!',
+            tag: 'uu-placed-' + orderCode
+          });
+        }
       } else if (d.type === 'order_finalized') {
         if (!isCurrentHost()) {
           var fHost = d.hostName || 'Đại diện';
@@ -4992,8 +5079,10 @@
         '</div>';
 
       card.onclick = function () {
-        if (isOrderSubmitted()) {
-          showToast('Đơn đã chốt & lưu Sheet! Không thể thêm món mới.');
+        if (isCartLocked()) {
+          showToast(isOrderSubmitted()
+            ? 'Đơn đã chốt & lưu Sheet! Không thể thêm món mới.'
+            : '🛵 Đại diện đã đặt hàng với quán! Không thể thêm món mới.');
           return;
         }
         openItemCustomizer(m, null, isTopping);
@@ -5015,8 +5104,10 @@
   var curSelectedToppings = []; // [{id, name, price, qty}]
 
   function openItemCustomizer(menuItem, cartLine, isToppingOnly) {
-    if (isOrderSubmitted()) {
-      showToast('Đơn đã chốt & lưu Sheet! Không thể thêm hoặc sửa món.');
+    if (isCartLocked()) {
+      showToast(isOrderSubmitted()
+        ? 'Đơn đã chốt & lưu Sheet! Không thể thêm hoặc sửa món.'
+        : '🛵 Đại diện đã đặt hàng với quán! Không thể thêm hoặc sửa món.');
       return;
     }
     curCustomItem = menuItem;
@@ -5359,13 +5450,14 @@
     ul.innerHTML = '';
 
     var submitted = isOrderSubmitted();
+    var placed = isOrderPlaced();
     var hasDonateQr = submitted && getHostQrSlots().length > 0;
     var cartVp = ul.closest('.cart-viewport');
     if (cartVp) {
       cartVp.classList.toggle('is-submitted', submitted);
     }
     if ($('cartTableActHead')) {
-      $('cartTableActHead').textContent = submitted ? 'TRẢ' : 'SỬA';
+      $('cartTableActHead').textContent = submitted ? 'TRẢ' : (placed ? 'KHÓA' : 'SỬA');
     }
 
     cart.forEach(function (c, idx) {
@@ -5376,7 +5468,7 @@
 
       var isMine = canEditRow(c);
       var canManagePay = canActAsHostOrOpen();
-      var canMutateRow = isMine && !submitted;
+      var canMutateRow = isMine && !submitted && !placed;
       var shortOpt = shortOptText(c);
       var ucol = (isMine ? myUcolor : (c.ucolor || '#0A7259'));
       var rowPayTarget = { uid: c.uid || '', name: c.uname || c.owner || 'Khách' };
@@ -7531,6 +7623,7 @@
             if ($('customer')) $('customer').value = myUname;
             tryRestoreMyHostQr(false);
           }
+          setSyncedField('orderPlaced', true);
           setSyncedField('orderSubmitted', true);
           setSyncedField('savedDisc', Math.max(0, Number(order.giam_gia) || 0));
           setSyncedField('savedShip', Math.max(0, Number(order.ship) || 0));
@@ -9797,7 +9890,8 @@
     }
   });
 
-  // Hối chốt đơn tính tiền (Member → Đại diện)
+  // Hối chốt đơn tính tiền (Member → Đại diện) & Đánh dấu Đã đặt hàng (Đại diện)
+  if ($('btnToggleOrderPlaced')) $('btnToggleOrderPlaced').onclick = toggleOrderPlaced;
   if ($('btnUrgeFinalize')) $('btnUrgeFinalize').onclick = sendUrgeFinalizeOrder;
   if ($('btnHostFinalizeNow')) {
     $('btnHostFinalizeNow').onclick = function () {

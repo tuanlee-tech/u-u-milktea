@@ -5763,6 +5763,45 @@ body {
 .mobile-urge-btn[hidden] {
   display: none !important;
 }
+.order-status-pill.is-placed {
+  background: #EEF2FF;
+  color: #4338CA;
+  border-color: #C7D2FE;
+}
+.btn-host-tool.btn-host-placed {
+  background: #EEF2FF;
+  color: #4338CA;
+  border-color: #C7D2FE;
+}
+.btn-host-tool.btn-host-placed:hover:not(:disabled) {
+  background: #4F46E5;
+  color: #FFFFFF;
+  border-color: #4F46E5;
+}
+.btn-host-tool.btn-host-placed.is-placed-active {
+  background: #4F46E5;
+  color: #FFFFFF;
+  border-color: #4F46E5;
+}
+.btn-host-tool.btn-host-placed.is-placed-active:hover:not(:disabled) {
+  background: #3730A3;
+  border-color: #3730A3;
+}
+@media (max-width: 600px) {
+  .order-steps-bar {
+    gap: 3px;
+    padding: 5px 7px;
+  }
+  .order-step {
+    font-size: 10.5px;
+    gap: 3px;
+  }
+  .order-step-num {
+    width: 16px;
+    height: 16px;
+    font-size: 9.5px;
+  }
+}
 
 
 
