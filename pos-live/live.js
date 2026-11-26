@@ -9166,11 +9166,11 @@
       btn.onclick = function () { switchToBill(item.ma_don); };
       actsDiv.appendChild(btn);
 
-      if (!isCur) {
+      if (!isCur && item.submitted) {
         var delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.className = 'btn-del-bill-item';
-        delBtn.title = 'Xóa bill #' + item.ma_don + ' khỏi danh sách tìm kiếm';
+        delBtn.title = 'Xóa bill đã chốt #' + item.ma_don + ' khỏi danh sách';
         delBtn.textContent = '×';
         delBtn.onclick = function (e) {
           e.stopPropagation();
@@ -9397,44 +9397,79 @@
   function removeBillFromSearchHistory(code) {
     var target = String(code || '').trim().toUpperCase();
     if (!target) return;
-    try {
-      var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
-        .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
-      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recent));
-    } catch (e) {}
-    try {
-      var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]')
-        .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
-      localStorage.setItem('pos_hist', JSON.stringify(hist));
-    } catch (e) {}
     fetch(getWorkerHttpOrigin() + '/bills/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bill: code })
-    }).catch(function () {}).finally(function () {
-      var q = $('billSearchInput') ? $('billSearchInput').value : '';
-      performBillSearch(q);
-      showToast('✓ Đã xóa #' + code + ' khỏi danh sách bill');
-    });
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
+      .then(function (j) {
+        if (j && j.ok === false) {
+          showToast('⚠ ' + (j.error || 'Chỉ được xóa bill đã chốt!'));
+          return;
+        }
+        try {
+          var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
+            .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
+          localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recent));
+        } catch (e) {}
+        try {
+          var hist = JSON.parse(localStorage.getItem('pos_hist') || '[]')
+            .filter(function (x) { return String(x && x.ma_don || '').trim().toUpperCase() !== target; });
+          localStorage.setItem('pos_hist', JSON.stringify(hist));
+        } catch (e) {}
+        showToast('✓ Đã xóa bill đã chốt #' + code);
+      })
+      .catch(function () {
+        showToast('⚠ Không thể xóa bill lúc này, thử lại sau!');
+      })
+      .finally(function () {
+        var q = $('billSearchInput') ? $('billSearchInput').value : '';
+        performBillSearch(q);
+      });
   }
 
   function clearAllBillSearchHistory() {
-    if (!confirm('Xóa sạch toàn bộ danh sách bill cũ trên phòng Live (Cloudflare Worker) và bộ nhớ trình duyệt?')) return;
+    if (!confirm('Xóa sạch các bill ĐÃ CHỐT khỏi danh sách? (Các bill đang đặt sẽ được giữ nguyên)')) return;
     var btn = $('btnClearBillHistory');
     var prevTxt = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang dọn...'; }
-    try { localStorage.removeItem(RECENT_BILLS_KEY); } catch (e) {}
-    try { localStorage.removeItem('pos_hist'); } catch (e) {}
+    try {
+      var recent = JSON.parse(localStorage.getItem(RECENT_BILLS_KEY) || '[]')
+        .filter(function (x) { return x && !x.submitted; });
+      localStorage.setItem(RECENT_BILLS_KEY, JSON.stringify(recent));
+    } catch (e) {}
+    try {
+      // pos_hist only stores finalized bills saved to sheet
+      localStorage.removeItem('pos_hist');
+    } catch (e) {}
     fetch(getWorkerHttpOrigin() + '/bills/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ all: true })
-    }).catch(function () {}).finally(function () {
-      if (btn) { btn.disabled = false; btn.textContent = prevTxt || '🗑 Dọn sạch danh sách'; }
-      if ($('billSearchInput')) $('billSearchInput').value = '';
-      performBillSearch('');
-      showToast('✓ Đã dọn sạch danh sách bill cũ!');
-    });
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: r.ok }; }); })
+      .then(function (j) {
+        var del = (j && typeof j.deleted === 'number') ? j.deleted : 0;
+        var kept = (j && typeof j.keptActive === 'number') ? j.keptActive : 0;
+        if (del > 0 && kept > 0) {
+          showToast('✓ Đã xóa ' + del + ' bill đã chốt (giữ lại ' + kept + ' bill đang đặt)');
+        } else if (del > 0) {
+          showToast('✓ Đã xóa ' + del + ' bill đã chốt!');
+        } else if (kept > 0) {
+          showToast('Không có bill đã chốt nào để xóa (đang giữ ' + kept + ' bill đang đặt)');
+        } else {
+          showToast('✓ Đã dọn sạch danh sách bill đã chốt!');
+        }
+      })
+      .catch(function () {
+        showToast('⚠ Không thể dọn danh sách lúc này!');
+      })
+      .finally(function () {
+        if (btn) { btn.disabled = false; btn.textContent = prevTxt || '🗑 Xóa bill đã chốt'; }
+        if ($('billSearchInput')) $('billSearchInput').value = '';
+        performBillSearch('');
+      });
   }
 
   if ($('btnClearBillHistory')) $('btnClearBillHistory').onclick = clearAllBillSearchHistory;

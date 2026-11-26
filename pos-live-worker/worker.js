@@ -441,16 +441,46 @@ export class LiveRoom {
           this.billIndex = (await this.state.storage.get('billIndex')) || {};
         }
         if (body && body.bill && !body.all) {
-          const code = String(body.bill).trim();
-          const existed = !!this.billIndex[code];
-          delete this.billIndex[code];
+          const rawCode = String(body.bill).trim();
+          let matchedKey = this.billIndex[rawCode] ? rawCode : null;
+          if (!matchedKey) {
+            const upper = rawCode.toUpperCase();
+            matchedKey = Object.keys(this.billIndex).find(k => String(k).trim().toUpperCase() === upper) || null;
+          }
+          if (!matchedKey) {
+            return jsonCors({ ok: true, deleted: 0, remaining: Object.keys(this.billIndex).length });
+          }
+          const entry = this.billIndex[matchedKey];
+          if (!entry || !entry.submitted) {
+            return jsonCors({
+              ok: false,
+              error: 'Chỉ được xóa bill đã chốt! Bill đang đặt sẽ được giữ nguyên.',
+              remaining: Object.keys(this.billIndex).length
+            }, 403);
+          }
+          delete this.billIndex[matchedKey];
           await this.state.storage.put('billIndex', this.billIndex);
-          return jsonCors({ ok: true, deleted: existed ? 1 : 0, remaining: Object.keys(this.billIndex).length });
+          return jsonCors({ ok: true, deleted: 1, remaining: Object.keys(this.billIndex).length });
         }
-        const prevCount = Object.keys(this.billIndex).length;
-        this.billIndex = {};
-        await this.state.storage.delete('billIndex');
-        return jsonCors({ ok: true, deleted: prevCount, remaining: 0 });
+        // Only clear submitted (finalized) bills; preserve all active/unsubmitted bills
+        const nextMap = {};
+        let deletedCount = 0;
+        let keptActive = 0;
+        for (const [k, it] of Object.entries(this.billIndex)) {
+          if (it && it.submitted) {
+            deletedCount++;
+          } else if (it && it.bill) {
+            nextMap[k] = it;
+            keptActive++;
+          }
+        }
+        this.billIndex = nextMap;
+        if (keptActive === 0) {
+          await this.state.storage.delete('billIndex');
+        } else {
+          await this.state.storage.put('billIndex', nextMap);
+        }
+        return jsonCors({ ok: true, deleted: deletedCount, keptActive, remaining: keptActive });
       } catch (e) {
         return jsonCors({ ok: false, error: String(e && e.message || e) }, 500);
       }
