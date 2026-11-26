@@ -9411,24 +9411,28 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bill: code })
-    }).finally(function () {
+    }).catch(function () {}).finally(function () {
       var q = $('billSearchInput') ? $('billSearchInput').value : '';
-      runBillSearch(q);
+      performBillSearch(q);
       showToast('✓ Đã xóa #' + code + ' khỏi danh sách bill');
     });
   }
 
   function clearAllBillSearchHistory() {
     if (!confirm('Xóa sạch toàn bộ danh sách bill cũ trên phòng Live (Cloudflare Worker) và bộ nhớ trình duyệt?')) return;
+    var btn = $('btnClearBillHistory');
+    var prevTxt = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang dọn...'; }
     try { localStorage.removeItem(RECENT_BILLS_KEY); } catch (e) {}
     try { localStorage.removeItem('pos_hist'); } catch (e) {}
     fetch(getWorkerHttpOrigin() + '/bills/clear', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ all: true })
-    }).finally(function () {
+    }).catch(function () {}).finally(function () {
+      if (btn) { btn.disabled = false; btn.textContent = prevTxt || '🗑 Dọn sạch danh sách'; }
       if ($('billSearchInput')) $('billSearchInput').value = '';
-      runBillSearch('');
+      performBillSearch('');
       showToast('✓ Đã dọn sạch danh sách bill cũ!');
     });
   }
