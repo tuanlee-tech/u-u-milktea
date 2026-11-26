@@ -3214,6 +3214,7 @@
 
   window.addEventListener('uu-ext-ready', function () {
     syncWebPushSubscription(true);
+    if ($('btnDownloadExtTopbar')) $('btnDownloadExtTopbar').hidden = true;
   });
 
   function requestBrowserNotificationPermission(isInteractiveClick) {
@@ -9966,6 +9967,42 @@
   }
   if ($('btnHostFinalizeLater')) $('btnHostFinalizeLater').onclick = hideHostFinalizeBanner;
   if ($('btnCloseHostFinalizeBanner')) $('btnCloseHostFinalizeBanner').onclick = hideHostFinalizeBanner;
+
+  // Modal Tải & cài đặt Chrome Extension
+  function openExtDownloadModal() {
+    var m = $('extDownloadModal');
+    if (m) m.hidden = false;
+  }
+  function closeExtDownloadModal() {
+    var m = $('extDownloadModal');
+    if (m) m.hidden = true;
+  }
+  if ($('btnDownloadExtTopbar')) {
+    if (isChromeExtensionActive()) $('btnDownloadExtTopbar').hidden = true;
+    $('btnDownloadExtTopbar').onclick = openExtDownloadModal;
+  }
+  if ($('btnMenuDownloadExt')) {
+    $('btnMenuDownloadExt').onclick = function () {
+      if ($('moreDropdown')) $('moreDropdown').hidden = true;
+      openExtDownloadModal();
+    };
+  }
+  if ($('btnCloseExtModal')) $('btnCloseExtModal').onclick = closeExtDownloadModal;
+  if ($('btnCloseExtModalBtn')) $('btnCloseExtModalBtn').onclick = closeExtDownloadModal;
+  if ($('extDownloadModal')) {
+    $('extDownloadModal').onclick = function (e) {
+      if (e.target === $('extDownloadModal')) closeExtDownloadModal();
+    };
+  }
+  if ($('btnCopyChromeExtUrl')) {
+    $('btnCopyChromeExtUrl').onclick = function () {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText('chrome://extensions').then(function () {
+          showToast('✓ Đã copy chrome://extensions — dán lên thanh địa chỉ Chrome nhé!');
+        }).catch(function () {});
+      }
+    };
+  }
 
   // Modal xác nhận thanh toán hộ (Donate)
   if ($('btnCloseDonateModal')) $('btnCloseDonateModal').onclick = closeDonateConfirmModal;

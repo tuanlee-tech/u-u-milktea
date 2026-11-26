@@ -5831,6 +5831,101 @@ body {
   border-color: #FCA5A5;
   color: #DC2626;
 }
+
+/* ================= DOWNLOAD CHROME EXTENSION BUTTON & MODAL ================= */
+.btn-ext-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid #C7D2FE;
+  background: #EEF2FF;
+  color: #4338CA;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+.btn-ext-top:hover {
+  background: #4F46E5;
+  border-color: #4F46E5;
+  color: #FFFFFF;
+}
+.btn-ext-top[hidden] {
+  display: none !important;
+}
+@media (max-width: 760px) {
+  .btn-ext-top {
+    display: none !important;
+  }
+}
+.ext-download-box {
+  max-width: 440px;
+}
+.ext-download-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ext-download-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px;
+  border-radius: 12px;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 13.5px;
+}
+.ext-install-steps {
+  background: #F8FAF9;
+  border: 1px solid #E2E8E4;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.55;
+}
+.ext-step-title {
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 6px;
+}
+.ext-install-steps ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ext-install-steps code {
+  background: #E2E8F0;
+  color: #0F172A;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+.btn-copy-ext-url {
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid #CBD5E1;
+  background: #FFFFFF;
+  color: #0A7259;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn-copy-ext-url:hover {
+  background: #ECFDF5;
+  border-color: #0A7259;
+}
 @media (max-width: 600px) {
   .order-steps-bar {
     gap: 3px;
