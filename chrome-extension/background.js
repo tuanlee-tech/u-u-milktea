@@ -306,6 +306,28 @@ async function handleSocketMessage(billCode, rawData) {
     return;
   }
 
+  if (d.type === 'pay_claim_rejected') {
+    const hostWho = d.hostName || 'Đại diện';
+    await notifyAndSpeak(billCode, {
+      title: '⚠️ ' + hostWho + ' chưa thấy tiền chuyển khoản · #' + billCode,
+      body: 'Đại diện chưa thấy tiền vào tài khoản, hãy kiểm tra lại giao dịch nhé!',
+      audioUrl: ''
+    });
+    return;
+  }
+
+  if (d.type === 'order_finalized') {
+    if (isEventSeen(d.finalizeId)) return;
+    const hostWho = d.hostName || 'Đại diện';
+    const amt = fmtVnd(d.grandTotal);
+    await notifyAndSpeak(billCode, {
+      title: '🔒 ' + hostWho + ' đã chốt đơn! (#' + billCode + ')',
+      body: 'Đơn có ' + (d.totalCups || '') + ' ' + (d.unit || 'món') + (amt !== '0đ' ? (' · Tổng ' + amt) : '') + ' — Mở bill để xem số tiền & quét QR thanh toán nhé!',
+      audioUrl: ''
+    });
+    return;
+  }
+
   if (d.type === 'pay_confirmed') {
     if (isEventSeen(d.confirmId)) return;
     const payer = d.payerName || 'Thành viên';

@@ -289,6 +289,24 @@
           <input id="orderNote" type="text" placeholder="Ghi chú đơn (vd: lầu 3, giao lúc 14h30)…" autocomplete="off">
         </div>
 
+        <!-- Order Lifecycle Stepper (1. Đặt món -> 2. Chốt đơn -> 3. Thanh toán) -->
+        <div class="order-steps-bar" id="orderStepsBar" aria-label="Tiến trình đơn hàng">
+          <div class="order-step is-active" id="orderStep1">
+            <span class="order-step-num">1</span>
+            <span class="order-step-lbl">Đặt món</span>
+          </div>
+          <span class="order-step-sep" aria-hidden="true">›</span>
+          <div class="order-step" id="orderStep2">
+            <span class="order-step-num">2</span>
+            <span class="order-step-lbl">Chốt đơn</span>
+          </div>
+          <span class="order-step-sep" aria-hidden="true">›</span>
+          <div class="order-step" id="orderStep3">
+            <span class="order-step-num">3</span>
+            <span class="order-step-lbl">Thanh toán</span>
+          </div>
+        </div>
+
         <!-- Host Permission & Payment Action Strip -->
         <div class="host-tools-bar" id="hostToolsBar" hidden>
           <span class="order-status-pill" id="orderSubmittedBadge">

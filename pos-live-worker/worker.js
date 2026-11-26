@@ -848,6 +848,18 @@ export class LiveRoom {
           try { s.send(out); } catch (e) {}
         }
       }
+      await this.dispatchRoomWebPush('pay_claim_rejected', d).catch(() => {});
+      return;
+    }
+
+    if (d.type === 'order_finalized') {
+      const out = JSON.stringify(d);
+      for (const s of this.state.getWebSockets()) {
+        if (s !== ws && !isHostPeer(s, d, this.last)) {
+          try { s.send(out); } catch (e) {}
+        }
+      }
+      await this.dispatchRoomWebPush('order_finalized', d).catch(() => {});
       return;
     }
 
@@ -1090,6 +1102,17 @@ export class LiveRoom {
         : ('🔔 ' + payer + ' báo đã CK' + (amt ? (' ' + amt) : '') + ' · #' + billCode);
       body = 'Mở app ngân hàng kiểm tra tiền vào rồi bấm xác nhận trên bill.';
       tag = 'uu-claim-' + ((d && d.claimId) || Date.now());
+    } else if (eventType === 'pay_claim_rejected') {
+      const hostWho = (d && d.hostName) || hostName || 'Đại diện';
+      title = '⚠️ ' + hostWho + ' chưa thấy tiền chuyển khoản · #' + billCode;
+      body = 'Đại diện chưa thấy tiền bạn chuyển vào tài khoản, hãy kiểm tra lại giao dịch nhé!';
+      tag = 'uu-prej-' + billCode + '-' + Date.now();
+    } else if (eventType === 'order_finalized') {
+      const hostWho = (d && d.hostName) || hostName || 'Đại diện';
+      const amt = fmtVnd(d && d.grandTotal);
+      title = '🔒 ' + hostWho + ' đã chốt đơn! (#' + billCode + ')';
+      body = 'Đơn có ' + ((d && d.totalCups) || '') + ' ' + ((d && d.unit) || 'món') + (amt ? (' · Tổng ' + amt) : '') + ' — Mở bill để xem số tiền & quét QR thanh toán nhé!';
+      tag = 'uu-finalized-' + billCode;
     } else if (eventType === 'pay_confirmed') {
       const payer = (d && d.payerName) || 'Thành viên';
       const amt = fmtVnd(d && d.amount);
@@ -1108,6 +1131,16 @@ export class LiveRoom {
       }
       if (eventType === 'urge_finalize' || eventType === 'pay_claim') {
         return isSubHost(rec);
+      }
+      if (eventType === 'order_finalized') {
+        return !isSubHost(rec);
+      }
+      if (eventType === 'pay_claim_rejected') {
+        const pUid = String((d && d.payerUid) || '').trim();
+        const pName = String((d && d.payerName) || '').trim().toLowerCase();
+        if (pUid && suid && pUid === suid) return true;
+        if (pName && sname && pName === sname) return true;
+        return false;
       }
       if (eventType === 'urge_pay') {
         if (isSubHost(rec)) return false;

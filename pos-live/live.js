@@ -2294,11 +2294,26 @@
       btnModalPay.title = allDebtorsPaid ? 'Tất cả thành viên đã thanh toán đủ' : 'Hối các bạn chưa trả tiền';
     }
 
-    // Khóa nút Chốt & Lưu Sheet khi non-host HOẶC đơn đã chốt xong (trừ khi Đại diện vừa sửa Giảm giá / Phí ship cần cập nhật lại)
+    // Cập nhật thanh tiến trình 3 bước: 1. Đặt món -> 2. Chốt đơn -> 3. Thanh toán
+    var s1 = $('orderStep1');
+    var s2 = $('orderStep2');
+    var s3 = $('orderStep3');
+    var hasItems = cart.length > 0;
+    if (s1 && s2 && s3) {
+      s1.classList.toggle('is-done', hasItems || submitted);
+      s1.classList.toggle('is-active', !hasItems && !submitted);
+      s2.classList.toggle('is-done', submitted);
+      s2.classList.toggle('is-active', hasItems && !submitted);
+      s3.classList.toggle('is-done', allDebtorsPaid);
+      s3.classList.toggle('is-active', submitted && !allDebtorsPaid);
+    }
+
+    // Khóa nút Chốt & Lưu Sheet khi chưa có món nào, khi non-host HOẶC đơn đã chốt xong (trừ khi Đại diện sửa Giảm giá / Phí ship)
     var canHostUpdateFees = !!(submitted && assigned && amHost && hasPendingHostFeeChanges());
     if (btnSave) {
       var lockNonHost = assigned && !amHost;
-      var disableSaveBtn = lockNonHost || (submitted && !canHostUpdateFees);
+      var noItemsLock = !submitted && !hasItems;
+      var disableSaveBtn = lockNonHost || noItemsLock || (submitted && !canHostUpdateFees);
       btnSave.disabled = disableSaveBtn;
       btnSave.classList.toggle('is-host-locked', lockNonHost);
       btnSave.classList.toggle('is-locked-member', lockNonHost);
@@ -2313,15 +2328,24 @@
         ? 'Giảm giá / Phí ship vừa thay đổi — bấm để cập nhật lại lên Google Sheet'
         : (submitted
           ? 'Đơn đã chốt & lưu lên Google Sheet'
-          : (lockNonHost
-            ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
-            : 'Chốt đơn hiện tại & lưu vào Google Sheet'));
+          : (noItemsLock
+            ? 'Chưa đặt món nào — cần có ít nhất 1 món trong giỏ trước khi chốt đơn'
+            : (lockNonHost
+              ? ('Chỉ Đại diện (' + (hostName || 'Host') + ') mới được Chốt & Lưu Sheet')
+              : 'Chốt đơn hiện tại & lưu vào Google Sheet')));
     }
 
-    // Vô hiệu hóa nút Hối đặt hàng sau khi đơn đã Chốt & Lưu Sheet
+    // Khi đã Chốt & Lưu Sheet -> ẨN hẳn nút Hối đặt hàng trên cả desktop & mobile và đóng modal hối nếu đang mở
     if ($('btnUrgeTopbar')) {
+      $('btnUrgeTopbar').hidden = submitted;
       $('btnUrgeTopbar').disabled = submitted;
-      if (submitted) $('btnUrgeTopbar').title = 'Đơn đã chốt & lưu Sheet';
+    }
+    if ($('mobileUrgeBtn')) {
+      $('mobileUrgeBtn').hidden = submitted;
+      $('mobileUrgeBtn').disabled = submitted;
+    }
+    if (submitted && $('urgeModal') && !$('urgeModal').hidden) {
+      closeUrgeModal();
     }
     if ($('mobileUrgeBtn')) {
       $('mobileUrgeBtn').disabled = submitted;
@@ -2756,6 +2780,10 @@
   }
 
   function openUrgeModal() {
+    if (isOrderSubmitted()) {
+      showToast('Đơn đã chốt & lưu Sheet rồi!');
+      return;
+    }
     var modal = $('urgeModal');
     if (!modal) return;
     renderUrgeVoiceList();
@@ -3487,6 +3515,11 @@
   }
 
   function sendUrgeOrder() {
+    if (isOrderSubmitted()) {
+      closeUrgeModal();
+      showToast('Đơn đã chốt & lưu Sheet rồi!');
+      return;
+    }
     var remSec = getUrgeRemainingSec();
     if (remSec > 0) {
       updateUrgeCooldownUI();
@@ -4732,6 +4765,17 @@
         handleRemoteClaimCancel(d);
       } else if (d.type === 'pay_claim_rejected') {
         handleRemoteClaimRejected(d);
+      } else if (d.type === 'order_finalized') {
+        if (!isCurrentHost()) {
+          var fHost = d.hostName || 'Đại diện';
+          var fAmt = Number(d.grandTotal) > 0 ? (' · Tổng ' + fmt(d.grandTotal)) : '';
+          showToast('🔒 ' + fHost + ' đã chốt đơn' + fAmt + '! Kiểm tra số tiền & quét QR thanh toán nhé.');
+          sendSystemNotification({
+            title: '🔒 ' + fHost + ' đã chốt đơn! (#' + orderCode + ')',
+            body: 'Mở bill để xem số tiền của bạn và quét QR thanh toán nhé!',
+            tag: 'uu-finalized-' + orderCode
+          });
+        }
       } else if (d.type === 'pay_confirmed') {
         triggerPayConfirmedAlert(d);
       } else if (d.type === 'reset') {
@@ -7505,6 +7549,20 @@
           renderPayReminderPanel(false);
           rtSend();
           syncBillServerStateToSheet(true);
+
+          if (!wasAlreadySubmitted) {
+            var tFin = totals();
+            sendRoomEvent({
+              type: 'order_finalized',
+              finalizeId: 'fin_' + clientId + '_' + Date.now(),
+              hostUid: getHostUid() || myUid,
+              hostName: getHostName() || myUname || 'Đại diện',
+              totalCups: tFin.totalCups,
+              unit: (currentStore && currentStore.itemUnit) || 'món',
+              grandTotal: tFin.grand,
+              storeName: (currentStore && currentStore.name) || 'Office Order'
+            });
+          }
 
           if ($('saveMsg')) {
             $('saveMsg').textContent = wasAlreadySubmitted
