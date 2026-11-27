@@ -5010,11 +5010,23 @@
     return '✨';
   }
 
+  var moLastMenuKey = '';
+  var moLastMenuHadCards = false;
+
   function renderMenu() {
     var q = ($('search') ? $('search').value : '').toLowerCase().trim();
     var grid = $('productGrid');
     if (!grid) return;
     grid.innerHTML = '';
+
+    var menuKey = (currentStore ? currentStore.id : '') + '|' + currentCat;
+    var shouldAnimate = !q && (menuKey !== moLastMenuKey || !moLastMenuHadCards);
+    var catBanner = document.querySelector('.cat-header-banner');
+    if (catBanner && menuKey !== moLastMenuKey) {
+      catBanner.classList.remove('mo-enter-soft');
+      void catBanner.offsetWidth;
+      catBanner.classList.add('mo-enter-soft');
+    }
 
     var catObj = (currentStore.categories || []).find(function (c) {
       return c.id === currentCat || c.name === currentCat;
@@ -5042,10 +5054,14 @@
     var unitStr = (currentStore && currentStore.itemUnit) || 'món';
     if ($('currentCatCount')) $('currentCatCount').textContent = filtered.length + ' ' + unitStr;
 
-    filtered.forEach(function (m) {
+    filtered.forEach(function (m, idx) {
       var card = document.createElement('div');
       var isTopping = (m.nhom === 'topping');
       card.className = 'product-card' + (isTopping ? ' pcard-topping' : '');
+      if (shouldAnimate) {
+        card.className += ' mo-enter-up';
+        card.style.setProperty('--mo-delay', (Math.min(idx, 12) * 32) + 'ms');
+      }
 
       var hasOptSize = currentStore.options && currentStore.options.hasSize;
       var priceHtml = '';
@@ -5096,8 +5112,18 @@
     });
 
     if (!grid.children.length) {
-      grid.innerHTML = '<p class="cart-empty-hint">Không thấy món nào khớp từ khóa "' + esc(q) + '".</p>';
+      if (q) {
+        grid.innerHTML = '<p class="cart-empty-hint menu-empty-full">Không thấy món nào khớp từ khóa "' + esc(q) + '".</p>';
+      } else {
+        grid.innerHTML =
+          '<div class="menu-empty-spinner" role="status" aria-live="polite">' +
+            '<progress aria-label="Đang tải thực đơn" class="loading-spinner"></progress>' +
+            '<span class="menu-empty-spinner-text">Đang tải thực đơn…</span>' +
+          '</div>';
+      }
     }
+    moLastMenuKey = menuKey;
+    moLastMenuHadCards = filtered.length > 0;
   }
 
   /* ================= 6. MODAL TÙY CHỌN MÓN (CUSTOMIZER) ================= */
@@ -10467,3 +10493,269 @@
   })();
 
 })();
+
+/* ===== Motion: sliding pill (video slidePill) ===== */
+(function motionPill() {
+  var GROUPS = [
+    ['.sidebar-tabs', '.v-tab', 'vtab'],
+    ['.store-nav-tabs', '.store-nav-tab', 'store'],
+    ['.qr-switch-tabs', '.qr-switch-pill', 'qr'],
+    ['.size-card-group', '.size-card', 'size'],
+    ['.chips-group', '.chip-btn', 'chip'],
+    ['.pill-group', '.pill-btn', 'pill']
+  ];
+  var LEAD = 350;
+  var TRAIL = 550;
+  var reduceQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  var rafScheduled = false;
+  var resizeObs = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(function () { schedule(); }) : null;
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
+  function clamp01(t) {
+    return t < 0 ? 0 : (t > 1 ? 1 : t);
+  }
+
+  function sameBox(a, b) {
+    if (!a || !b) return false;
+    return Math.abs(a.x - b.x) < 0.5 &&
+      Math.abs(a.y - b.y) < 0.5 &&
+      Math.abs(a.w - b.w) < 0.5 &&
+      Math.abs(a.h - b.h) < 0.5;
+  }
+
+  function measure(item, host) {
+    var x = 0;
+    var y = 0;
+    var el = item;
+    while (el && el !== host) {
+      x += el.offsetLeft;
+      y += el.offsetTop;
+      el = el.offsetParent;
+    }
+    if (el !== host) {
+      var ir = item.getBoundingClientRect();
+      var hr = host.getBoundingClientRect();
+      x = ir.left - hr.left + host.scrollLeft - host.clientLeft;
+      y = ir.top - hr.top + host.scrollTop - host.clientTop;
+    }
+    return { x: x, y: y, w: item.offsetWidth, h: item.offsetHeight };
+  }
+
+  function paint(pill, box) {
+    pill.style.transform = 'translate3d(' + box.x.toFixed(2) + 'px,' + box.y.toFixed(2) + 'px,0)';
+    pill.style.width = box.w.toFixed(2) + 'px';
+    pill.style.height = box.h.toFixed(2) + 'px';
+  }
+
+  function ensurePill(host, kind) {
+    if (!host.classList.contains('mo-host')) host.classList.add('mo-host');
+    if (host.getAttribute('data-mo') !== kind) host.setAttribute('data-mo', kind);
+    var first = host.firstElementChild;
+    if (first && first.classList.contains('mo-pill')) return first;
+    var existing = host.querySelector(':scope > .mo-pill');
+    if (existing) {
+      host.insertBefore(existing, first);
+      return existing;
+    }
+    var pill = document.createElement('span');
+    pill.className = 'mo-pill';
+    pill.setAttribute('aria-hidden', 'true');
+    pill.style.opacity = '0';
+    host.insertBefore(pill, first);
+    return pill;
+  }
+
+  function cancelAnim(host) {
+    if (host.__moRaf) {
+      cancelAnimationFrame(host.__moRaf);
+      host.__moRaf = 0;
+    }
+  }
+
+  function snap(host, pill, to) {
+    cancelAnim(host);
+    paint(pill, to);
+    pill.style.opacity = '1';
+    host.__moCur = { x: to.x, y: to.y, w: to.w, h: to.h };
+    host.__moTo = { x: to.x, y: to.y, w: to.w, h: to.h };
+  }
+
+  function animate(host, pill, from, to) {
+    host.__moTo = { x: to.x, y: to.y, w: to.w, h: to.h };
+    if (reduceQuery && reduceQuery.matches) {
+      snap(host, pill, to);
+      return;
+    }
+    cancelAnim(host);
+    pill.style.opacity = '1';
+
+    var fL = from.x, fT = from.y, fR = from.x + from.w, fB = from.y + from.h;
+    var tL = to.x, tT = to.y, tR = to.x + to.w, tB = to.y + to.h;
+
+    // Leading edge leads with LEAD/easeOut; trailing edge follows with TRAIL/easeInOut.
+    var goRight = tR > fR || (tR === fR && tL > fL);
+    var goLeft = tL < fL || (tL === fL && tR < fR);
+    var rIsLead = goRight || !goLeft;
+    var lIsLead = goLeft || !goRight;
+
+    var goDown = tB > fB || (tB === fB && tT > fT);
+    var goUp = tT < fT || (tT === fT && tB < fB);
+    var bIsLead = goDown || !goUp;
+    var tIsLead = goUp || !goDown;
+
+    var start = 0;
+    function step(now) {
+      if (!start) start = now;
+      var elapsed = now - start;
+      var pLead = easeOutCubic(clamp01(elapsed / LEAD));
+      var pTrail = easeInOutCubic(clamp01(elapsed / TRAIL));
+
+      var curL = fL + (tL - fL) * (lIsLead ? pLead : pTrail);
+      var curR = fR + (tR - fR) * (rIsLead ? pLead : pTrail);
+      var curT = fT + (tT - fT) * (tIsLead ? pLead : pTrail);
+      var curB = fB + (tB - fB) * (bIsLead ? pLead : pTrail);
+
+      var cur = {
+        x: curL,
+        y: curT,
+        w: Math.max(0, curR - curL),
+        h: Math.max(0, curB - curT)
+      };
+      host.__moCur = cur;
+      paint(pill, cur);
+
+      if (elapsed < TRAIL) {
+        host.__moRaf = requestAnimationFrame(step);
+      } else {
+        host.__moRaf = 0;
+        host.__moCur = { x: tL, y: tT, w: to.w, h: to.h };
+        paint(pill, host.__moCur);
+      }
+    }
+    host.__moRaf = requestAnimationFrame(step);
+  }
+
+  function syncHost(host, itemSel, kind) {
+    if (host.offsetParent === null || host.offsetWidth === 0 || host.offsetHeight === 0) {
+      cancelAnim(host);
+      host.__moCur = null;
+      host.__moTo = null;
+      host.__moActive = null;
+      return;
+    }
+
+    var pill = ensurePill(host, kind);
+    if (resizeObs && !host.__moRo) {
+      host.__moRo = true;
+      resizeObs.observe(host);
+    }
+    var active = host.querySelector(':scope > ' + itemSel + '.is-active');
+    if (!active) {
+      cancelAnim(host);
+      pill.style.opacity = '0';
+      host.__moCur = null;
+      host.__moTo = null;
+      host.__moActive = null;
+      return;
+    }
+    if (resizeObs && !active.__moRo) {
+      active.__moRo = true;
+      resizeObs.observe(active);
+    }
+
+    var to = measure(active, host);
+    var cur = host.__moCur;
+    var target = host.__moTo;
+    var prevActive = host.__moActive;
+    host.__moActive = active;
+
+    if (!cur) {
+      snap(host, pill, to);
+      return;
+    }
+    if (target && sameBox(target, to)) return;
+    if (prevActive && prevActive !== active) {
+      animate(host, pill, cur, to);
+      return;
+    }
+    if (host.__moRaf) {
+      animate(host, pill, cur, to);
+    } else {
+      snap(host, pill, to);
+    }
+  }
+
+  function sync() {
+    rafScheduled = false;
+    try {
+      for (var i = 0; i < GROUPS.length; i++) {
+        var g = GROUPS[i];
+        var hosts = document.querySelectorAll(g[0]);
+        for (var j = 0; j < hosts.length; j++) {
+          syncHost(hosts[j], g[1], g[2]);
+        }
+      }
+    } catch (err) {
+      // Never break POS UI if motion fails
+    }
+  }
+
+  function schedule() {
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(sync);
+  }
+
+  function isPillMutationOnly(rec) {
+    if (rec.target && rec.target.classList && rec.target.classList.contains('mo-pill')) return true;
+    if (rec.type === 'childList') {
+      var a = rec.addedNodes, r = rec.removedNodes;
+      if (a.length === 1 && r.length === 0 && a[0].classList && a[0].classList.contains('mo-pill')) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function init() {
+    try {
+      if (!document.body) return;
+      var observer = new MutationObserver(function (records) {
+        for (var i = 0; i < records.length; i++) {
+          if (!isPillMutationOnly(records[i])) {
+            schedule();
+            break;
+          }
+        }
+      });
+      observer.observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ['class', 'hidden']
+      });
+      window.addEventListener('resize', schedule);
+      window.addEventListener('orientationchange', schedule);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(schedule);
+      }
+      schedule();
+    } catch (err) {
+      // Keep POS functional
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
